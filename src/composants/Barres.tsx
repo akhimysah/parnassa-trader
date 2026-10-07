@@ -7,6 +7,7 @@ import { DEFINITIONS } from '../graphique/indicateurs';
 import { registreGraphiques } from '../graphique/registre';
 import { REST_BINANCE } from '../marche/binance';
 import { ListeMenu, type ElementMenu } from './ui';
+import { IndicateurSynchro } from './Synchro';
 
 export function useActions() {
   const t = useTerminal();
@@ -43,6 +44,8 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Ouvrir un compte…', action: () => ouvrir({ type: 'compte' }) },
         { libelle: 'Se connecter à un compte de trading…', action: () => ouvrir({ type: 'connexion' }) },
         { libelle: 'Dépôt / retrait…', action: () => ouvrir({ type: 'depot' }) },
+        { separateur: true },
+        { libelle: 'Compte Parnassa et synchronisation…', action: () => ouvrir({ type: 'synchro' }) },
       ],
     ],
     [
@@ -283,6 +286,9 @@ export function BarreEtat({ texteSurvol }: { texteSurvol: string }) {
       <span className="be-aide">Pour obtenir de l'aide, appuyez sur F1</span>
       <span className="be-defaut">Défaut</span>
       <span className="be-survol">{texteSurvol}</span>
+      <span className="be-synchro-case">
+        <IndicateurSynchro />
+      </span>
       <span className={`be-connexion ${enLigne ? '' : 'hors-ligne'}`} title={enLigne ? `Connecté — ${ping ?? '…'} ms` : 'Pas de connexion'}>
         <span className="be-barres">
           {[1, 2, 3, 4].map((i) => (

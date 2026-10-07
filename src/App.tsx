@@ -15,6 +15,7 @@ import { ZoneGraphiques } from './composants/ZoneGraphiques';
 import { Testeur } from './composants/Testeur';
 import { Dialogues } from './composants/Dialogues';
 import { Mobile } from './mobile/Mobile';
+import { useSynchro } from './synchro';
 
 function useMobile(): boolean {
   const requete = '(max-width: 820px)';
@@ -63,6 +64,9 @@ export function App() {
   useEffect(() => definirAbonnements(cleAbonnements.split(',').filter(Boolean)), [cleAbonnements]);
 
   const signaler = useCallback((texte: string) => setToast({ texte, id: Date.now() }), []);
+  // Compte Parnassa : copie en ligne et synchronisation entre appareils.
+  const remplacer = useCallback((e: EtatTerminal) => maj(() => e), [maj]);
+  const synchro = useSynchro(etat, remplacer, signaler);
   useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), 4000);
@@ -176,6 +180,7 @@ export function App() {
     outil,
     choisirOutil: setOutil,
     mobile,
+    synchro,
   };
 
   // ---------- Raccourcis clavier façon MT5 ----------

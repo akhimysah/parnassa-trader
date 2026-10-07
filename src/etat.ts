@@ -117,22 +117,25 @@ function etatInitial(): EtatTerminal {
 
 const CLE = 'parnassa-trader:v1';
 
-export function chargerEtat(): EtatTerminal {
+/** Complète un état lu (stockage local ou compte Parnassa) avec les valeurs par défaut et écarte l'invalide. */
+export function fusionnerEtat(lu: Partial<EtatTerminal>): EtatTerminal {
   const base = etatInitial();
+  const etat: EtatTerminal = { ...base, ...lu, colonnes: { ...base.colonnes, ...lu.colonnes }, panneaux: { ...base.panneaux, ...lu.panneaux } };
+  etat.observation = (etat.observation ?? []).filter((n) => symbole(n));
+  etat.graphiques = (etat.graphiques ?? []).filter((g) => symbole(g.symbole)).map((g) => ({ ...nouveauGraphique(g.symbole), ...g }));
+  if (etat.graphiques.length === 0) etat.graphiques = base.graphiques;
+  if (!etat.graphiques.some((g) => g.id === etat.graphiqueActif)) etat.graphiqueActif = etat.graphiques[0].id;
+  if (!etat.comptes?.length) etat.comptes = base.comptes;
+  if (!etat.comptes.some((c) => c.login === etat.actif)) etat.actif = etat.comptes[0].login;
+  return etat;
+}
+
+export function chargerEtat(): EtatTerminal {
   try {
     const brut = localStorage.getItem(CLE);
-    if (!brut) return base;
-    const lu = JSON.parse(brut) as Partial<EtatTerminal>;
-    const etat: EtatTerminal = { ...base, ...lu, colonnes: { ...base.colonnes, ...lu.colonnes }, panneaux: { ...base.panneaux, ...lu.panneaux } };
-    etat.observation = etat.observation.filter((n) => symbole(n));
-    etat.graphiques = etat.graphiques.filter((g) => symbole(g.symbole)).map((g) => ({ ...nouveauGraphique(g.symbole), ...g }));
-    if (etat.graphiques.length === 0) etat.graphiques = base.graphiques;
-    if (!etat.graphiques.some((g) => g.id === etat.graphiqueActif)) etat.graphiqueActif = etat.graphiques[0].id;
-    if (etat.comptes.length === 0) etat.comptes = base.comptes;
-    if (!etat.comptes.some((c) => c.login === etat.actif)) etat.actif = etat.comptes[0].login;
-    return etat;
+    return brut ? fusionnerEtat(JSON.parse(brut) as Partial<EtatTerminal>) : etatInitial();
   } catch {
-    return base;
+    return etatInitial();
   }
 }
 

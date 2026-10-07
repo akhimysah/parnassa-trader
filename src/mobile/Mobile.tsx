@@ -6,6 +6,7 @@ import { etatCompte, fermerPosition, LIBELLES_TYPE, profitPosition, prixFermetur
 import { FenetreGraphique } from '../graphique/FenetreGraphique';
 import { OngletActualites, OngletAlertes, OngletCalendrier, OngletCourrier, OngletJournal, MESSAGES } from '../composants/BoiteOutils';
 import { PrixGros, argent, dateMT, heureMT } from '../composants/ui';
+import { BlocSynchro } from '../composants/Synchro';
 
 type Onglet = 'cotations' | 'graphique' | 'trade' | 'historique' | 'plus';
 type Plus = null | 'actualites' | 'calendrier' | 'courrier' | 'alertes' | 'journal' | 'comptes' | 'reglages';
@@ -339,6 +340,10 @@ function Comptes() {
         <li onClick={() => ouvrir({ type: 'compte' })}>+ Ouvrir un compte de démonstration</li>
         <li onClick={() => ouvrir({ type: 'depot' })}>Dépôt / retrait</li>
       </ul>
+      <h2 className="m-section">Compte Parnassa · synchronisation</h2>
+      <div className="m-synchro">
+        <BlocSynchro />
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import type { Cotation } from './marche/cotations';
 import type { EtatTerminal, Graphique } from './etat';
 import type { Periode } from './marche/bougies';
 import type { TypeIndicateur } from './graphique/indicateurs';
+import type { Synchro } from './synchro';
 
 export type Dialogue =
   | { type: 'ordre'; symbole?: string; sens?: Sens; attente?: TypeEnAttente; prix?: number; volume?: number }
@@ -28,7 +29,8 @@ export type Dialogue =
   | { type: 'apropos' }
   | { type: 'raccourcis' }
   | { type: 'expert'; graphique: string; expert?: import('./algo/experts').TypeExpert }
-  | { type: 'rapport' };
+  | { type: 'rapport' }
+  | { type: 'synchro' };
 
 /** Ce qu'affiche la barre d'état au survol d'un graphique. */
 export interface Survol {
@@ -61,6 +63,8 @@ export interface Terminal {
   outil: OutilDessin;
   choisirOutil: (o: OutilDessin) => void;
   mobile: boolean;
+  /** Compte Parnassa : synchronisation entre appareils. */
+  synchro: Synchro;
 }
 
 export const ContexteTerminal = createContext<Terminal | null>(null);

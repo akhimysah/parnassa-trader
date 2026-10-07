@@ -1850,3 +1850,71 @@ kbd {
 .testeur-backtest .specification td:last-child {
   white-space: normal;
 }
+
+/* Compte Parnassa · synchronisation */
+.bloc-synchro p {
+  margin: 0 0 8px;
+}
+.bouton-lien {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 3px;
+  text-decoration: none;
+  margin-bottom: 8px;
+}
+.bouton-lien.principal {
+  background: #6d4aff;
+  color: #fff;
+}
+.boutons.gauche {
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+.etat-synchro {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--entete);
+  border: 1px solid var(--bordure);
+}
+.etat-synchro.a-jour {
+  color: #1e9e3a;
+  border-color: #1e9e3a;
+}
+.etat-synchro.erreur {
+  color: var(--negatif);
+  border-color: var(--negatif);
+}
+.be-synchro-case {
+  padding: 0 !important;
+}
+.be-synchro {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 19px;
+  border: none;
+  background: none;
+  padding: 0 8px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--muet);
+}
+.be-synchro:hover {
+  background: var(--survol);
+}
+.be-synchro.a-jour {
+  color: #1e9e3a;
+}
+.be-synchro.erreur {
+  color: var(--negatif);
+}
+.m-synchro {
+  padding: 12px 16px;
+}
+.m-synchro button {
+  border: 1px solid var(--bordure);
+  background: var(--entete);
+  padding: 7px 10px;
+  border-radius: 6px;
+}

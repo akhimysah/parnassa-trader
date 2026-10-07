@@ -7,6 +7,7 @@ import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA } fr
 import { SCHEMAS } from '../graphique/couleurs';
 import { definirSuiveur, fermerPosition, levierEffectif, nouveauCompte, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
 import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
+import { BlocSynchro, DialogueSynchro } from './Synchro';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
 import { Fenetre, Spin, argent } from './ui';
 
@@ -64,6 +65,8 @@ function Contenu({ d }: { d: Dialogue }) {
       return <DialogueExpert graphique={d.graphique} expert={d.expert} />;
     case 'rapport':
       return <DialogueRapport />;
+    case 'synchro':
+      return <DialogueSynchro />;
   }
 }
 
@@ -560,6 +563,10 @@ function DialogueOptions() {
           <input type="checkbox" checked={etat.son} onChange={() => maj((e) => ({ ...e, son: !e.son }))} />
           Sons (exécutions, alertes, stop-out)
         </label>
+      </fieldset>
+      <fieldset>
+        <legend>Compte Parnassa · synchronisation</legend>
+        <BlocSynchro />
       </fieldset>
       <fieldset>
         <legend>Serveur</legend>
