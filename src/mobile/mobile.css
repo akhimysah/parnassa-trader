@@ -1588,3 +1588,34 @@
 .mm.tablette .mm-feuille {
   width: 420px;
 }
+
+/* Saisie des stops : erreur sous le champ, bouton effacer */
+.mm-erreur-champ {
+  color: var(--m-baisse);
+  font-size: 12px;
+  text-align: right;
+  margin-top: -4px;
+}
+.mm-champ-pas {
+  position: relative;
+}
+.mm-champ-pas .mm-effacer {
+  position: absolute;
+  right: 42px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--m-trait);
+  color: var(--m-carte);
+  font-size: 11px;
+  line-height: 22px;
+  padding: 0;
+}
+.mm-champ-pas button {
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}

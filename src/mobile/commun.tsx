@@ -197,22 +197,52 @@ export function ChampPas({
   min?: number;
   max?: number;
   vide?: boolean;
+  /** Valeur proposée au premier appui quand le champ est vide (déjà du bon côté pour un stop). */
   amorce?: number;
   placeholder?: string;
 }) {
   const [texte, setTexte] = useState(vide && valeur === 0 ? '' : valeur.toFixed(decimales));
   const focus = useRef(false);
+  const actuel = useRef(valeur);
+  actuel.current = valeur;
+  const repetition = useRef<number | undefined>(undefined);
   useEffect(() => {
     if (!focus.current) setTexte(vide && valeur === 0 ? '' : valeur.toFixed(decimales));
   }, [valeur, decimales, vide]);
+  useEffect(() => () => window.clearTimeout(repetition.current), []);
   const borner = (v: number) => Number(Math.min(max, Math.max(min, v)).toFixed(decimales));
-  const pousser = (sens: 1 | -1) => {
-    vibrer(6);
-    changer(borner(valeur === 0 && amorce ? amorce : valeur + sens * pas));
+  const pousser = (sens: 1 | -1, multiple = 1) => {
+    const v = actuel.current === 0 && amorce ? amorce : actuel.current + sens * pas * multiple;
+    actuel.current = borner(v);
+    changer(actuel.current);
   };
+  // Appui maintenu : répétition, de plus en plus rapide (×10 au-delà de 2 s).
+  const debut = (sens: 1 | -1) => {
+    vibrer(6);
+    pousser(sens);
+    const t0 = Date.now();
+    const suivant = (delai: number) => {
+      repetition.current = window.setTimeout(() => {
+        pousser(sens, Date.now() - t0 > 2000 ? 10 : 1);
+        suivant(Math.max(50, delai * 0.85));
+      }, delai);
+    };
+    suivant(400);
+  };
+  const fin = () => window.clearTimeout(repetition.current);
+  const bouton = (sens: 1 | -1) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      debut(sens);
+    },
+    onPointerUp: fin,
+    onPointerLeave: fin,
+    onPointerCancel: fin,
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  });
   return (
     <div className="mm-champ-pas">
-      <button type="button" onClick={() => pousser(-1)} aria-label="Diminuer">
+      <button type="button" {...bouton(-1)} aria-label="Diminuer">
         −
       </button>
       <input
@@ -231,7 +261,12 @@ export function ChampPas({
           else if (Number.isFinite(v)) changer(Math.min(max, Math.max(min, v)));
         }}
       />
-      <button type="button" onClick={() => pousser(1)} aria-label="Augmenter">
+      {vide && valeur !== 0 && (
+        <button type="button" className="mm-effacer" aria-label="Effacer" onClick={() => changer(0)}>
+          ✕
+        </button>
+      )}
+      <button type="button" {...bouton(1)} aria-label="Augmenter">
         +
       </button>
     </div>

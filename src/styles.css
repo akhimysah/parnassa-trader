@@ -1774,3 +1774,9 @@ kbd {
     font-size: 15px;
   }
 }
+
+.erreur-champ {
+  grid-column: 2;
+  color: var(--negatif);
+  font-size: 11px;
+}

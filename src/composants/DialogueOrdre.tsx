@@ -20,6 +20,7 @@ import {
 } from '../compte/moteur';
 import { Fenetre, PrixGros, Spin, argent, dateMT } from './ui';
 import { GraphiqueTicks } from './ObservationMarche';
+import { amorceStop, erreurStop, pasStop } from '../compte/stops';
 
 function versDateLocale(ms: number): string {
   const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000);
@@ -139,13 +140,15 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
           <div className="ordre-stops">
             <label>
               <span>Stop Loss :</span>
-              <Spin valeur={sl} changer={setSl} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} />
+              <Spin valeur={sl} changer={setSl} pas={pasStop(s, prixEntree ?? 1)} decimales={s.chiffres} vide amorce={prixEntree ? amorceStop(s, prixEntree, entreeSens, 'sl') : undefined} />
               <Estimation valeur={sl && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, sl, cotations) : null} />
+              {mode === 'attente' && prixEntree && erreurStop(s, entreeSens, prixEntree, 'sl', sl) && <small className="erreur-champ">{erreurStop(s, entreeSens, prixEntree, 'sl', sl)}</small>}
             </label>
             <label>
               <span>Take Profit :</span>
-              <Spin valeur={tp} changer={setTp} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} />
+              <Spin valeur={tp} changer={setTp} pas={pasStop(s, prixEntree ?? 1)} decimales={s.chiffres} vide amorce={prixEntree ? amorceStop(s, prixEntree, entreeSens, 'tp') : undefined} />
               <Estimation valeur={tp && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, tp, cotations) : null} />
+              {mode === 'attente' && prixEntree && erreurStop(s, entreeSens, prixEntree, 'tp', tp) && <small className="erreur-champ">{erreurStop(s, entreeSens, prixEntree, 'tp', tp)}</small>}
             </label>
           </div>
           {mode === 'attente' && (
@@ -274,13 +277,15 @@ export function DialogueModifierPosition({ ticket }: { ticket: number }) {
           </div>
           <label>
             <span>Stop Loss :</span>
-            <Spin valeur={sl} changer={setSl} pas={point(s)} decimales={s.chiffres} vide amorce={actuel} />
+            <Spin valeur={sl} changer={setSl} pas={pasStop(s, actuel)} decimales={s.chiffres} vide amorce={amorceStop(s, actuel, p.type, 'sl')} />
             <Estimation valeur={sl ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, sl, cotations) : null} />
+            {erreurStop(s, p.type, actuel, 'sl', sl) && <small className="erreur-champ">{erreurStop(s, p.type, actuel, 'sl', sl)}</small>}
           </label>
           <label>
             <span>Take Profit :</span>
-            <Spin valeur={tp} changer={setTp} pas={point(s)} decimales={s.chiffres} vide amorce={actuel} />
+            <Spin valeur={tp} changer={setTp} pas={pasStop(s, actuel)} decimales={s.chiffres} vide amorce={amorceStop(s, actuel, p.type, 'tp')} />
             <Estimation valeur={tp ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, tp, cotations) : null} />
+            {erreurStop(s, p.type, actuel, 'tp', tp) && <small className="erreur-champ">{erreurStop(s, p.type, actuel, 'tp', tp)}</small>}
           </label>
           <label>
             <span>Copier à :</span>
@@ -290,6 +295,7 @@ export function DialogueModifierPosition({ ticket }: { ticket: number }) {
           <div className="ordre-boutons">
             <button
               className="principal large"
+              disabled={Boolean(erreurStop(s, p.type, actuel, 'sl', sl) || erreurStop(s, p.type, actuel, 'tp', tp))}
               onClick={() => {
                 const r = operer((c) => modifierPosition(c, p.ticket, sl, tp, cotations), { confirmation: false });
                 if (!r.erreur) fermer();

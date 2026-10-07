@@ -20,6 +20,7 @@ import {
   type TypeEnAttente,
 } from '../compte/moteur';
 import { GraphiqueTicks } from '../composants/ObservationMarche';
+import { amorceStop, erreurStop, pasStop } from '../compte/stops';
 import { PrixGros, argent, dateMT } from '../composants/ui';
 import { BoutonRetour, ChampPas, ChampVolume, EnTete, Segments, useNav, vibrer } from './commun';
 
@@ -35,6 +36,10 @@ function versDateLocale(ms: number): string {
 function enArgent(sym: string, sens: Sens, volume: number, de: number, a: number, cot: ReturnType<typeof useTerminal>['cotations']): number {
   const s = symbole(sym)!;
   return (sens === 'buy' ? a - de : de - a) * volume * s.contrat * conversion(s, cot);
+}
+
+function ErreurStop({ texte }: { texte: string | null }) {
+  return texte ? <div className="mm-erreur-champ">{texte}</div> : null;
 }
 
 function Montant({ v }: { v: number | null }) {
@@ -100,6 +105,7 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
   }, [type, prix, q]);
 
   const pas = point(s);
+  const pasS = pasStop(s, q ? q.bid : prix || 1);
   const marge = q ? margeRequise(s, volume, type === 'marche' ? q.ask : prix || q.ask, compte.levier, cotations) : 0;
   const libre = etatCompte(compte, cotations).margeLibre;
   const ouvert = marcheOuvert(s);
@@ -182,7 +188,7 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
           {type !== 'marche' && (
             <div className="mm-ligne-champ">
               <span>Prix</span>
-              <ChampPas valeur={prix} changer={setPrix} pas={pas} decimales={s.chiffres} />
+              <ChampPas valeur={prix} changer={setPrix} pas={pasS} decimales={s.chiffres} />
             </div>
           )}
           {type.endsWith('stop_limit') && (
@@ -206,20 +212,35 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
             <>
               <div className="mm-ligne-champ">
                 <span>S/L</span>
-                <ChampPas valeur={sl} changer={setSl} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} placeholder="non défini" />
+                <ChampPas valeur={sl} changer={setSl} pas={pasS} decimales={s.chiffres} vide amorce={prixEntree ? amorceStop(s, prixEntree, sens, 'sl') : undefined} placeholder="non défini" />
               </div>
               {sl > 0 && prixEntree && (
                 <div className="mm-aide-ligne">
                   <Montant v={enArgent(sym, sens, volume, prixEntree, sl, cotations)} />
                 </div>
               )}
+              {type !== 'marche' && <ErreurStop texte={prixEntree ? erreurStop(s, sens, prixEntree, 'sl', sl) : null} />}
               <div className="mm-ligne-champ">
                 <span>T/P</span>
-                <ChampPas valeur={tp} changer={setTp} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} placeholder="non défini" />
+                <ChampPas valeur={tp} changer={setTp} pas={pasS} decimales={s.chiffres} vide amorce={prixEntree ? amorceStop(s, prixEntree, sens, 'tp') : undefined} placeholder="non défini" />
               </div>
               {tp > 0 && prixEntree && (
                 <div className="mm-aide-ligne">
                   <Montant v={enArgent(sym, sens, volume, prixEntree, tp, cotations)} />
+                </div>
+              )}
+              {type !== 'marche' && <ErreurStop texte={prixEntree ? erreurStop(s, sens, prixEntree, 'tp', tp) : null} />}
+              {type === 'marche' && (sl > 0 || tp > 0) && q && (
+                <div className="mm-aide-ligne">
+                  {sl > 0 && tp > 0 && (sl < q.bid) !== (tp > q.ask)
+                    ? 'S/L et T/P incompatibles entre eux'
+                    : sl > 0 && sl < q.bid
+                      ? 'Niveaux pour un ACHAT'
+                      : sl > 0
+                        ? 'Niveaux pour une VENTE'
+                        : tp > q.ask
+                          ? 'Niveau pour un ACHAT'
+                          : 'Niveau pour une VENTE'}
                 </div>
               )}
             </>
@@ -340,6 +361,11 @@ export function EcranPosition({ ticket }: { ticket: number }) {
   const q = cotations[p.symbole];
   const actuel = q ? prixFermeture(p.type, q) : p.prixOuverture;
   const profit = profitPosition(p, cotations);
+  const pasS = pasStop(s, actuel);
+  // Les stops d'une position sont contrôlés par rapport au prix de clôture actuel (Bid pour un achat, Ask pour une vente).
+  const errSl = erreurStop(s, p.type, actuel, 'sl', sl);
+  const errTp = erreurStop(s, p.type, actuel, 'tp', tp);
+  const inchange = sl === p.sl && tp === p.tp;
   return (
     <div className="mm-ecran mm-ordre">
       <EnTete titre={`Modifier #${p.ticket}`} sousTitre={`${p.symbole}, ${p.type} ${p.volume.toFixed(2)}`} gauche={<BoutonRetour />} />
@@ -353,22 +379,24 @@ export function EcranPosition({ ticket }: { ticket: number }) {
         <div className="mm-formulaire">
           <div className="mm-ligne-champ">
             <span>S/L</span>
-            <ChampPas valeur={sl} changer={setSl} pas={point(s)} decimales={s.chiffres} vide amorce={actuel} placeholder="non défini" />
+            <ChampPas valeur={sl} changer={setSl} pas={pasS} decimales={s.chiffres} vide amorce={amorceStop(s, actuel, p.type, 'sl')} placeholder="non défini" />
           </div>
           {sl > 0 && (
             <div className="mm-aide-ligne">
               <Montant v={enArgent(p.symbole, p.type, p.volume, p.prixOuverture, sl, cotations)} />
             </div>
           )}
+          <ErreurStop texte={errSl} />
           <div className="mm-ligne-champ">
             <span>T/P</span>
-            <ChampPas valeur={tp} changer={setTp} pas={point(s)} decimales={s.chiffres} vide amorce={actuel} placeholder="non défini" />
+            <ChampPas valeur={tp} changer={setTp} pas={pasS} decimales={s.chiffres} vide amorce={amorceStop(s, actuel, p.type, 'tp')} placeholder="non défini" />
           </div>
           {tp > 0 && (
             <div className="mm-aide-ligne">
               <Montant v={enArgent(p.symbole, p.type, p.volume, p.prixOuverture, tp, cotations)} />
             </div>
           )}
+          <ErreurStop texte={errTp} />
         </div>
         <div className="mm-ticks">
           <GraphiqueTicks
@@ -389,6 +417,7 @@ export function EcranPosition({ ticket }: { ticket: number }) {
         </button>
         <button
           className="mm-bouton principal"
+          disabled={Boolean(errSl || errTp) || inchange}
           onClick={() => {
             const r = operer((c) => modifierPosition(c, p.ticket, sl, tp, cotations), { confirmation: false });
             if (!r.erreur) {
@@ -467,6 +496,10 @@ export function EcranOrdreAttente({ ticket }: { ticket: number }) {
   const [tp, setTp] = useState(o?.tp ?? 0);
   if (!o) return <Disparu />;
   const s = symbole(o.symbole)!;
+  const sensO = sensDe(o.type);
+  const pasS = pasStop(s, prix);
+  const errSl = erreurStop(s, sensO, prix, 'sl', sl);
+  const errTp = erreurStop(s, sensO, prix, 'tp', tp);
   return (
     <div className="mm-ecran mm-ordre">
       <EnTete titre={`Ordre #${o.ticket}`} sousTitre={`${o.symbole}, ${NOMS_TYPE_ATTENTE[o.type]} ${o.volume.toFixed(2)}`} gauche={<BoutonRetour />} />
@@ -474,16 +507,18 @@ export function EcranOrdreAttente({ ticket }: { ticket: number }) {
         <div className="mm-formulaire">
           <div className="mm-ligne-champ">
             <span>Prix</span>
-            <ChampPas valeur={prix} changer={setPrix} pas={point(s)} decimales={s.chiffres} />
+            <ChampPas valeur={prix} changer={setPrix} pas={pasS} decimales={s.chiffres} />
           </div>
           <div className="mm-ligne-champ">
             <span>S/L</span>
-            <ChampPas valeur={sl} changer={setSl} pas={point(s)} decimales={s.chiffres} vide amorce={prix} placeholder="non défini" />
+            <ChampPas valeur={sl} changer={setSl} pas={pasS} decimales={s.chiffres} vide amorce={amorceStop(s, prix, sensO, 'sl')} placeholder="non défini" />
           </div>
+          <ErreurStop texte={errSl} />
           <div className="mm-ligne-champ">
             <span>T/P</span>
-            <ChampPas valeur={tp} changer={setTp} pas={point(s)} decimales={s.chiffres} vide amorce={prix} placeholder="non défini" />
+            <ChampPas valeur={tp} changer={setTp} pas={pasS} decimales={s.chiffres} vide amorce={amorceStop(s, prix, sensO, 'tp')} placeholder="non défini" />
           </div>
+          <ErreurStop texte={errTp} />
           <div className="mm-aide-ligne">
             Placé le {dateMT(o.heure)} · expiration {o.expiration === 'gtc' ? 'GTC' : o.expiration === 'jour' ? "aujourd'hui" : dateMT(o.echeance, false)}
           </div>
@@ -506,6 +541,7 @@ export function EcranOrdreAttente({ ticket }: { ticket: number }) {
         </button>
         <button
           className="mm-bouton principal"
+          disabled={Boolean(errSl || errTp)}
           onClick={() => {
             const r = operer((c) => modifierOrdre(c, o.ticket, { prix, prixLimite: o.prixLimite, sl, tp, expiration: o.expiration, echeance: o.echeance }, cotations), { confirmation: false });
             if (!r.erreur) {
