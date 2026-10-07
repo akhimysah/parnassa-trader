@@ -4,7 +4,7 @@
  * barres déjà clôturées, puis les stop-loss / take-profit sont vérifiés à l'intérieur de la barre.
  */
 import type { Bougie } from '../marche/bougies';
-import { commissionParCote, point, type SymboleMT, type TypeCompte } from '../marche/symboles';
+import { commissionParCote, point, rolloversEntre, swapPoints, type SymboleMT, type TypeCompte } from '../marche/symboles';
 import type { Sens, Transaction } from '../compte/moteur';
 import { NIVEAU_STOP_OUT } from '../compte/moteur';
 import { decider, type Expert } from './experts';
@@ -25,6 +25,8 @@ export interface ParametresTest {
   conversion: number;
   /** Compte Raw : commission par lot à l'ouverture et à la fermeture. */
   typeCompte?: TypeCompte;
+  /** Swaps débités / crédités à chaque rollover (sauf compte sans swap). */
+  swaps?: boolean;
 }
 
 export interface Marqueur {
@@ -54,6 +56,8 @@ interface PositionTest {
   sl: number;
   tp: number;
   heure: number;
+  swap: number;
+  dernierSwap: number;
 }
 
 /** Fenêtre de barres transmise à l'expert : assez pour amorcer ses indicateurs, sans recalcul quadratique. */
@@ -77,13 +81,14 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
   const t0 = (b[0]?.time ?? 0) * 1000;
   transactions.push({ ticket: ticket++, ordre: 0, position: 0, heure: t0, symbole: '', type: 'balance', entree: '', volume: 0, prix: 0, commission: 0, swap: 0, profit: depot, solde: depot, commentaire: 'Dépôt initial' });
 
-  const valeur = (p: PositionTest, bid: number) => (p.type === 'buy' ? bid - p.prix : p.prix - (bid + ecart)) * p.volume * s.contrat * conversion;
+  const valeur = (p: PositionTest, bid: number) => (p.type === 'buy' ? bid - p.prix : p.prix - (bid + ecart)) * p.volume * s.contrat * conversion + p.swap;
   const marge = (p: PositionTest) => (p.volume * s.contrat * p.prix * conversion) / levierEff;
   const commission = (volume: number, prix: number) => -argent(commissionParCote(s, pt.typeCompte ?? 'standard', volume, volume * s.contrat * prix * conversion)) || 0;
   const fermer = (p: PositionTest, prix: number, heure: number, raison: string) => {
     const profit = argent((p.type === 'buy' ? prix - p.prix : p.prix - prix) * p.volume * s.contrat * conversion);
     const frais = commission(p.volume, prix);
-    solde = argent(solde + profit + frais);
+    const swap = argent(p.swap);
+    solde = argent(solde + profit + frais + swap);
     transactions.push({
       ticket: ticket++,
       ordre: 0,
@@ -95,7 +100,7 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
       volume: p.volume,
       prix,
       commission: frais,
-      swap: 0,
+      swap,
       profit,
       solde,
       commentaire: raison,
@@ -126,6 +131,8 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
         sl: expert.p.sl ? arrondi(prix - sens * expert.p.sl * pas) : 0,
         tp: expert.p.tp ? arrondi(prix + sens * expert.p.tp * pas) : 0,
         heure,
+        swap: 0,
+        dernierSwap: heure,
       };
       const fondsPropres = solde + positions.reduce((t, x) => t + valeur(x, barre.open), 0);
       const utilisee = positions.reduce((t, x) => t + marge(x), 0);
@@ -153,6 +160,16 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
           if (p.sl && ask >= p.sl) fermer(p, k === 0 ? arrondi(ask) : p.sl, heure, 'sl');
           else if (p.tp && ask <= p.tp) fermer(p, k === 0 ? arrondi(ask) : p.tp, heure, 'tp');
         }
+      }
+    }
+    // Swaps des rollovers passés pendant la barre (au prix de clôture).
+    if (pt.swaps !== false) {
+      for (const p of positions) {
+        const nuits = rolloversEntre(s, p.dernierSwap, heure + 1);
+        if (!nuits.length) continue;
+        const points = swapPoints(s, barre.close)[p.type === 'buy' ? 'long' : 'short'];
+        p.swap += nuits.reduce((t, n) => t + n.fois, 0) * points * pas * s.contrat * p.volume * conversion;
+        p.dernierSwap = nuits[nuits.length - 1].t;
       }
     }
     // 3. Fonds propres à la clôture et stop-out.

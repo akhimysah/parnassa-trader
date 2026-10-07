@@ -115,6 +115,7 @@ export function Testeur() {
     modelisation: r.modelisation,
     conversion: conversion(s, cotations),
     typeCompte: compte.type ?? 'standard',
+    swaps: !compte.sansSwap,
   });
 
   const plagesActives = Object.fromEntries(Object.entries(r.optimiser).filter(([, v]) => v.actif)) as Record<string, PlageOptimisation>;
@@ -310,7 +311,7 @@ export function Testeur() {
                   </button>
                 )}
                 <p className="aide">
-                  Compte {compte.type === 'raw' ? 'Raw : commission de 7 $ par lot aller-retour en forex et métaux' : 'Standard : sans commission'}. Profits en devise étrangère convertis au taux actuel, sans swap.
+                  Compte {compte.type === 'raw' ? 'Raw : commission de 7 $ par lot aller-retour en forex et métaux' : 'Standard : sans commission'}. Swaps {compte.sansSwap ? 'désactivés (compte sans swap)' : 'comptés à chaque rollover'}. Profits en devise étrangère convertis au taux actuel.
                 </p>
               </div>
             </div>

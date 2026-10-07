@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTerminal } from '../contexte';
-import { SYMBOLES, TYPES_COMPTE, formaterPrix, libelleSeances, marcheOuvert, point, spreadPoints, symbole, type Categorie } from '../marche/symboles';
+import { SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, marcheOuvert, point, spreadPoints, swapPoints, symbole, type Categorie } from '../marche/symboles';
 import { levierEffectif } from '../compte/moteur';
 import { PrixGros, argent, heureMT } from '../composants/ui';
 import { BoutonIcone, BoutonRetour, EnTete, IconePlus, useAppuiLong, useNav, vibrer } from './commun';
@@ -233,6 +233,9 @@ export function ProprietesSymbole({ nom }: { nom: string }) {
     ['Taille du contrat', `${argent(s.contrat, 0)} ${s.base}`],
     ['Devise de profit', s.profit],
     ['Levier', `1:${levierEffectif(s, compte.levier)}`],
+    ['Swap long', compte.sansSwap ? 'aucun' : `${swapPoints(s, c ? (c.bid + c.ask) / 2 : 1).long.toFixed(2)} points`],
+    ['Swap short', compte.sansSwap ? 'aucun' : `${swapPoints(s, c ? (c.bid + c.ask) / 2 : 1).short.toFixed(2)} points`],
+    ['Swap triple', jourSwapTriple(s) === 3 ? 'mercredi' : jourSwapTriple(s) === 5 ? 'vendredi' : 'aucun (chaque jour)'],
     ['Volume minimal', s.volumeMin.toFixed(2)],
     ['Volume maximal', s.volumeMax.toFixed(2)],
     ['Pas du volume', s.pasVolume.toFixed(2)],

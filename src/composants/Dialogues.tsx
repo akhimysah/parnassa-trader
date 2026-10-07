@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTerminal, type Dialogue } from '../contexte';
 import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
-import { SYMBOLES, TYPES_COMPTE, formaterPrix, libelleSeances, point, spreadPoints, symbole, type Categorie, type TypeCompte } from '../marche/symboles';
+import { HEURE_ROLLOVER_UTC, SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, point, spreadPoints, swapPoints, symbole, type Categorie, type TypeCompte } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { sourceDirecte } from '../marche/cotations';
 import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA } from '../graphique/indicateurs';
@@ -145,8 +145,12 @@ function DialogueSuiveur({ ticket }: { ticket: number }) {
 const NOMS_CATEGORIES: Record<Categorie, string> = { forex: 'Forex', metaux: 'Métaux', indices: 'Indices', energie: 'Énergie', 'actions-us': 'Actions États-Unis', 'actions-fr': 'Actions France', crypto: 'Crypto' };
 
 function DialogueSpecification({ nom }: { nom: string }) {
-  const { fermer, compte } = useTerminal();
+  const { fermer, compte, cotations } = useTerminal();
   const s = symbole(nom)!;
+  const q = cotations[nom];
+  const sw = swapPoints(s, q ? (q.bid + q.ask) / 2 : 1);
+  const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+  const triple = jourSwapTriple(s);
   const lignes: [string, string][] = [
     ['Symbole', s.nom],
     ['Description', s.description],
@@ -169,7 +173,11 @@ function DialogueSpecification({ nom }: { nom: string }) {
     ['Remplissage', 'Fill or Kill, Immediate or Cancel'],
     ['Expiration', 'GTC, aujourd\'hui, spécifiée'],
     ['Ordres', 'Market, Limit, Stop, Stop Limit, SL, TP'],
-    ['Swap', '0 (non facturé sur le compte démo)'],
+    ['Type de swap', compte.sansSwap ? 'aucun (compte sans swap)' : 'en points'],
+    ['Swap long', compte.sansSwap ? '—' : `${sw.long.toFixed(2)} points par lot et par nuit`],
+    ['Swap short', compte.sansSwap ? '—' : `${sw.short.toFixed(2)} points par lot et par nuit`],
+    ['Swap triple', triple === null ? 'aucun (swap chaque jour, week-end compris)' : JOURS[triple]],
+    ['Rollover', `${HEURE_ROLLOVER_UTC}:00 UTC (minuit serveur)`],
     ['Séances', libelleSeances(s)],
     ['Cotations', s.direct.swissquote ? `Swissquote ${s.direct.swissquote}, Bid/Ask réels chaque seconde${sourceDirecte(nom) === 'swissquote' ? '' : ' (indisponible : source de secours)'}` : s.direct.binance ? `Binance ${s.direct.binance} (temps réel)` : s.direct.yahoo ? 'Flux continu (≈ 1 mise à jour par seconde)' : s.direct.pilote ? `TradingView, animé par ${s.direct.pilote}` : 'TradingView (rafraîchi chaque seconde)'],
     ['Historique', s.histo.binance ? `Binance ${s.histo.binance}` : `Yahoo Finance ${s.histo.yahoo}${s.histo.recaler ? ' (contrat à terme recalé sur le comptant)' : ''}`],
@@ -241,6 +249,7 @@ function DialogueCompte() {
   const [depot, setDepot] = useState(10000);
   const [levier, setLevier] = useState(100);
   const [type, setType] = useState<TypeCompte>('standard');
+  const [sansSwap, setSansSwap] = useState(false);
   return (
     <Fenetre titre="Ouvrir un compte de démonstration" fermer={fermer} largeur={440}>
       <p className="aide">Serveur : {SERVEUR} — compte de couverture en USD. Aucune donnée personnelle n'est demandée : le compte est conservé dans ce navigateur.</p>
@@ -258,6 +267,10 @@ function DialogueCompte() {
               </option>
             ))}
           </select>
+        </label>
+        <label className="case">
+          <input type="checkbox" checked={sansSwap} onChange={() => setSansSwap(!sansSwap)} />
+          Compte sans swap (islamique)
         </label>
         <label>
           <span>Dépôt :</span>
@@ -285,7 +298,7 @@ function DialogueCompte() {
         <button
           className="principal"
           onClick={() => {
-            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type);
+            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type, sansSwap);
             maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
             signaler(`Compte ${TYPES_COMPTE[type].nom} ${c.login} ouvert sur ${SERVEUR}`);
             fermer();

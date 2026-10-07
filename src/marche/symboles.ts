@@ -272,3 +272,66 @@ export function facteurRollover(s: SymboleMT, t = Date.now()): number {
   const m = d.getUTCHours() * 60 + d.getUTCMinutes();
   return m >= 21 * 60 + 55 && m < 22 * 60 + 10 ? 3 : 1;
 }
+
+// ---------- Swaps (financement des positions gardées la nuit) ----------
+
+/**
+ * Taux directeurs indicatifs (% par an) servant au calcul des swaps. Ce sont des valeurs paramétrées, pas un flux
+ * en direct : à mettre à jour quand les banques centrales changent leurs taux.
+ */
+export const TAUX_DIRECTEURS: Record<string, number> = { USD: 3.75, EUR: 2.0, GBP: 3.75, JPY: 0.75, CHF: 0.0, AUD: 3.35, CAD: 2.5, NZD: 2.75 };
+
+/** Marge du courtier (% par an) retirée des deux côtés, selon la classe d'actifs. */
+const MARGE_SWAP: Record<Categorie, number> = { forex: 1.0, metaux: 2.0, indices: 2.5, energie: 2.5, 'actions-us': 2.5, 'actions-fr': 2.5, crypto: 0 };
+
+/**
+ * Swap long / short en points par lot et par nuit (comme la spécification MT5, mode « en points »).
+ * Forex : différentiel de taux entre la devise de base et la devise de cotation, moins la marge du courtier.
+ * Métaux, indices, énergie, actions : financement au taux de la devise de cotation + marge (pas de rendement).
+ * Crypto : 20 % par an à l'achat, 12 % à la vente (les deux sont payés), comme les CFD crypto courants.
+ */
+export function swapPoints(s: SymboleMT, prix: number): { long: number; short: number } {
+  const taux = (d: string) => TAUX_DIRECTEURS[d] ?? 0;
+  const m = MARGE_SWAP[s.categorie];
+  let long: number;
+  let short: number;
+  if (s.categorie === 'crypto') {
+    long = -20;
+    short = -12;
+  } else if (s.categorie === 'forex') {
+    long = taux(s.base) - taux(s.profit) - m;
+    short = taux(s.profit) - taux(s.base) - m;
+  } else {
+    long = -(taux(s.profit) + m);
+    short = taux(s.profit) - m - (s.categorie === 'metaux' ? 1.0 : 0);
+  }
+  const jours = s.categorie === 'crypto' ? 365 : 360;
+  const enPoints = (pct: number) => Number(((prix * pct) / 100 / jours / point(s)).toFixed(2));
+  return { long: enPoints(long), short: enPoints(short) };
+}
+
+/** Jour du swap triple (couvre le week-end) : mercredi en forex et métaux, vendredi ailleurs, aucun en crypto. */
+export function jourSwapTriple(s: SymboleMT): number | null {
+  if (s.categorie === 'crypto') return null;
+  return s.categorie === 'forex' || s.categorie === 'metaux' ? 3 : 5;
+}
+
+export const HEURE_ROLLOVER_UTC = 22;
+
+/**
+ * Rollovers survenus dans l'intervalle ]depuis, jusqu'a] (ms) pour ce symbole, avec leur multiplicateur.
+ * Du lundi au vendredi à 22:00 UTC (×3 le jour du triple) ; tous les jours pour la crypto.
+ */
+export function rolloversEntre(s: SymboleMT, depuis: number, jusqua: number): { t: number; fois: number }[] {
+  const sortie: { t: number; fois: number }[] = [];
+  const d = new Date(depuis);
+  let t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), HEURE_ROLLOVER_UTC);
+  if (t <= depuis) t += 86400000;
+  const triple = jourSwapTriple(s);
+  for (let n = 0; t <= jusqua && n < 4000; t += 86400000, n++) {
+    const jour = new Date(t).getUTCDay();
+    if (s.categorie !== 'crypto' && (jour === 0 || jour === 6)) continue;
+    sortie.push({ t, fois: jour === triple ? 3 : 1 });
+  }
+  return sortie;
+}

@@ -4,7 +4,7 @@
  * une position acheteuse se ferme au Bid, une position vendeuse à l'Ask.
  */
 import type { Cotation } from '../marche/cotations';
-import { commissionParCote, formaterPrix, marcheOuvert, point, symbole, versUsd, type SymboleMT, type TypeCompte } from '../marche/symboles';
+import { commissionParCote, formaterPrix, marcheOuvert, point, rolloversEntre, swapPoints, symbole, versUsd, type SymboleMT, type TypeCompte } from '../marche/symboles';
 
 export type Sens = 'buy' | 'sell';
 export type TypeEnAttente = 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop' | 'buy_stop_limit' | 'sell_stop_limit';
@@ -28,6 +28,8 @@ export interface Position {
   suiveur: number;
   /** Identifiant de l'Expert Advisor qui a ouvert la position (0 = manuelle). */
   magic?: number;
+  /** Dernier rollover dont le swap a été compté (ms) ; à défaut, l'heure d'ouverture. */
+  dernierSwap?: number;
 }
 
 export interface Ordre {
@@ -96,6 +98,8 @@ export interface Compte {
   nom: string;
   /** Standard (spreads larges, sans commission) ou Raw (spreads serrés + commission) ; Standard si absent. */
   type?: TypeCompte;
+  /** Compte sans swap (« islamique ») : aucun swap n'est débité ni crédité. */
+  sansSwap?: boolean;
   serveur: string;
   devise: 'USD';
   levier: number;
@@ -211,7 +215,7 @@ export function etatCompte(c: Compte, cot: Cotations): EtatCompte {
 
 // ---------- Création ----------
 
-export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard'): Compte {
+export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard', sansSwap = false): Compte {
   const login = 50000000 + Math.floor(Math.random() * 49999999);
   const maintenant = Date.now();
   const ticket = 100000000 + Math.floor(Math.random() * 9000000);
@@ -219,6 +223,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number, type: 
     login,
     nom,
     type,
+    sansSwap: sansSwap || undefined,
     serveur: SERVEUR,
     devise: 'USD',
     levier,
@@ -230,7 +235,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number, type: 
       { ticket, ordre: 0, position: 0, heure: maintenant, symbole: '', type: 'balance', entree: '', volume: 0, prix: 0, commission: 0, swap: 0, profit: depot, solde: depot, commentaire: 'Dépôt de démonstration' },
     ],
     ordresHisto: [],
-    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} USD, levier 1:${levier}, compte ${type === 'raw' ? 'Raw' : 'Standard'}` }],
+    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} USD, levier 1:${levier}, compte ${type === 'raw' ? 'Raw' : 'Standard'}${sansSwap ? ' sans swap' : ''}` }],
     ticketSuivant: ticket + 1,
     creeLe: maintenant,
     appelMarge: false,
@@ -602,6 +607,30 @@ function finDeJournee(heure: number): number {
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 23, 59, 59);
 }
 
+/**
+ * Swaps : à chaque rollover (22:00 UTC, triple le mercredi ou le vendredi selon le symbole) passé depuis le dernier
+ * compté, la position est débitée ou créditée du swap long / short. Les nuits manquées (application fermée) sont
+ * rattrapées. Le swap s'ajoute au profit flottant et passe au solde à la fermeture, comme dans MT5.
+ */
+export function appliquerSwaps(c: Compte, cot: Cotations, maintenant = Date.now()): Compte {
+  if (c.sansSwap) return c;
+  let change = false;
+  const positions = c.positions.map((p) => {
+    const s = symbole(p.symbole);
+    if (!s) return p;
+    const nuits = rolloversEntre(s, p.dernierSwap ?? p.heure, maintenant);
+    if (nuits.length === 0) return p;
+    const q = cot[p.symbole];
+    const prix = q ? (q.bid + q.ask) / 2 : p.prixOuverture;
+    const points = swapPoints(s, prix)[p.type === 'buy' ? 'long' : 'short'];
+    const fois = nuits.reduce((t, n) => t + n.fois, 0);
+    const montant = fois * points * point(s) * s.contrat * p.volume * conversion(s, cot);
+    change = true;
+    return { ...p, swap: arrondir(p.swap + montant), dernierSwap: nuits[nuits.length - 1].t };
+  });
+  return change ? { ...c, positions } : c;
+}
+
 export interface Evenement {
   type: 'execution' | 'sl' | 'tp' | 'stop-out' | 'appel-marge' | 'expiration' | 'rejet';
   message: string;
@@ -613,7 +642,7 @@ export interface Evenement {
  * jusqu'à repasser au-dessus du seuil, comme MT5).
  */
 export function appliquerCotations(c: Compte, cot: Cotations): { compte: Compte; evenements: Evenement[] } {
-  let courant = c;
+  let courant = appliquerSwaps(c, cot);
   const evenements: Evenement[] = [];
   const maintenant = Date.now();
 

@@ -38,6 +38,7 @@ export function Reglages() {
             </small>
             <small>
               {argent(compte.solde)} USD · 1:{compte.levier} · démo {TYPES_COMPTE[compte.type ?? 'standard'].nom}
+              {compte.sansSwap ? ' sans swap' : ''}
             </small>
           </span>
           <span className="mm-chevron">›</span>
@@ -219,6 +220,7 @@ export function OuvrirCompte() {
   const [depot, setDepot] = useState(10000);
   const [levier, setLevier] = useState(100);
   const [type, setType] = useState<TypeCompte>('standard');
+  const [sansSwap, setSansSwap] = useState(false);
   return (
     <div className="mm-ecran">
       <EnTete titre="Compte démo" gauche={<BoutonRetour />} />
@@ -240,6 +242,12 @@ export function OuvrirCompte() {
             </select>
           </label>
           <div className="mm-aide-ligne">{TYPES_COMPTE[type].description}</div>
+          <div className="mm-ligne-champ">
+            <span>Sans swap</span>
+            <span style={{ justifySelf: 'end' }}>
+              <Interrupteur actif={sansSwap} libelle="Compte sans swap" changer={setSansSwap} />
+            </span>
+          </div>
           <label className="mm-ligne-champ">
             <span>Dépôt</span>
             <select value={depot} onChange={(e) => setDepot(Number(e.target.value))}>
@@ -266,7 +274,7 @@ export function OuvrirCompte() {
         <button
           className="mm-bouton principal"
           onClick={() => {
-            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type);
+            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type, sansSwap);
             maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
             signaler(`Compte ${c.login} ouvert`);
             vibrer(20);
