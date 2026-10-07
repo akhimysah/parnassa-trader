@@ -45,7 +45,7 @@ export function lienLiaison(): string {
  * Champs propres à chaque appareil, jamais envoyés : disposition de l'écran, et surtout l'Algo Trading,
  * pour que deux appareils ne fassent pas trader les mêmes experts en double.
  */
-const LOCAUX = ['panneaux', 'hauteurBoite', 'graphiqueActif', 'disposition', 'algo'] as const;
+const LOCAUX = ['panneaux', 'hauteurBoite', 'graphiqueActif', 'disposition', 'algo', 'ecranAllume'] as const;
 type Local = (typeof LOCAUX)[number];
 
 /** Journal limité aux 300 dernières lignes par compte pour garder la copie en ligne légère. */

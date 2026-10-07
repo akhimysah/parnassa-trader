@@ -125,6 +125,38 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = etat.theme;
   }, [etat.theme]);
+  // Thème automatique : suit le réglage clair / sombre du système.
+  useEffect(() => {
+    if (!etat.themeAuto) return;
+    const m = window.matchMedia('(prefers-color-scheme: dark)');
+    const appliquer = () => maj((e) => (e.themeAuto && e.theme !== (m.matches ? 'sombre' : 'clair') ? { ...e, theme: m.matches ? 'sombre' : 'clair' } : e));
+    appliquer();
+    m.addEventListener('change', appliquer);
+    return () => m.removeEventListener('change', appliquer);
+  }, [etat.themeAuto, maj]);
+  // Écran allumé : verrou de mise en veille, repris à chaque retour sur l'application.
+  useEffect(() => {
+    if (!etat.ecranAllume || !('wakeLock' in navigator)) return;
+    let verrou: { release: () => Promise<void> } | null = null;
+    let actif = true;
+    const demander = () => {
+      if (document.visibilityState !== 'visible') return;
+      (navigator as Navigator & { wakeLock: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock
+        .request('screen')
+        .then((v) => {
+          if (actif) verrou = v;
+          else void v.release();
+        })
+        .catch(() => undefined);
+    };
+    demander();
+    document.addEventListener('visibilitychange', demander);
+    return () => {
+      actif = false;
+      document.removeEventListener('visibilitychange', demander);
+      void verrou?.release();
+    };
+  }, [etat.ecranAllume]);
 
   // ---------- Actions partagées ----------
   const operer = useCallback(

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Cotation } from '../marche/cotations';
 import { useTerminal } from '../contexte';
 import { MESSAGES } from '../composants/BoiteOutils';
 import { ContexteNav, FeuilleActions, ICONES, type Action, type Ecran, type Onglet } from './commun';
@@ -7,7 +8,7 @@ import { GraphiqueMobile } from './GraphiqueMobile';
 import { EcranFermer, EcranOrdre, EcranOrdreAttente, EcranPosition, EcranResultat } from './Ordre';
 import { Historique, Trade } from './Trade';
 import { Comptes, EcranListe, OuvrirCompte, Reglages } from './Reglages';
-import { EcranAlerte, EcranDepot, EcranExpert, EcranExperts, EcranIndicateur, EcranIndicateurs, EcranProfondeur, EcranRapport } from './Outils';
+import { EcranAlerte, EcranDepot, EcranExpert, EcranExperts, EcranIndicateur, EcranIndicateurs, EcranProfondeur, EcranRapport, EcranSuiveur, EcranUnClic } from './Outils';
 import './mobile.css';
 
 const ONGLETS: [Onglet, string][] = [
@@ -20,7 +21,8 @@ const ONGLETS: [Onglet, string][] = [
 
 /** Interface téléphone, organisée comme l'application MetaTrader 5 mobile. */
 export function Mobile({ cadre = false }: { cadre?: boolean }) {
-  const { etat, majGraphique, compte } = useTerminal();
+  const { etat, majGraphique, compte, cotations } = useTerminal();
+  const connexion = useConnexion(cotations);
   const [onglet, setOnglet] = useState<Onglet>('cotations');
   const [pile, setPile] = useState<Ecran[]>([]);
   const [feuille, setFeuille] = useState<{ titre: string | null; actions: Action[] } | null>(null);
@@ -62,6 +64,7 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
   return (
     <ContexteNav.Provider value={nav}>
       <div className={`mm${cadre ? ' cadre' : ''}${!haut ? ` onglet-${onglet}` : ''}`}>
+        {connexion !== 'ok' && <div className={`mm-connexion ${connexion}`}>{connexion === 'hors-ligne' ? 'Pas de connexion — les cotations reprendront au retour du réseau' : 'Connexion lente — cotations en attente…'}</div>}
         <div className="mm-pile">
           {/* Les onglets restent en place sous la pile : le graphique ne recharge pas son historique. */}
           <div className="mm-racine" style={{ display: haut ? 'none' : undefined }}>
@@ -139,5 +142,33 @@ function EcranPile({ e }: { e: Ecran }) {
       return <EcranExpert graphique={e.graphique} expert={e.expert} />;
     case 'depot':
       return <EcranDepot />;
+    case 'unclic':
+      return <EcranUnClic />;
+    case 'suiveur':
+      return <EcranSuiveur ticket={e.ticket} />;
   }
 }
+
+/** État du réseau comme l'indicateur de connexion de MT5 : hors ligne, ou plus aucune cotation depuis 20 s. */
+function useConnexion(cotations: Record<string, Cotation>): 'ok' | 'lente' | 'hors-ligne' {
+  const [enLigne, setEnLigne] = useState(navigator.onLine);
+  const [maintenant, setMaintenant] = useState(Date.now());
+  useEffect(() => {
+    const h = () => setEnLigne(navigator.onLine);
+    window.addEventListener('online', h);
+    window.addEventListener('offline', h);
+    const t = window.setInterval(() => setMaintenant(Date.now()), 5000);
+    return () => {
+      window.removeEventListener('online', h);
+      window.removeEventListener('offline', h);
+      window.clearInterval(t);
+    };
+  }, []);
+  if (!enLigne) return 'hors-ligne';
+  const derniere = Math.max(0, ...Object.values(cotations).map((c) => c.heure));
+  // Au démarrage (aucune cotation encore), pas d'alerte avant 20 s.
+  if (derniere === 0) return maintenant - DEMARRAGE > 20000 ? 'lente' : 'ok';
+  return maintenant - derniere > 20000 && document.visibilityState === 'visible' ? 'lente' : 'ok';
+}
+
+const DEMARRAGE = Date.now();

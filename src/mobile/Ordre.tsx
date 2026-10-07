@@ -97,6 +97,29 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
   const prixEntree = type === 'marche' ? q?.ask : type.endsWith('stop_limit') ? prixLimite : prix;
   const sens: Sens = type === 'marche' ? 'buy' : sensDe(type);
 
+  // Calculateur de risque : volume pour perdre au plus x % des fonds propres si le S/L est touché.
+  const calculerRisque = () => {
+    if (!sl || !prixEntree) {
+      feuille('Volume selon le risque', [{ libelle: 'Placez d’abord un S/L : le risque se mesure entre l’entrée et le stop', action: () => undefined }]);
+      return;
+    }
+    const { fondsPropres, margeLibre } = etatCompte(compte, cotations);
+    const parLot = Math.abs(enArgent(sym, sens, 1, prixEntree, sl, cotations));
+    // Le volume est aussi plafonné par la marge libre (sinon l'ordre serait refusé).
+    const margeParLot = margeRequise(s, 1, prixEntree, compte.levier, cotations);
+    const maxMarge = margeParLot > 0 ? margeLibre / margeParLot : s.volumeMax;
+    feuille(
+      `Risque jusqu'au S/L (fonds propres ${argent(fondsPropres)} USD)`,
+      [0.5, 1, 2, 3, 5].map((pct) => {
+        const brut = parLot > 0 ? (fondsPropres * pct) / 100 / parLot : 0;
+        const plafond = Math.min(s.volumeMax, maxMarge);
+        const v = Number(Math.max(s.volumeMin, Math.floor(Math.min(brut, plafond) / s.pasVolume) * s.pasVolume).toFixed(2));
+        const limite = brut > plafond ? (maxMarge < s.volumeMax ? ' — limité par la marge' : ' — volume maximal') : '';
+        return { libelle: `${pct} % → ${v.toFixed(2)} lot, perte ${argent(parLot * v)} USD${limite}`, action: () => setVolume(v) };
+      }),
+    );
+  };
+
   const termine = (r: { erreur: string | null; message?: string; ticket?: number }, titreOk: string) => {
     if (r.erreur) {
       vibrer(40);
@@ -138,6 +161,10 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
           <ChampVolume valeur={volume} changer={setVolume} min={s.volumeMin} max={s.volumeMax} pasMin={s.pasVolume} />
           <div className="mm-aide-ligne">
             {argent(volume * s.contrat, 0)} {s.base} · marge {argent(marge)} USD{marge > libre ? ' · marge libre insuffisante' : ''}
+            {' · '}
+            <button className="mm-lien" onClick={calculerRisque}>
+              volume selon le risque
+            </button>
           </div>
           {type !== 'marche' && (
             <div className="mm-ligne-champ">

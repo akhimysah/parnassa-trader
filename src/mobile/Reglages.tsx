@@ -69,7 +69,7 @@ export function Reglages() {
         <ul className="mm-liste">
           <li>
             <span className="mm-ico vert">⚡</span>Trading en un clic
-            <Interrupteur actif={etat.unClicAccepte} libelle="Trading en un clic" changer={(v) => (v ? ouvrir({ type: 'unclic' }) : maj((e) => ({ ...e, unClicAccepte: false })))} />
+            <Interrupteur actif={etat.unClicAccepte} libelle="Trading en un clic" changer={(v) => (v ? pousser({ type: 'unclic' }) : maj((e) => ({ ...e, unClicAccepte: false })))} />
           </li>
           <li>
             <span className="mm-ico bleu">🎓</span>Algo Trading
@@ -101,9 +101,23 @@ export function Reglages() {
 
         <div className="mm-section">Affichage</div>
         <ul className="mm-liste">
+          <li className="mm-li-colonne">
+            <span className="mm-li-titre">
+              <span className="mm-ico gris">🌙</span>Thème
+            </span>
+            <Segments<'clair' | 'sombre' | 'auto'>
+              valeur={etat.themeAuto ? 'auto' : etat.theme}
+              changer={(v) => maj((e) => (v === 'auto' ? { ...e, themeAuto: true } : { ...e, themeAuto: false, theme: v }))}
+              options={[
+                ['clair', 'Clair'],
+                ['sombre', 'Sombre'],
+                ['auto', 'Automatique'],
+              ]}
+            />
+          </li>
           <li>
-            <span className="mm-ico gris">🌙</span>Thème sombre
-            <Interrupteur actif={etat.theme === 'sombre'} libelle="Thème sombre" changer={(v) => maj((e) => ({ ...e, theme: v ? 'sombre' : 'clair' }))} />
+            <span className="mm-ico orange">☀</span>Garder l'écran allumé
+            <Interrupteur actif={etat.ecranAllume} libelle="Garder l'écran allumé" changer={(v) => maj((e) => ({ ...e, ecranAllume: v }))} />
           </li>
           <li>
             <span className="mm-ico bleu">⇅</span>Cotations avancées

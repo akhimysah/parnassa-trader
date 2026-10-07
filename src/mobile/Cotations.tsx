@@ -223,7 +223,17 @@ export function ProprietesSymbole({ nom }: { nom: string }) {
   const { pousser } = useNav();
   const s = symbole(nom)!;
   const c = cotations[nom];
+  const variation = c ? ((c.bid - c.ouverture) / c.ouverture) * 100 : 0;
   const lignes: [string, string][] = [
+    ...(c
+      ? ([
+          ['Variation du jour', `${variation >= 0 ? '+' : ''}${variation.toFixed(2)} %`],
+          ['Ouverture', formaterPrix(s, c.ouverture)],
+          ['Plus haut', formaterPrix(s, c.haut)],
+          ['Plus bas', formaterPrix(s, c.bas)],
+          ['Spread actuel', `${Math.round((c.ask - c.bid) / point(s))} points`],
+        ] as [string, string][])
+      : []),
     ['Description', s.description],
     ['Chiffres', String(s.chiffres)],
     ['Type de compte', TYPES_COMPTE[compte.type ?? 'standard'].nom],

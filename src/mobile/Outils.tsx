@@ -6,10 +6,10 @@ import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { DEFINITIONS, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
 import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
 import { calculerStats } from '../algo/statistiques';
-import { operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
+import { definirSuiveur, operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
 import { CourbeSolde } from '../composants/Courbe';
 import { PrixGros, argent } from '../composants/ui';
-import { BoutonRetour, ChampPas, ChampVolume, EnTete, Interrupteur, Segments, useNav, vibrer } from './commun';
+import { BoutonIcone, BoutonRetour, ChampPas, ChampVolume, EnTete, Interrupteur, Segments, useNav, vibrer } from './commun';
 
 // ---------- Rapport de trading ----------
 
@@ -25,9 +25,39 @@ export function EcranRapport() {
       <dd className={c}>{v}</dd>
     </div>
   );
+  const { signaler } = useTerminal();
+  const partager = async () => {
+    const texte = [
+      `Parnassa Trader — compte ${compte.login} (démo)`,
+      `Solde : ${argent(compte.solde)} USD`,
+      `Bénéfice net : ${argent(s.net)} USD sur ${s.trades} trades (${pct(s.gagnants, s.trades)} gagnants)`,
+      `Facteur de profit : ${s.facteur === null ? '—' : s.facteur.toFixed(2)} · drawdown max ${s.ddMaxPct.toFixed(2)} %`,
+      ...s.parSymbole.slice(0, 5).map((x) => `${x.symbole} : ${argent(x.net)} USD (${x.trades} trades)`),
+    ].join('\n');
+    try {
+      if (navigator.share) await navigator.share({ title: 'Rapport Parnassa Trader', text: texte });
+      else {
+        await navigator.clipboard.writeText(texte);
+        signaler('Rapport copié dans le presse-papiers');
+      }
+    } catch {
+      // partage annulé
+    }
+  };
   return (
     <div className="mm-ecran">
-      <EnTete titre="Rapport" sousTitre={`${compte.login} · ${compte.nom}`} gauche={<BoutonRetour />} />
+      <EnTete
+        titre="Rapport"
+        sousTitre={`${compte.login} · ${compte.nom}`}
+        gauche={<BoutonRetour />}
+        droite={
+          <BoutonIcone titre="Partager" onClick={() => void partager()}>
+            <svg viewBox="0 0 20 20" width="20" height="20">
+              <path d="M10 13V3M6.5 6.5L10 3l3.5 3.5M5 9H4v8h12V9h-1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </BoutonIcone>
+        }
+      />
       <div className="mm-defile">
         <div className="mm-tuiles">
           <div>
@@ -308,14 +338,15 @@ export function EcranAlerte({ id, symboleInitial }: { id?: string; symboleInitia
 // ---------- Profondeur du marché ----------
 
 export function EcranProfondeur({ nom }: { nom: string }) {
-  const { etat, cotations, operer, ouvrir } = useTerminal();
+  const { etat, cotations, operer } = useTerminal();
+  const { pousser } = useNav();
   const s = symbole(nom)!;
   const [carnet, setCarnet] = useState<Carnet | null>(null);
   const [volume, setVolume] = useState(Math.max(s.volumeMin, etat.volumeDefaut));
   useEffect(() => (s.direct.binance ? abonnerProfondeur(s.direct.binance, setCarnet) : undefined), [s]);
   const max = carnet ? Math.max(...carnet.bids.slice(0, 10).map((b) => b[1]), ...carnet.asks.slice(0, 10).map((a) => a[1])) : 1;
   const passer = (type: 'buy' | 'sell') => {
-    if (!etat.unClicAccepte) return ouvrir({ type: 'unclic' });
+    if (!etat.unClicAccepte) return pousser({ type: 'unclic' });
     const r = operer((c) => ouvrirMarche(c, { symbole: nom, type, volume, sl: 0, tp: 0, commentaire: '' }, cotations), { confirmation: false });
     vibrer(r.erreur ? 40 : 20);
   };
@@ -554,3 +585,92 @@ export function EcranDepot() {
   );
 }
 
+
+// ---------- Trading en un clic : avertissement ----------
+
+export function EcranUnClic() {
+  const { maj } = useTerminal();
+  const { retour } = useNav();
+  const [accepte, setAccepte] = useState(false);
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Trading en un clic" gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-bloc">
+          <p>
+            Le trading en un clic envoie vos ordres <b>immédiatement, sans confirmation</b> : chaque appui sur SELL ou BUY (graphique, profondeur du marché) ouvre une position au prix du marché.
+          </p>
+          <p className="mm-note sans-marge">Vous pourrez le désactiver à tout moment dans Paramètres.</p>
+        </div>
+        <div className="mm-bloc ligne">
+          J'ai compris et j'accepte
+          <Interrupteur actif={accepte} libelle="J'accepte" changer={setAccepte} />
+        </div>
+      </div>
+      <div className="mm-boutons-bas">
+        <button
+          className="mm-bouton principal"
+          disabled={!accepte}
+          onClick={() => {
+            maj((e) => ({ ...e, unClicAccepte: true }));
+            vibrer(20);
+            retour();
+          }}
+        >
+          ACTIVER
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Stop suiveur personnalisé ----------
+
+export function EcranSuiveur({ ticket }: { ticket: number }) {
+  const { compte, operer } = useTerminal();
+  const { retour } = useNav();
+  const p = compte.positions.find((x) => x.ticket === ticket);
+  const [points, setPoints] = useState(p?.suiveur || 200);
+  if (!p) return null;
+  const s = symbole(p.symbole)!;
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Stop suiveur" sousTitre={`#${p.ticket} ${p.symbole}, ${p.type} ${p.volume.toFixed(2)}`} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-formulaire">
+          <div className="mm-ligne-champ">
+            <span>Distance (points)</span>
+            <ChampPas valeur={points} changer={setPoints} pas={10} min={5} decimales={0} />
+          </div>
+          <div className="mm-aide-ligne">
+            soit {(points * point(s)).toFixed(s.chiffres)} en prix, environ {argent(points * point(s) * s.contrat * p.volume)} USD sur cette position
+          </div>
+        </div>
+        <p className="mm-note">Le stop-loss suit le prix dès que la position gagne plus que cette distance. Comme dans MT5, il est géré par le terminal : il ne bouge que lorsque l'application est ouverte.</p>
+      </div>
+      <div className="mm-boutons-bas">
+        {p.suiveur > 0 && (
+          <button
+            className="mm-bouton vente"
+            onClick={() => {
+              operer((c) => ({ compte: definirSuiveur(c, p.ticket, 0), erreur: null }), { silencieux: true });
+              retour();
+            }}
+          >
+            DÉSACTIVER
+          </button>
+        )}
+        <button
+          className="mm-bouton principal"
+          onClick={() => {
+            operer((c) => ({ compte: definirSuiveur(c, p.ticket, points), erreur: null }), { silencieux: true });
+            vibrer(15);
+            retour();
+          }}
+        >
+          ACTIVER
+        </button>
+      </div>
+    </div>
+  );
+}

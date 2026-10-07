@@ -1459,3 +1459,32 @@
 .mm-calendrier li.prochain {
   background: rgba(0, 122, 255, 0.08);
 }
+
+/* Connexion, réglages en colonne */
+.mm-connexion {
+  flex: none;
+  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px;
+  font-size: 12px;
+  text-align: center;
+  color: #fff;
+  background: #ff9500;
+}
+.mm-connexion.hors-ligne {
+  background: var(--m-baisse);
+}
+.mm-connexion + .mm-pile .mm-entete {
+  padding-top: 4px;
+}
+.mm-liste li.mm-li-colonne {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.mm-li-titre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.mm-aide-ligne .mm-lien {
+  font-size: 12px;
+}

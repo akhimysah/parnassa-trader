@@ -23,7 +23,9 @@ export type Ecran =
   | { type: 'profondeur'; symbole: string }
   | { type: 'experts' }
   | { type: 'expert'; graphique: string; expert?: import('../algo/experts').TypeExpert }
-  | { type: 'depot' };
+  | { type: 'depot' }
+  | { type: 'unclic' }
+  | { type: 'suiveur'; ticket: number };
 
 export interface Action {
   libelle: string;

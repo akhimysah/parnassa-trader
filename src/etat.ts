@@ -60,6 +60,10 @@ export interface EtatTerminal {
   volumeDefaut: number;
   son: boolean;
   theme: 'clair' | 'sombre';
+  /** Thème automatique : suit le réglage clair / sombre du système (theme est alors mis à jour tout seul). */
+  themeAuto: boolean;
+  /** Empêche la mise en veille de l'écran tant que l'application est affichée (propre à l'appareil). */
+  ecranAllume: boolean;
   alertes: Alerte[];
   /** Algo Trading : autorise les Expert Advisors à trader. */
   algo: boolean;
@@ -113,6 +117,8 @@ function etatInitial(): EtatTerminal {
     volumeDefaut: 0.1,
     son: true,
     theme: 'clair',
+    themeAuto: false,
+    ecranAllume: false,
     alertes: [],
     algo: false,
     mobileAvance: true,

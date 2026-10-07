@@ -148,7 +148,7 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
 }
 
 function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: string) => void }) {
-  const { cotations, operer, ouvrir } = useTerminal();
+  const { cotations, operer } = useTerminal();
   const { pousser, feuille } = useNav();
   const [ouvert, setOuvert] = useState(false);
   const [decalage, setDecalage] = useState(0);
@@ -168,7 +168,7 @@ function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: s
           feuille('Stop suiveur', [
             { libelle: `Aucun${p.suiveur === 0 ? ' ✓' : ''}`, action: suiveur(0) },
             ...[50, 100, 200, 300, 500, 1000].map((n) => ({ libelle: `${n} points${p.suiveur === n ? ' ✓' : ''}`, action: suiveur(n) })),
-            { libelle: 'Personnalisé…', action: () => ouvrir({ type: 'suiveur', ticket: p.ticket }) },
+            { libelle: 'Personnalisé…', action: () => pousser({ type: 'suiveur', ticket: p.ticket }) },
           ]),
       },
       { libelle: 'Nouvel ordre', action: () => pousser({ type: 'ordre', symbole: p.symbole }) },
