@@ -30,7 +30,7 @@ import { couleursSchema } from './couleurs';
 import { registreGraphiques } from './registre';
 import { decider, definitionExpert } from '../algo/experts';
 import { journaliser, LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
-import { PrixGros, Spin, useMenuContextuel, type ElementMenu } from '../composants/ui';
+import { PrixGros, VolumeRapide, useMenuContextuel, type ElementMenu } from '../composants/ui';
 
 interface Props {
   g: Graphique;
@@ -98,7 +98,9 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   const appui = useRef<{ x: number; y: number } | null>(null);
   const minuteurAppui = useRef<number | undefined>(undefined);
   const premierPoint = useRef<{ t: number; prix: number } | null>(null);
-  const [volume, setVolume] = useState(etat.volumeDefaut);
+  // Volume du panneau un clic, mémorisé par graphique (ramené aux limites du symbole affiché).
+  const volume = Math.min(s.volumeMax, Math.max(s.volumeMin, g.volumeUnClic ?? etat.volumeDefaut));
+  const setVolume = (v: number) => majGraphique(g.id, { volumeUnClic: v });
   const [hauteursPanneaux, setHauteursPanneaux] = useState<number[]>([]);
   const { ouvrirMenu, element: menu } = useMenuContextuel();
   const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo, appuiLong, appuiLigne });
@@ -745,8 +747,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
               <PrixGros s={s} prix={cot?.bid} />
             </button>
             <div className="uc-volume">
-              <Spin valeur={volume} changer={setVolume} pas={s.pasVolume} min={s.volumeMin} max={s.volumeMax} decimales={2} />
-              {cot && <span className="uc-spread">{Math.round((cot.ask - cot.bid) / point(s))}</span>}
+              <VolumeRapide valeur={volume} changer={setVolume} pas={s.pasVolume} min={s.volumeMin} max={s.volumeMax} />
+              {cot && <span className="uc-spread">spread {Math.round((cot.ask - cot.bid) / point(s))}</span>}
             </div>
             <button className="uc-achat" onClick={() => unClic('buy')} title="Acheter au marché">
               <span className="uc-libelle">BUY</span>

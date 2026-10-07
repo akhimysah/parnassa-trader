@@ -250,3 +250,87 @@ export function Spin({
     </span>
   );
 }
+
+const VOLUMES_RAPIDES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10];
+
+/**
+ * Volume du trading en un clic : le chiffre se modifie directement (clic = tout sélectionné, Entrée = valider),
+ * boutons − / + et menu de volumes rapides.
+ */
+export function VolumeRapide({ valeur, changer, min, max, pas }: { valeur: number; changer: (v: number) => void; min: number; max: number; pas: number }) {
+  const [texte, setTexte] = useState(valeur.toFixed(2));
+  const [menu, setMenu] = useState(false);
+  const focus = useRef(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focus.current) setTexte(valeur.toFixed(2));
+  }, [valeur]);
+  useEffect(() => {
+    if (!menu) return;
+    const h = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setMenu(false);
+    window.addEventListener('pointerdown', h);
+    return () => window.removeEventListener('pointerdown', h);
+  }, [menu]);
+  const borner = (v: number) => Number(Math.min(max, Math.max(min, Math.round(v / pas) * pas)).toFixed(2));
+  const valider = () => {
+    const v = Number(texte.replace(',', '.'));
+    const ok = Number.isFinite(v) && v > 0 ? borner(v) : valeur;
+    changer(ok);
+    setTexte(ok.toFixed(2));
+  };
+  const presets = VOLUMES_RAPIDES.filter((v) => v >= min && v <= max);
+  return (
+    <div className="volume-rapide" ref={ref} onPointerDown={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
+      <button type="button" className="vr-pas" onClick={() => changer(borner(valeur - pas))} aria-label="Diminuer le volume">
+        −
+      </button>
+      <input
+        value={texte}
+        inputMode="decimal"
+        aria-label="Volume en lots"
+        onFocus={(e) => {
+          focus.current = true;
+          e.target.select();
+        }}
+        onBlur={() => {
+          focus.current = false;
+          valider();
+        }}
+        onChange={(e) => setTexte(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') {
+            setTexte(valeur.toFixed(2));
+            (e.target as HTMLInputElement).blur();
+          }
+          if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            changer(borner(valeur + (e.key === 'ArrowUp' ? pas : -pas)));
+          }
+        }}
+      />
+      <button type="button" className="vr-pas" onClick={() => changer(borner(valeur + pas))} aria-label="Augmenter le volume">
+        +
+      </button>
+      <button type="button" className="vr-menu" onClick={() => setMenu(!menu)} aria-label="Volumes rapides">
+        ▾
+      </button>
+      {menu && (
+        <div className="vr-liste">
+          {presets.map((v) => (
+            <button
+              key={v}
+              className={v === valeur ? 'actif' : ''}
+              onClick={() => {
+                changer(v);
+                setMenu(false);
+              }}
+            >
+              {v.toFixed(2)}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

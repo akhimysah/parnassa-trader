@@ -1619,3 +1619,24 @@
   -webkit-user-select: none;
   touch-action: manipulation;
 }
+
+/* Volume du trading en un clic, au doigt */
+.mm-graphique .volume-rapide {
+  height: 32px;
+  border-radius: 6px;
+}
+.mm-graphique .volume-rapide input {
+  width: 48px;
+  font-size: 15px;
+}
+.mm-graphique .volume-rapide .vr-pas {
+  width: 26px;
+  font-size: 17px;
+}
+.mm-graphique .volume-rapide .vr-menu {
+  width: 20px;
+}
+.mm-graphique .vr-liste button {
+  height: 34px;
+  font-size: 14px;
+}

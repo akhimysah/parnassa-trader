@@ -30,6 +30,8 @@ export interface Graphique {
   defilement: boolean;
   decalage: boolean;
   unClic: boolean;
+  /** Volume du panneau de trading en un clic de ce graphique (mémorisé). */
+  volumeUnClic?: number;
   schema: Schema;
   /** Expert Advisor attaché au graphique. */
   expert: Expert | null;
