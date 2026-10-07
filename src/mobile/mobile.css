@@ -1555,3 +1555,36 @@
   width: 100%;
   flex: none;
 }
+
+/* ---------- Tablette : deux colonnes, comme MT5 sur iPad ---------- */
+.mm-colonne-principale {
+  position: absolute;
+  inset: 0;
+}
+.mm-pile.tablette {
+  display: grid;
+  grid-template-columns: minmax(320px, 36%) 1fr;
+}
+.mm-pile.tablette .mm-colonne-cotations {
+  position: relative;
+  min-height: 0;
+  border-right: 0.5px solid var(--m-trait);
+  overflow: hidden;
+}
+.mm-pile.tablette .mm-colonne-principale {
+  position: relative;
+  min-width: 0;
+}
+.mm.tablette .mm-onglets {
+  justify-content: center;
+}
+.mm.tablette .mm-onglets button {
+  flex: 0 1 140px;
+}
+.mm.tablette .mm-voile {
+  align-items: center;
+  justify-content: center;
+}
+.mm.tablette .mm-feuille {
+  width: 420px;
+}

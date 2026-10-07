@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Cotation } from '../marche/cotations';
 import { useTerminal } from '../contexte';
 import { MESSAGES } from '../composants/BoiteOutils';
@@ -59,35 +59,55 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
     [etat.graphiques, etat.graphiqueActif, majGraphique],
   );
 
+  // Tablette (iPad, grand téléphone en paysage…) : cotations toujours à gauche, onglet actif à droite.
+  const racineRef = useRef<HTMLDivElement>(null);
+  const [tablette, setTablette] = useState(false);
+  useEffect(() => {
+    const el = racineRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setTablette(el.clientWidth >= 700 && el.clientHeight >= 500));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Sur tablette, l'onglet Cotations est la colonne de gauche : la partie droite montre alors le graphique.
+  const ongletDroit: Onglet = tablette && onglet === 'cotations' ? 'graphique' : onglet;
+
   const haut = pile[pile.length - 1];
   const nonLus = MESSAGES.filter((m) => !etat.lus.includes(m.id)).length;
   const positions = compte.positions.length;
 
   return (
     <ContexteNav.Provider value={nav}>
-      <div className={`mm${cadre ? ' cadre' : ''}${!haut ? ` onglet-${onglet}` : ''}`}>
+      <div ref={racineRef} className={`mm${cadre ? ' cadre' : ''}${tablette ? ' tablette' : ''}${!haut ? ` onglet-${ongletDroit}` : ''}`}>
         {connexion !== 'ok' && <div className={`mm-connexion ${connexion}`}>{connexion === 'hors-ligne' ? 'Pas de connexion — les cotations reprendront au retour du réseau' : 'Connexion lente — cotations en attente…'}</div>}
-        <div className="mm-pile">
-          {/* Les onglets restent en place sous la pile : le graphique ne recharge pas son historique. */}
-          <div className="mm-racine" style={{ display: haut ? 'none' : undefined }}>
-            {onglet === 'cotations' && <Cotations voirGraphique={voirGraphique} />}
-            <div className="mm-conteneur-graphique" style={{ display: onglet === 'graphique' ? undefined : 'none' }}>
-              <GraphiqueMobile />
-            </div>
-            {onglet === 'trade' && <Trade voirGraphique={voirGraphique} />}
-            {onglet === 'historique' && <Historique />}
-            {onglet === 'parametres' && <Reglages />}
-          </div>
-          {haut && (
-            <div className="mm-ecran-pile" key={pile.length}>
-              <EcranPile e={haut} />
+        <div className={`mm-pile${tablette ? ' tablette' : ''}`}>
+          {tablette && (
+            <div className="mm-colonne-cotations">
+              <Cotations voirGraphique={voirGraphique} />
             </div>
           )}
+          <div className="mm-colonne-principale">
+            {/* Les onglets restent en place sous la pile : le graphique ne recharge pas son historique. */}
+            <div className="mm-racine" style={{ display: haut ? 'none' : undefined }}>
+              {ongletDroit === 'cotations' && <Cotations voirGraphique={voirGraphique} />}
+              <div className="mm-conteneur-graphique" style={{ display: ongletDroit === 'graphique' ? undefined : 'none' }}>
+                <GraphiqueMobile />
+              </div>
+              {ongletDroit === 'trade' && <Trade voirGraphique={voirGraphique} />}
+              {ongletDroit === 'historique' && <Historique />}
+              {ongletDroit === 'parametres' && <Reglages />}
+            </div>
+            {haut && (
+              <div className="mm-ecran-pile" key={pile.length}>
+                <EcranPile e={haut} />
+              </div>
+            )}
+          </div>
         </div>
-        {!haut && (
+        {(!haut || tablette) && (
           <nav className="mm-onglets">
-            {ONGLETS.map(([id, l]) => (
-              <button key={id} className={onglet === id ? 'actif' : ''} onClick={() => setOnglet(id)}>
+            {ONGLETS.filter(([id]) => !tablette || id !== 'cotations').map(([id, l]) => (
+              <button key={id} className={ongletDroit === id ? 'actif' : ''} onClick={() => setOnglet(id)}>
                 <span className="mm-onglet-icone">
                   {ICONES[id]}
                   {id === 'parametres' && nonLus > 0 && <i className="mm-point" />}

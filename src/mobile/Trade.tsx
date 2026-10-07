@@ -34,7 +34,26 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
   return (
     <div className="mm-ecran">
       <EnTete
-        titre={<span className={e.profit >= 0 ? 'positif' : 'negatif'}>{`${e.profit >= 0 ? '' : '−'}${argent(Math.abs(e.profit))} USD`}</span>}
+        titre={
+          <button
+            className="mm-titre-bouton"
+            onClick={() =>
+              feuille(
+                'Changer de compte',
+                etat.comptes.map((c) => ({
+                  libelle: `${c.login === etat.actif ? '✓ ' : ''}${c.login} · ${c.nom} · ${argent(c.solde)} USD`,
+                  action: () => {
+                    vibrer();
+                    maj((x) => ({ ...x, actif: c.login }));
+                  },
+                })),
+              )
+            }
+          >
+            <span className={e.profit >= 0 ? 'positif' : 'negatif'}>{`${e.profit >= 0 ? '' : '−'}${argent(Math.abs(e.profit))} USD`}</span>
+          </button>
+        }
+        sousTitre={`${compte.login} · ${compte.nom}`}
         gauche={
           <BoutonIcone
             titre="Trier et opérations groupées"
@@ -353,6 +372,26 @@ export function Historique() {
   const depot = somme((d) => (d.type === 'balance' && d.profit > 0 ? d.profit : 0));
   const retrait = somme((d) => (d.type === 'balance' && d.profit < 0 ? d.profit : 0));
   const symboles = [...new Set(compte.transactions.filter((d) => d.symbole).map((d) => d.symbole))];
+  // Export de l'historique (transactions de la période) : feuille de partage du téléphone, sinon téléchargement.
+  const exporterCsv = async () => {
+    const entetes = ['Heure', 'Transaction', 'Position', 'Symbole', 'Type', 'Direction', 'Volume', 'Prix', 'Commission', 'Swap', 'Profit', 'Solde', 'Commentaire'];
+    const lignes = deals.map((d) => [dateMT(d.heure), d.ticket, d.position || '', d.symbole, d.type, d.entree, d.volume || '', d.prix || '', d.commission, d.swap, d.profit, d.solde, d.commentaire]);
+    const csv = '\ufeff' + [entetes, ...lignes].map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
+    const nom = `Historique-${compte.login}.csv`;
+    const fichier = new File([csv], nom, { type: 'text/csv' });
+    try {
+      if (navigator.canShare?.({ files: [fichier] })) {
+        await navigator.share({ files: [fichier], title: nom });
+        return;
+      }
+    } catch {
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(fichier);
+    a.download = nom;
+    a.click();
+  };
   const courbe = useMemo(() => calculerStats(compte.transactions.filter((d) => d.heure >= depuis)).courbe, [compte.transactions, depuis]);
   return (
     <div className="mm-ecran">
@@ -540,6 +579,9 @@ export function Historique() {
         <div className="mm-boutons-bas statique">
           <button className="mm-bouton secondaire" onClick={() => pousser({ type: 'rapport' })}>
             Rapport détaillé
+          </button>
+          <button className="mm-bouton secondaire" onClick={() => void exporterCsv()}>
+            Exporter (CSV)
           </button>
         </div>
       </div>

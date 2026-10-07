@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 export type ModeInterface = 'auto' | 'mobile' | 'bureau';
 
 const CLE = 'parnassa-trader:interface';
-const REQUETE = '(max-width: 820px)';
+// Téléphones, et tablettes tactiles (iPad en paysage compris) : interface mobile, comme MT5 qui a son application iPad.
+const REQUETE = '(max-width: 820px), (pointer: coarse) and (max-width: 1366px)';
 const ecouteurs = new Set<() => void>();
 
 function lire(): ModeInterface {

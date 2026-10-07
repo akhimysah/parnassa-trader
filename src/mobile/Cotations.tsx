@@ -19,9 +19,24 @@ const CATEGORIES: { id: Categorie; nom: string }[] = [
 /** Cotations : liste des symboles en mode avancé (prix, spread, plus haut / bas) ou simple, comme MT5 mobile. */
 export function Cotations({ voirGraphique }: { voirGraphique: (s: string) => void }) {
   const { etat, maj } = useTerminal();
-  const { pousser } = useNav();
+  const { pousser, feuille } = useNav();
+  const { cotations } = useTerminal();
   const avance = etat.mobileAvance;
-  const basculer = () => maj((e) => ({ ...e, mobileAvance: !e.mobileAvance }));
+  const [tri, setTri] = useState<'perso' | 'nom' | 'hausse' | 'baisse'>('perso');
+  const variation = (n: string) => {
+    const c = cotations[n];
+    return c ? (c.bid - c.ouverture) / c.ouverture : 0;
+  };
+  const liste =
+    tri === 'nom' ? [...etat.observation].sort() : tri === 'hausse' ? [...etat.observation].sort((a, b) => variation(b) - variation(a)) : tri === 'baisse' ? [...etat.observation].sort((a, b) => variation(a) - variation(b)) : etat.observation;
+  const basculer = () =>
+    feuille('Affichage', [
+      { libelle: avance ? 'Mode simple' : 'Mode avancé', action: () => maj((e) => ({ ...e, mobileAvance: !e.mobileAvance })) },
+      { libelle: `Ordre personnel${tri === 'perso' ? ' ✓' : ''}`, action: () => setTri('perso') },
+      { libelle: `Alphabétique${tri === 'nom' ? ' ✓' : ''}`, action: () => setTri('nom') },
+      { libelle: `Plus fortes hausses${tri === 'hausse' ? ' ✓' : ''}`, action: () => setTri('hausse') },
+      { libelle: `Plus fortes baisses${tri === 'baisse' ? ' ✓' : ''}`, action: () => setTri('baisse') },
+    ]);
   return (
     <div className="mm-ecran">
       <EnTete
@@ -35,7 +50,7 @@ export function Cotations({ voirGraphique }: { voirGraphique: (s: string) => voi
         }
         droite={
           <>
-            <BoutonIcone titre={avance ? 'Mode simple' : 'Mode avancé'} onClick={basculer}>
+            <BoutonIcone titre="Affichage et tri" onClick={basculer}>
               <svg viewBox="0 0 20 20" width="20" height="20">
                 {avance ? <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.7" /> : <path d="M3 4h14M3 8h9M3 12h14M3 16h9" stroke="currentColor" strokeWidth="1.7" />}
               </svg>
@@ -49,7 +64,7 @@ export function Cotations({ voirGraphique }: { voirGraphique: (s: string) => voi
       <div className="mm-defile">
         <BanniereInstallation />
         <ul className={`mm-cotations ${avance ? 'avance' : 'simple'}`}>
-          {etat.observation.map((nom) => (
+          {liste.map((nom) => (
             <LigneCotation key={nom} nom={nom} avance={avance} voirGraphique={voirGraphique} />
           ))}
         </ul>

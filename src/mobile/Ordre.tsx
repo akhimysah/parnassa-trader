@@ -21,7 +21,7 @@ import {
 } from '../compte/moteur';
 import { GraphiqueTicks } from '../composants/ObservationMarche';
 import { PrixGros, argent, dateMT } from '../composants/ui';
-import { BoutonRetour, ChampPas, ChampVolume, EnTete, useNav, vibrer } from './commun';
+import { BoutonRetour, ChampPas, ChampVolume, EnTete, Segments, useNav, vibrer } from './commun';
 
 type TypeOrdre = 'marche' | TypeEnAttente;
 
@@ -75,6 +75,15 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
   const [expiration, setExpiration] = useState<Expiration>('gtc');
   const [echeance, setEcheance] = useState(Date.now() + 86400000);
   const [commentaire, setCommentaire] = useState('');
+  // Stops en points : la distance est fixée maintenant, le prix exact du S/L / T/P au moment de l'ordre (selon le sens).
+  const [modeStops, setModeStops] = useState<'prix' | 'points'>('prix');
+  const [slPts, setSlPts] = useState(0);
+  const [tpPts, setTpPts] = useState(0);
+  const stopsDepuisPoints = (entree: number, cote: Sens) => {
+    const f = cote === 'buy' ? 1 : -1;
+    const arr = (v: number) => Number(v.toFixed(s.chiffres));
+    return { sl: slPts ? arr(entree - f * slPts * point(s)) : 0, tp: tpPts ? arr(entree + f * tpPts * point(s)) : 0 };
+  };
 
   // Changement de symbole : les prix ne valent plus (le prix reçu à l'ouverture de l'écran est gardé).
   const symPrecedent = useRef(sym);
@@ -129,10 +138,14 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
       pousser({ type: 'resultat', ok: true, titre: titreOk, texte: `#${r.ticket} ${r.message ?? ''}` });
     }
   };
-  const marche = (t: Sens) => termine(operer((c) => ouvrirMarche(c, { symbole: sym, type: t, volume, sl, tp, commentaire }, cotations), { confirmation: false, silencieux: true }), 'Ordre exécuté');
+  const marche = (t: Sens) => {
+    const st = modeStops === 'points' && q ? stopsDepuisPoints(t === 'buy' ? q.ask : q.bid, t) : { sl, tp };
+    termine(operer((c) => ouvrirMarche(c, { symbole: sym, type: t, volume, sl: st.sl, tp: st.tp, commentaire }, cotations), { confirmation: false, silencieux: true }), 'Ordre exécuté');
+  };
   const placer = () => {
     if (type === 'marche') return;
-    termine(operer((c) => placerOrdre(c, { symbole: sym, type, volume, prix, prixLimite, sl, tp, expiration, echeance, commentaire }, cotations), { confirmation: false, silencieux: true }), 'Ordre placé');
+    const st = modeStops === 'points' ? stopsDepuisPoints(type.endsWith('stop_limit') ? prixLimite : prix, sensDe(type)) : { sl, tp };
+    termine(operer((c) => placerOrdre(c, { symbole: sym, type, volume, prix, prixLimite, sl: st.sl, tp: st.tp, expiration, echeance, commentaire }, cotations), { confirmation: false, silencieux: true }), 'Ordre placé');
   };
 
   return (
@@ -179,22 +192,60 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
             </div>
           )}
           <div className="mm-ligne-champ">
-            <span>S/L</span>
-            <ChampPas valeur={sl} changer={setSl} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} placeholder="non défini" />
+            <span>Stops en</span>
+            <Segments<'prix' | 'points'>
+              valeur={modeStops}
+              changer={setModeStops}
+              options={[
+                ['prix', 'Prix'],
+                ['points', 'Points'],
+              ]}
+            />
           </div>
-          {sl > 0 && prixEntree && (
-            <div className="mm-aide-ligne">
-              <Montant v={enArgent(sym, sens, volume, prixEntree, sl, cotations)} />
-            </div>
-          )}
-          <div className="mm-ligne-champ">
-            <span>T/P</span>
-            <ChampPas valeur={tp} changer={setTp} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} placeholder="non défini" />
-          </div>
-          {tp > 0 && prixEntree && (
-            <div className="mm-aide-ligne">
-              <Montant v={enArgent(sym, sens, volume, prixEntree, tp, cotations)} />
-            </div>
+          {modeStops === 'prix' ? (
+            <>
+              <div className="mm-ligne-champ">
+                <span>S/L</span>
+                <ChampPas valeur={sl} changer={setSl} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} placeholder="non défini" />
+              </div>
+              {sl > 0 && prixEntree && (
+                <div className="mm-aide-ligne">
+                  <Montant v={enArgent(sym, sens, volume, prixEntree, sl, cotations)} />
+                </div>
+              )}
+              <div className="mm-ligne-champ">
+                <span>T/P</span>
+                <ChampPas valeur={tp} changer={setTp} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} placeholder="non défini" />
+              </div>
+              {tp > 0 && prixEntree && (
+                <div className="mm-aide-ligne">
+                  <Montant v={enArgent(sym, sens, volume, prixEntree, tp, cotations)} />
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="mm-ligne-champ">
+                <span>S/L (points)</span>
+                <ChampPas valeur={slPts} changer={setSlPts} pas={10} decimales={0} vide placeholder="non défini" />
+              </div>
+              {slPts > 0 && (
+                <div className="mm-aide-ligne">
+                  {(slPts * pas).toFixed(s.chiffres)} de distance · <Montant v={-slPts * pas * s.contrat * volume * conversion(s, cotations)} />
+                  {q && type === 'marche' ? ` · achat : ${formaterPrix(s, stopsDepuisPoints(q.ask, 'buy').sl)}, vente : ${formaterPrix(s, stopsDepuisPoints(q.bid, 'sell').sl)}` : ''}
+                </div>
+              )}
+              <div className="mm-ligne-champ">
+                <span>T/P (points)</span>
+                <ChampPas valeur={tpPts} changer={setTpPts} pas={10} decimales={0} vide placeholder="non défini" />
+              </div>
+              {tpPts > 0 && (
+                <div className="mm-aide-ligne">
+                  {(tpPts * pas).toFixed(s.chiffres)} de distance · <Montant v={tpPts * pas * s.contrat * volume * conversion(s, cotations)} />
+                  {q && type === 'marche' ? ` · achat : ${formaterPrix(s, stopsDepuisPoints(q.ask, 'buy').tp)}, vente : ${formaterPrix(s, stopsDepuisPoints(q.bid, 'sell').tp)}` : ''}
+                </div>
+              )}
+            </>
           )}
           {type !== 'marche' && (
             <label className="mm-ligne-champ">
@@ -223,8 +274,8 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
             hauteur={170}
             niveaux={[
               ...(type !== 'marche' && prix ? [{ prix, couleur: '#8e8e93', libelle: 'Prix' }] : []),
-              ...(sl ? [{ prix: sl, couleur: '#ff3b30', libelle: 'S/L' }] : []),
-              ...(tp ? [{ prix: tp, couleur: '#34c759', libelle: 'T/P' }] : []),
+              ...(modeStops === 'prix' && sl ? [{ prix: sl, couleur: '#ff3b30', libelle: 'S/L' }] : []),
+              ...(modeStops === 'prix' && tp ? [{ prix: tp, couleur: '#34c759', libelle: 'T/P' }] : []),
             ]}
           />
         </div>
@@ -369,6 +420,19 @@ export function EcranFermer({ ticket }: { ticket: number }) {
       <div className="mm-defile">
         <div className="mm-formulaire">
           <ChampVolume valeur={volume} changer={(v) => setVolume(Math.min(p.volume, v))} min={s.volumeMin} max={p.volume} pasMin={s.pasVolume} />
+          <div className="mm-raccourcis">
+            {[25, 50, 75, 100].map((pct) => (
+              <button
+                key={pct}
+                onClick={() => {
+                  vibrer(6);
+                  setVolume(Number(Math.min(p.volume, Math.max(s.volumeMin, Math.round((p.volume * pct) / 100 / s.pasVolume) * s.pasVolume)).toFixed(2)));
+                }}
+              >
+                {pct} %
+              </button>
+            ))}
+          </div>
           <div className="mm-aide-ligne">Volume ouvert : {p.volume.toFixed(2)} lot</div>
         </div>
         <div className="mm-ticks">
