@@ -38,6 +38,8 @@ interface Props {
   activer: () => void;
   /** Mobile : appui long (ou clic droit) sur le graphique, avec le prix pointé — remplace le menu contextuel. */
   appuiLong?: (prix: number) => void;
+  /** Mobile : appui long sur une ligne de position / d'ordre (sans la déplacer) — ouvre sa modification. */
+  appuiLigne?: (genre: 'position' | 'ordre', ticket: number) => void;
 }
 
 /** Ligne déplaçable à la souris : stop-loss, take-profit, ordre en attente, ouverture de position, ligne horizontale. */
@@ -75,7 +77,7 @@ function sansErreur(f: () => void) {
   }
 }
 
-export function FenetreGraphique({ g, actif, activer, appuiLong }: Props) {
+export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: Props) {
   const t = useTerminal();
   const { etat, compte, cotations, operer, ouvrir, majGraphique, survol, outil, choisirOutil } = t;
   const s = symbole(g.symbole)!;
@@ -99,8 +101,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong }: Props) {
   const [volume, setVolume] = useState(etat.volumeDefaut);
   const [hauteursPanneaux, setHauteursPanneaux] = useState<number[]>([]);
   const { ouvrirMenu, element: menu } = useMenuContextuel();
-  const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo, appuiLong });
-  refEtat.current = { g, compte, cotations, outil, algo: etat.algo, appuiLong };
+  const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo, appuiLong, appuiLigne });
+  refEtat.current = { g, compte, cotations, outil, algo: etat.algo, appuiLong, appuiLigne };
   /** Dernière barre clôturée déjà soumise à l'Expert Advisor (il ne trade jamais sur l'historique). */
   const derniereTraitee = useRef(0);
 
@@ -530,6 +532,20 @@ export function FenetreGraphique({ g, actif, activer, appuiLong }: Props) {
       e.stopPropagation();
       e.preventDefault();
       glisse.current = { d, prix: d.prix };
+      // Doigt immobile 600 ms sur une ligne : ouverture de la modification au lieu du glisser.
+      if (e.pointerType === 'touch' && refEtat.current.appuiLigne && d.genre !== 'objet') {
+        appui.current = { x: e.clientX, y: e.clientY };
+        window.clearTimeout(minuteurAppui.current);
+        minuteurAppui.current = window.setTimeout(() => {
+          appui.current = null;
+          const gl = glisse.current;
+          if (!gl) return;
+          gl.d.ligne.applyOptions({ price: gl.d.prix });
+          glisse.current = null;
+          chartRef.current?.applyOptions({ handleScroll: true, handleScale: true });
+          refEtat.current.appuiLigne?.(gl.d.genre === 'ordre' ? 'ordre' : 'position', gl.d.ticket);
+        }, 600);
+      }
       chartRef.current?.applyOptions({ handleScroll: false, handleScale: false });
       el.setPointerCapture(e.pointerId);
     };

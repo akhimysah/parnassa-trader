@@ -129,7 +129,7 @@ export function GraphiqueMobile() {
         </button>
       </div>
       <div className="mm-graphique">
-        <FenetreGraphique g={g} actif activer={() => undefined} appuiLong={auPrix} />
+        <FenetreGraphique g={g} actif activer={() => undefined} appuiLong={auPrix} appuiLigne={(genre, ticket) => { vibrer(15); pousser(genre === 'ordre' ? { type: 'ordre-attente', ticket } : { type: 'position', ticket }); }} />
         {d && (
           <div className="mm-donnees">
             {new Date(d.temps).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} O <b>{d.o.toFixed(d.chiffres)}</b> H <b>{d.h.toFixed(d.chiffres)}</b> B <b>{d.l.toFixed(d.chiffres)}</b> C <b>{d.c.toFixed(d.chiffres)}</b>

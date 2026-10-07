@@ -66,7 +66,7 @@ function DeuxPrix({ nom }: { nom: string }) {
 
 /** Écran « Nouvel ordre ». */
 export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }: { symboleInitial: string; attente?: boolean; typeInitial?: TypeEnAttente; prixInitial?: number }) {
-  const { etat, compte, cotations, operer } = useTerminal();
+  const { etat, compte, cotations, operer, majGraphique } = useTerminal();
   const { pousser, feuille } = useNav();
   const [sym, setSym] = useState(symboleInitial);
   const s = symbole(sym)!;
@@ -141,11 +141,24 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
       pousser({ type: 'resultat', ok: false, titre: 'Ordre refusé', texte: r.erreur });
     } else {
       vibrer(20);
-      pousser({ type: 'resultat', ok: true, titre: titreOk, texte: `#${r.ticket} ${r.message ?? ''}` });
+      // Le graphique affiché passe sur le symbole de l'ordre, pour « Voir sur le graphique ».
+      const g = etat.graphiques.find((x) => x.id === etat.graphiqueActif) ?? etat.graphiques[0];
+      if (g && g.symbole !== sym) majGraphique(g.id, { symbole: sym });
+      pousser({ type: 'resultat', ok: true, titre: titreOk, texte: `#${r.ticket} ${r.message ?? ''}`, symbole: sym });
     }
   };
   const marche = (t: Sens) => {
     const st = modeStops === 'points' && q ? stopsDepuisPoints(t === 'buy' ? q.ask : q.bid, t) : { sl, tp };
+    // Explication précise avant d'envoyer : un S/L / T/P du mauvais côté pour ce sens serait refusé (« Stops invalides »).
+    if (q) {
+      const ref = prixFermeture(t, q);
+      const err = erreurStop(s, t, ref, 'sl', st.sl) ?? erreurStop(s, t, ref, 'tp', st.tp);
+      if (err) {
+        vibrer(40);
+        pousser({ type: 'resultat', ok: false, titre: 'Ordre refusé', texte: `${err} (prix de clôture actuel). Ajustez le S/L / T/P ou passez en mode Points, qui s'adapte au sens.` });
+        return;
+      }
+    }
     termine(operer((c) => ouvrirMarche(c, { symbole: sym, type: t, volume, sl: st.sl, tp: st.tp, commentaire }, cotations), { confirmation: false, silencieux: true }), 'Ordre exécuté');
   };
   const placer = () => {
@@ -325,7 +338,7 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
 }
 
 /** Résultat d'un ordre (« Done » de MT5). */
-export function EcranResultat({ ok, titre, texte }: { ok: boolean; titre: string; texte: string }) {
+export function EcranResultat({ ok, titre, texte, symbole }: { ok: boolean; titre: string; texte: string; symbole?: string }) {
   const { racine, retour } = useNav();
   return (
     <div className="mm-ecran mm-resultat">
@@ -336,9 +349,16 @@ export function EcranResultat({ ok, titre, texte }: { ok: boolean; titre: string
       </div>
       <div className="mm-boutons-bas">
         {ok ? (
-          <button className="mm-bouton principal" onClick={() => racine('trade')}>
-            Terminé
-          </button>
+          <>
+            {symbole && (
+              <button className="mm-bouton secondaire" onClick={() => racine('graphique')}>
+                Voir sur le graphique
+              </button>
+            )}
+            <button className="mm-bouton principal" onClick={() => racine('trade')}>
+              Terminé
+            </button>
+          </>
         ) : (
           <button className="mm-bouton principal" onClick={retour}>
             Retour

@@ -6,7 +6,7 @@ export type Onglet = 'cotations' | 'graphique' | 'trade' | 'historique' | 'param
 
 export type Ecran =
   | { type: 'ordre'; symbole: string; attente?: boolean; typeAttente?: import('../compte/moteur').TypeEnAttente; prix?: number }
-  | { type: 'resultat'; ok: boolean; titre: string; texte: string }
+  | { type: 'resultat'; ok: boolean; titre: string; texte: string; symbole?: string }
   | { type: 'position'; ticket: number }
   | { type: 'fermer'; ticket: number }
   | { type: 'ordre-attente'; ticket: number }

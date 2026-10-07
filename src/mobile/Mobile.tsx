@@ -130,7 +130,7 @@ function EcranPile({ e }: { e: Ecran }) {
     case 'ordre':
       return <EcranOrdre symboleInitial={e.symbole} attente={e.attente} typeInitial={e.typeAttente} prixInitial={e.prix} />;
     case 'resultat':
-      return <EcranResultat ok={e.ok} titre={e.titre} texte={e.texte} />;
+      return <EcranResultat ok={e.ok} titre={e.titre} texte={e.texte} symbole={e.symbole} />;
     case 'position':
       return <EcranPosition ticket={e.ticket} />;
     case 'fermer':
