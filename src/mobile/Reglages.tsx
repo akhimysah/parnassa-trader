@@ -7,12 +7,23 @@ import { MESSAGES } from '../composants/BoiteOutils';
 import { BlocSynchro } from '../composants/Synchro';
 import { argent, dateMT } from '../composants/ui';
 import { choisirInterface } from '../interface';
+import { demanderPermission, notificationsDisponibles } from '../notifications';
+import { useInstallation } from '../installation';
 import { BoutonIcone, BoutonRetour, ChampPas, EnTete, IconePlus, Interrupteur, useAppuiLong, useNav, vibrer } from './commun';
 
 /** Onglet Paramètres : compte, messagerie, outils et réglages, comme le menu de MT5 mobile. */
 export function Reglages() {
-  const { etat, maj, compte, ouvrir, synchro } = useTerminal();
-  const { pousser } = useNav();
+  const { etat, maj, compte, ouvrir, synchro, signaler } = useTerminal();
+  const { pousser, feuille } = useNav();
+  const installation = useInstallation();
+  const notifications = async (v: boolean) => {
+    if (!v) return maj((e) => ({ ...e, notifications: false }));
+    const ok = await demanderPermission();
+    if (ok) {
+      maj((e) => ({ ...e, notifications: true }));
+      signaler('Notifications activées : exécutions, SL/TP, stop-out et alertes');
+    } else signaler('Notifications refusées par le navigateur : autorisez-les dans les réglages du site');
+  };
   const nonLus = MESSAGES.filter((m) => !etat.lus.includes(m.id)).length;
   return (
     <div className="mm-ecran">
@@ -72,6 +83,12 @@ export function Reglages() {
           <li className="fleche" onClick={() => ouvrir({ type: 'rapport' })}>
             <span className="mm-ico violet">📊</span>Rapport de trading
           </li>
+          {notificationsDisponibles() && (
+            <li>
+              <span className="mm-ico rouge">🔔</span>Notifications
+              <Interrupteur actif={etat.notifications} libelle="Notifications" changer={(v) => void notifications(v)} />
+            </li>
+          )}
         </ul>
 
         <div className="mm-section">Affichage</div>
@@ -88,6 +105,18 @@ export function Reglages() {
             <span className="mm-ico orange">🔊</span>Sons
             <Interrupteur actif={etat.son} libelle="Sons" changer={(v) => maj((e) => ({ ...e, son: v }))} />
           </li>
+          {installation.etat !== 'installee' && installation.etat !== 'indisponible' && (
+            <li
+              className="fleche"
+              onClick={() =>
+                installation.etat === 'invite'
+                  ? void installation.installer()
+                  : feuille("Installer sur l'iPhone", [{ libelle: 'Touchez Partager ⬆︎ puis « Sur l’écran d’accueil »', action: () => undefined }])
+              }
+            >
+              <span className="mm-ico bleu">⬇</span>Installer l'application
+            </li>
+          )}
           <li className="fleche" onClick={() => choisirInterface('bureau')}>
             <span className="mm-ico gris">🖥</span>Version ordinateur
           </li>

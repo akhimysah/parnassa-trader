@@ -63,6 +63,8 @@ export interface EtatTerminal {
   alertes: Alerte[];
   /** Algo Trading : autorise les Expert Advisors à trader. */
   algo: boolean;
+  /** Notifications du système pour les exécutions, SL/TP, stop-out et alertes (application en arrière-plan). */
+  notifications: boolean;
   /** Mobile : cotations en mode avancé (variation, heure, spread, plus haut / bas) ou simple. */
   mobileAvance: boolean;
   /** Messages de la boîte aux lettres déjà lus. */
@@ -114,6 +116,7 @@ function etatInitial(): EtatTerminal {
     alertes: [],
     algo: false,
     mobileAvance: true,
+    notifications: false,
     lus: [],
   };
 }

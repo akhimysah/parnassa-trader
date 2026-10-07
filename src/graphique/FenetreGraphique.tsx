@@ -36,6 +36,8 @@ interface Props {
   g: Graphique;
   actif: boolean;
   activer: () => void;
+  /** Mobile : appui long (ou clic droit) sur le graphique, avec le prix pointé — remplace le menu contextuel. */
+  appuiLong?: (prix: number) => void;
 }
 
 /** Ligne déplaçable à la souris : stop-loss, take-profit, ordre en attente, ouverture de position, ligne horizontale. */
@@ -73,7 +75,7 @@ function sansErreur(f: () => void) {
   }
 }
 
-export function FenetreGraphique({ g, actif, activer }: Props) {
+export function FenetreGraphique({ g, actif, activer, appuiLong }: Props) {
   const t = useTerminal();
   const { etat, compte, cotations, operer, ouvrir, majGraphique, survol, outil, choisirOutil } = t;
   const s = symbole(g.symbole)!;
@@ -91,12 +93,14 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
   const [chargement, setChargement] = useState<'en-cours' | 'ok' | 'vide'>('en-cours');
   const deplacables = useRef<Deplacable[]>([]);
   const glisse = useRef<{ d: Deplacable; prix: number } | null>(null);
+  const appui = useRef<{ x: number; y: number } | null>(null);
+  const minuteurAppui = useRef<number | undefined>(undefined);
   const premierPoint = useRef<{ t: number; prix: number } | null>(null);
   const [volume, setVolume] = useState(etat.volumeDefaut);
   const [hauteursPanneaux, setHauteursPanneaux] = useState<number[]>([]);
   const { ouvrirMenu, element: menu } = useMenuContextuel();
-  const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo });
-  refEtat.current = { g, compte, cotations, outil, algo: etat.algo };
+  const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo, appuiLong });
+  refEtat.current = { g, compte, cotations, outil, algo: etat.algo, appuiLong };
   /** Dernière barre clôturée déjà soumise à l'Expert Advisor (il ne trade jamais sur l'historique). */
   const derniereTraitee = useRef(0);
 
@@ -511,6 +515,17 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
     const bas = (e: PointerEvent) => {
       if (e.button !== 0 || refEtat.current.outil || !dansPrincipal(e)) return;
       const d = ligneProche(yDe(e));
+      // Appui long au doigt (mobile) : menu « trader à ce prix » au prix pointé.
+      if (!d && e.pointerType === 'touch' && refEtat.current.appuiLong) {
+        const y = yDe(e);
+        appui.current = { x: e.clientX, y: e.clientY };
+        window.clearTimeout(minuteurAppui.current);
+        minuteurAppui.current = window.setTimeout(() => {
+          appui.current = null;
+          const prix = serieRef.current?.coordinateToPrice(y);
+          if (prix !== null && prix !== undefined) refEtat.current.appuiLong?.(prix);
+        }, 600);
+      }
       if (!d) return;
       e.stopPropagation();
       e.preventDefault();
@@ -519,6 +534,11 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
       el.setPointerCapture(e.pointerId);
     };
     const bouge = (e: PointerEvent) => {
+      const a = appui.current;
+      if (a && Math.hypot(e.clientX - a.x, e.clientY - a.y) > 10) {
+        appui.current = null;
+        window.clearTimeout(minuteurAppui.current);
+      }
       const gl = glisse.current;
       if (!gl) {
         el.style.cursor = !refEtat.current.outil && dansPrincipal(e) && ligneProche(yDe(e)) ? 'ns-resize' : refEtat.current.outil ? 'crosshair' : '';
@@ -532,6 +552,8 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
       gl.d.ligne.applyOptions({ price: gl.prix });
     };
     const haut = (e: PointerEvent) => {
+      appui.current = null;
+      window.clearTimeout(minuteurAppui.current);
       const gl = glisse.current;
       if (!gl) return;
       e.stopPropagation();
@@ -599,6 +621,11 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
     const y = e.clientY - el.getBoundingClientRect().top;
     const prixBrut = serieRef.current?.coordinateToPrice(y);
     const prix = prixBrut !== null && prixBrut !== undefined ? Number(prixBrut.toFixed(s.chiffres)) : undefined;
+    if (appuiLong) {
+      // Le menu mobile passe par l'appui long au doigt ; à la souris (cadre de téléphone), par le clic droit.
+      if ((e.nativeEvent as PointerEvent).pointerType !== 'touch' && prix !== undefined) appuiLong(prix);
+      return;
+    }
     const d = ligneProche(y);
     const v = volume;
     const elements: ElementMenu[] = [];

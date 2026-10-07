@@ -1,15 +1,16 @@
 import { useTerminal } from '../contexte';
 import { identifiant, nouveauGraphique } from '../etat';
 import { PERIODES } from '../marche/bougies';
-import { symbole } from '../marche/symboles';
+import { formaterPrix, symbole } from '../marche/symboles';
+import type { TypeEnAttente } from '../compte/moteur';
 import { DEFINITIONS, nomCourt } from '../graphique/indicateurs';
 import { FenetreGraphique } from '../graphique/FenetreGraphique';
 import { registreGraphiques } from '../graphique/registre';
-import { BoutonIcone, EnTete, IconePlus, useNav } from './commun';
+import { BoutonIcone, EnTete, IconePlus, useNav, vibrer } from './commun';
 
 /** Graphique plein écran avec les barres de commandes de MT5 mobile. */
 export function GraphiqueMobile() {
-  const { etat, maj, majGraphique, choisirOutil, outil, ouvrir } = useTerminal();
+  const { etat, maj, majGraphique, choisirOutil, outil, ouvrir, cotations, survolActuel, signaler } = useTerminal();
   const { feuille, pousser } = useNav();
   const g = etat.graphiques.find((x) => x.id === etat.graphiqueActif) ?? etat.graphiques[0];
   if (!g) {
@@ -30,6 +31,26 @@ export function GraphiqueMobile() {
     );
   }
   const s = symbole(g.symbole)!;
+  const q = cotations[g.symbole];
+  // Appui long sur le graphique : ordres en attente, alerte ou ligne au prix pointé (comme le réticule de MT5 mobile).
+  const auPrix = (brut: number) => {
+    vibrer(15);
+    const prix = Number(brut.toFixed(s.chiffres));
+    const f = formaterPrix(s, prix);
+    const attente = (t: TypeEnAttente, l: string) => ({ libelle: `${l} à ${f}`, action: () => pousser({ type: 'ordre', symbole: g.symbole, typeAttente: t, prix }) });
+    const ordres = !q ? [] : prix < q.bid ? [attente('buy_limit', 'Buy Limit'), attente('sell_stop', 'Sell Stop')] : prix > q.ask ? [attente('sell_limit', 'Sell Limit'), attente('buy_stop', 'Buy Stop')] : [];
+    const alerte = (condition: 'bid>' | 'bid<') => () => {
+      maj((e) => ({ ...e, alertes: [...e.alertes, { id: identifiant(), symbole: g.symbole, condition, valeur: prix, active: true, commentaire: '' }] }));
+      signaler(`Alerte créée : ${g.symbole} Bid ${condition.endsWith('>') ? '>' : '<'} ${f}`);
+    };
+    feuille(`${g.symbole} à ${f}`, [
+      ...ordres,
+      { libelle: `Alerte quand le Bid ${q && prix > q.bid ? 'dépasse' : 'passe sous'} ${f}`, action: alerte(q && prix > q.bid ? 'bid>' : 'bid<') },
+      { libelle: `Ligne horizontale à ${f}`, action: () => majGraphique(g.id, (gr) => ({ objets: [...gr.objets, { id: identifiant(), type: 'horizontale', points: [{ t: 0, prix }], couleur: '#ff3b30' }] })) },
+      { libelle: 'Nouvel ordre au marché', action: () => pousser({ type: 'ordre', symbole: g.symbole }) },
+    ]);
+  };
+  const d = survolActuel;
   const changerSymbole = () => feuille('Symbole', etat.observation.map((n) => ({ libelle: `${n} — ${symbole(n)?.description}`, action: () => majGraphique(g.id, { symbole: n }) })));
   const indicateurs = () =>
     feuille('Indicateurs', [
@@ -101,7 +122,12 @@ export function GraphiqueMobile() {
         </button>
       </div>
       <div className="mm-graphique">
-        <FenetreGraphique g={g} actif activer={() => undefined} />
+        <FenetreGraphique g={g} actif activer={() => undefined} appuiLong={auPrix} />
+        {d && (
+          <div className="mm-donnees">
+            {new Date(d.temps).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} O <b>{d.o.toFixed(d.chiffres)}</b> H <b>{d.h.toFixed(d.chiffres)}</b> B <b>{d.l.toFixed(d.chiffres)}</b> C <b>{d.c.toFixed(d.chiffres)}</b>
+          </div>
+        )}
       </div>
     </div>
   );

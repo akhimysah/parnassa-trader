@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../contexte';
 import { formaterPrix, marcheOuvert, point, symbole } from '../marche/symboles';
 import {
@@ -60,15 +60,15 @@ function DeuxPrix({ nom }: { nom: string }) {
 }
 
 /** Écran « Nouvel ordre ». */
-export function EcranOrdre({ symboleInitial, attente }: { symboleInitial: string; attente?: boolean }) {
+export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }: { symboleInitial: string; attente?: boolean; typeInitial?: TypeEnAttente; prixInitial?: number }) {
   const { etat, compte, cotations, operer } = useTerminal();
   const { pousser, feuille } = useNav();
   const [sym, setSym] = useState(symboleInitial);
   const s = symbole(sym)!;
   const q = cotations[sym];
-  const [type, setType] = useState<TypeOrdre>(attente ? 'buy_limit' : 'marche');
+  const [type, setType] = useState<TypeOrdre>(typeInitial ?? (attente ? 'buy_limit' : 'marche'));
   const [volume, setVolume] = useState(Math.max(s.volumeMin, etat.volumeDefaut));
-  const [prix, setPrix] = useState(0);
+  const [prix, setPrix] = useState(prixInitial ?? 0);
   const [prixLimite, setPrixLimite] = useState(0);
   const [sl, setSl] = useState(0);
   const [tp, setTp] = useState(0);
@@ -76,7 +76,11 @@ export function EcranOrdre({ symboleInitial, attente }: { symboleInitial: string
   const [echeance, setEcheance] = useState(Date.now() + 86400000);
   const [commentaire, setCommentaire] = useState('');
 
+  // Changement de symbole : les prix ne valent plus (le prix reçu à l'ouverture de l'écran est gardé).
+  const symPrecedent = useRef(sym);
   useEffect(() => {
+    if (symPrecedent.current === sym) return;
+    symPrecedent.current = sym;
     setPrix(0);
     setSl(0);
     setTp(0);

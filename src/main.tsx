@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import './styles.css';
 import { capturerJetonDepuisAdresse } from './synchro';
+import './installation';
 
 // Retour de la page de consentement Parnassa : le jeton arrive dans le fragment de l'adresse.
 capturerJetonDepuisAdresse();

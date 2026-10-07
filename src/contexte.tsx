@@ -60,6 +60,8 @@ export interface Terminal {
   ouvrirGraphique: (symbole: string, periode?: Periode) => void;
   signaler: (message: string) => void;
   survol: (s: Survol | null) => void;
+  /** Barre survolée sur un graphique (fenêtre de données du mobile). */
+  survolActuel: Survol | null;
   outil: OutilDessin;
   choisirOutil: (o: OutilDessin) => void;
   mobile: boolean;

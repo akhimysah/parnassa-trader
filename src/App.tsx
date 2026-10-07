@@ -17,6 +17,7 @@ import { Dialogues } from './composants/Dialogues';
 import { Mobile } from './mobile/Mobile';
 import { useSynchro } from './synchro';
 import { useInterface } from './interface';
+import { notifier } from './notifications';
 
 export function App() {
   const [etat, setEtat] = useState<EtatTerminal>(chargerEtat);
@@ -75,6 +76,10 @@ export function App() {
         if (r.compte !== c) change = true;
         for (const ev of r.evenements) {
           messages.push(c.login === e.actif ? ev.message : `${c.login} : ${ev.message}`);
+          if (e.notifications) {
+            const titres = { execution: 'Ordre exécuté', sl: 'Stop Loss', tp: 'Take Profit', 'stop-out': 'Stop-out', 'appel-marge': 'Appel de marge', expiration: 'Ordre expiré', rejet: 'Ordre rejeté' };
+            notifier(titres[ev.type], ev.message, ev.type === 'stop-out' || ev.type === 'appel-marge');
+          }
           if (ev.type === 'stop-out' || ev.type === 'appel-marge') retour.son = 'stop';
           else if (ev.type === 'sl' || ev.type === 'tp' || ev.type === 'execution') retour.son ??= 'ok';
           else retour.son ??= 'alerte';
@@ -92,7 +97,7 @@ export function App() {
         const s = symbole(a.symbole);
         messages.push(`Alerte ${a.symbole} : ${a.condition.slice(0, 3).toUpperCase()} ${a.condition.slice(3)} ${a.valeur.toFixed(s?.chiffres ?? 5)}${a.commentaire ? ` — ${a.commentaire}` : ''}`);
         retour.son = 'alerte';
-        if ('Notification' in window && Notification.permission === 'granted') new Notification(`Parnassa Trader — ${a.symbole}`, { body: messages[messages.length - 1] });
+        notifier(`Alerte ${a.symbole}`, messages[messages.length - 1], true);
       }
       if (!change && alertes === e.alertes) return e;
       return { ...e, comptes, alertes };
@@ -166,6 +171,7 @@ export function App() {
     ouvrirGraphique,
     signaler,
     survol: setSurvol,
+    survolActuel: survol,
     outil,
     choisirOutil: setOutil,
     mobile,

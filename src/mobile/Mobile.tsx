@@ -60,7 +60,7 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
 
   return (
     <ContexteNav.Provider value={nav}>
-      <div className={`mm${cadre ? ' cadre' : ''}`}>
+      <div className={`mm${cadre ? ' cadre' : ''}${!haut ? ` onglet-${onglet}` : ''}`}>
         <div className="mm-pile">
           {/* Les onglets restent en place sous la pile : le graphique ne recharge pas son historique. */}
           <div className="mm-racine" style={{ display: haut ? 'none' : undefined }}>
@@ -101,7 +101,7 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
 function EcranPile({ e }: { e: Ecran }) {
   switch (e.type) {
     case 'ordre':
-      return <EcranOrdre symboleInitial={e.symbole} attente={e.attente} />;
+      return <EcranOrdre symboleInitial={e.symbole} attente={e.attente} typeInitial={e.typeAttente} prixInitial={e.prix} />;
     case 'resultat':
       return <EcranResultat ok={e.ok} titre={e.titre} texte={e.texte} />;
     case 'position':

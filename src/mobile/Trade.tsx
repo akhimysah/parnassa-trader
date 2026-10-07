@@ -1,17 +1,26 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../contexte';
 import { formaterPrix, symbole } from '../marche/symboles';
-import { LIBELLES_TYPE, etatCompte, fermerPosition, prixFermeture, profitPosition, type Position } from '../compte/moteur';
+import { LIBELLES_TYPE, definirSuiveur, etatCompte, fermerPosition, prixFermeture, profitPosition, supprimerOrdre, type Position } from '../compte/moteur';
 import { argent, dateMT } from '../composants/ui';
-import { BoutonIcone, EnTete, IconePlus, Segments, useAppuiLong, useNav, vibrer } from './commun';
+import { CourbeSolde } from '../composants/Courbe';
+import { calculerStats } from '../algo/statistiques';
+import { BoutonIcone, EnTete, IconePlus, Segments, useNav, vibrer } from './commun';
 
 type Tri = 'heure' | 'symbole' | 'profit' | 'ticket';
 
 /** Onglet Trade : profit flottant, état du compte, positions et ordres en attente. */
 export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void }) {
-  const { compte, cotations, etat } = useTerminal();
+  const { compte, cotations, etat, operer } = useTerminal();
   const { pousser, feuille } = useNav();
   const [tri, setTri] = useState<Tri>('heure');
+  const fermerTout = (filtre: (p: Position) => boolean, libelle: string) => {
+    const cibles = compte.positions.filter(filtre);
+    if (cibles.length === 0) return;
+    if (!window.confirm(`${libelle} : ${cibles.length} position${cibles.length > 1 ? 's' : ''} ?`)) return;
+    operer((c) => ({ compte: cibles.reduce((acc, p) => fermerPosition(acc, p.ticket, cotations).compte, c), erreur: null, message: `${cibles.length} position${cibles.length > 1 ? 's' : ''} fermée${cibles.length > 1 ? 's' : ''}` }), { confirmation: false });
+    vibrer(25);
+  };
   const e = etatCompte(compte, cotations);
   const positions = useMemo(() => {
     const l = [...compte.positions];
@@ -28,13 +37,23 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
         titre={<span className={e.profit >= 0 ? 'positif' : 'negatif'}>{`${e.profit >= 0 ? '' : '−'}${argent(Math.abs(e.profit))} USD`}</span>}
         gauche={
           <BoutonIcone
-            titre="Trier"
+            titre="Trier et opérations groupées"
             onClick={() =>
               feuille('Trier par', [
                 { libelle: `Heure d'ouverture${tri === 'heure' ? ' ✓' : ''}`, action: () => setTri('heure') },
                 { libelle: `Symbole${tri === 'symbole' ? ' ✓' : ''}`, action: () => setTri('symbole') },
                 { libelle: `Profit${tri === 'profit' ? ' ✓' : ''}`, action: () => setTri('profit') },
                 { libelle: `Ticket${tri === 'ticket' ? ' ✓' : ''}`, action: () => setTri('ticket') },
+                ...(compte.positions.length
+                  ? [
+                      { libelle: 'Fermer toutes les positions', danger: true, action: () => fermerTout(() => true, 'Fermer toutes les positions') },
+                      { libelle: 'Fermer les positions gagnantes', danger: true, action: () => fermerTout((p) => profitPosition(p, cotations) > 0, 'Fermer les positions gagnantes') },
+                      { libelle: 'Fermer les positions perdantes', danger: true, action: () => fermerTout((p) => profitPosition(p, cotations) < 0, 'Fermer les positions perdantes') },
+                    ]
+                  : []),
+                ...(compte.ordres.length
+                  ? [{ libelle: 'Supprimer tous les ordres', danger: true, action: () => operer((c) => ({ compte: c.ordres.reduce((a, o) => supprimerOrdre(a, o.ticket).compte, c), erreur: null, message: 'Ordres supprimés' }), { confirmation: false }) }]
+                  : []),
               ])
             }
           >
@@ -124,22 +143,103 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
 }
 
 function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: string) => void }) {
-  const { cotations, operer } = useTerminal();
+  const { cotations, operer, ouvrir } = useTerminal();
   const { pousser, feuille } = useNav();
   const [ouvert, setOuvert] = useState(false);
+  const [decalage, setDecalage] = useState(0);
+  const geste = useRef<{ x: number; y: number; base: number; horizontal: boolean | null; long: number | undefined; declenche: boolean } | null>(null);
   const s = symbole(p.symbole)!;
   const q = cotations[p.symbole];
   const profit = profitPosition(p, cotations);
+  const LARGEUR = 168;
+  const suiveur = (n: number) => () => operer((c) => ({ compte: definirSuiveur(c, p.ticket, n), erreur: null }), { silencieux: true });
   const menu = () =>
     feuille(`#${p.ticket} ${p.symbole}, ${p.type} ${p.volume.toFixed(2)}`, [
       { libelle: 'Fermer la position', danger: true, action: () => pousser({ type: 'fermer', ticket: p.ticket }) },
       { libelle: 'Modifier la position', action: () => pousser({ type: 'position', ticket: p.ticket }) },
+      {
+        libelle: `Stop suiveur${p.suiveur ? ` (${p.suiveur} pts)` : ''}`,
+        action: () =>
+          feuille('Stop suiveur', [
+            { libelle: `Aucun${p.suiveur === 0 ? ' ✓' : ''}`, action: suiveur(0) },
+            ...[50, 100, 200, 300, 500, 1000].map((n) => ({ libelle: `${n} points${p.suiveur === n ? ' ✓' : ''}`, action: suiveur(n) })),
+            { libelle: 'Personnalisé…', action: () => ouvrir({ type: 'suiveur', ticket: p.ticket }) },
+          ]),
+      },
       { libelle: 'Nouvel ordre', action: () => pousser({ type: 'ordre', symbole: p.symbole }) },
       { libelle: 'Graphique', action: () => voirGraphique(p.symbole) },
     ]);
-  const appui = useAppuiLong(menu, () => setOuvert(!ouvert));
+  // Gestes : toucher = détails, appui long = menu, glisser vers la gauche = boutons Fermer / Modifier (comme MT5 Android).
+  const gestes = {
+    onPointerDown: (e: React.PointerEvent) => {
+      const g = { x: e.clientX, y: e.clientY, base: decalage, horizontal: null as boolean | null, long: undefined as number | undefined, declenche: false };
+      g.long = window.setTimeout(() => {
+        g.declenche = true;
+        vibrer(15);
+        menu();
+      }, 500);
+      geste.current = g;
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const g = geste.current;
+      if (!g) return;
+      const dx = e.clientX - g.x;
+      const dy = e.clientY - g.y;
+      if (g.horizontal === null && Math.hypot(dx, dy) > 8) {
+        g.horizontal = Math.abs(dx) > Math.abs(dy);
+        window.clearTimeout(g.long);
+      }
+      if (g.horizontal) setDecalage(Math.max(-LARGEUR, Math.min(0, g.base + dx)));
+    },
+    onPointerUp: () => {
+      const g = geste.current;
+      geste.current = null;
+      if (!g) return;
+      window.clearTimeout(g.long);
+      if (g.horizontal) {
+        setDecalage((d) => (d < -LARGEUR / 3 ? -LARGEUR : 0));
+        return;
+      }
+      if (g.declenche || g.horizontal !== null) return;
+      if (decalage) setDecalage(0);
+      else setOuvert(!ouvert);
+    },
+    onPointerCancel: () => {
+      if (geste.current) window.clearTimeout(geste.current.long);
+      geste.current = null;
+      setDecalage((d) => (d < -LARGEUR / 3 ? -LARGEUR : 0));
+    },
+    onContextMenu: (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (geste.current) window.clearTimeout(geste.current.long);
+      geste.current = null;
+      menu();
+    },
+  };
   return (
-    <li className={ouvert ? 'ouvert' : ''} {...appui}>
+    <li className={`mm-glissable${ouvert ? ' ouvert' : ''}`}>
+      <div className="mm-glisse-actions" style={{ width: LARGEUR }}>
+        <button
+          className="modifier"
+          onClick={() => {
+            setDecalage(0);
+            pousser({ type: 'position', ticket: p.ticket });
+          }}
+        >
+          Modifier
+        </button>
+        <button
+          className="fermer"
+          onClick={() => {
+            setDecalage(0);
+            const r = operer((c) => fermerPosition(c, p.ticket, cotations), { confirmation: false });
+            vibrer(r.erreur ? 40 : 25);
+          }}
+        >
+          Fermer
+        </button>
+      </div>
+      <div className="mm-glisse-contenu" style={{ transform: `translateX(${decalage}px)`, transition: geste.current?.horizontal ? 'none' : undefined }} {...gestes}>
       <div className="mm-pos">
         <div>
           <span>
@@ -147,6 +247,7 @@ function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: s
           </span>
           <small>
             {formaterPrix(s, p.prixOuverture)} → {q ? formaterPrix(s, prixFermeture(p.type, q)) : '—'}
+            {p.suiveur ? ' · ↻' : ''}
           </small>
         </div>
         <b className={`mm-profit ${profit >= 0 ? 'positif' : 'negatif'}`}>{argent(profit)}</b>
@@ -192,6 +293,7 @@ function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: s
           </div>
         </div>
       )}
+      </div>
     </li>
   );
 }
@@ -230,6 +332,7 @@ export function Historique() {
   const depot = somme((d) => (d.type === 'balance' && d.profit > 0 ? d.profit : 0));
   const retrait = somme((d) => (d.type === 'balance' && d.profit < 0 ? d.profit : 0));
   const symboles = [...new Set(compte.transactions.filter((d) => d.symbole).map((d) => d.symbole))];
+  const courbe = useMemo(() => calculerStats(compte.transactions.filter((d) => d.heure >= depuis)).courbe, [compte.transactions, depuis]);
   return (
     <div className="mm-ecran">
       <EnTete
@@ -296,6 +399,11 @@ export function Historique() {
             <dd>{argent(compte.solde)}</dd>
           </div>
         </dl>
+        {mode === 'positions' && courbe.length > 1 && (
+          <div className="mm-courbe">
+            <CourbeSolde points={courbe} hauteur={130} />
+          </div>
+        )}
         <ul className="mm-positions">
           {mode === 'positions' &&
             sorties

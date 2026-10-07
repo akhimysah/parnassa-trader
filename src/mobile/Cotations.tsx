@@ -4,6 +4,7 @@ import { SYMBOLES, formaterPrix, libelleSeances, marcheOuvert, point, symbole, t
 import { levierEffectif } from '../compte/moteur';
 import { PrixGros, argent, heureMT } from '../composants/ui';
 import { BoutonIcone, BoutonRetour, EnTete, IconePlus, useAppuiLong, useNav, vibrer } from './commun';
+import { useInstallation } from '../installation';
 
 const CATEGORIES: { id: Categorie; nom: string }[] = [
   { id: 'forex', nom: 'Forex' },
@@ -46,6 +47,7 @@ export function Cotations({ voirGraphique }: { voirGraphique: (s: string) => voi
         }
       />
       <div className="mm-defile">
+        <BanniereInstallation />
         <ul className={`mm-cotations ${avance ? 'avance' : 'simple'}`}>
           {etat.observation.map((nom) => (
             <LigneCotation key={nom} nom={nom} avance={avance} voirGraphique={voirGraphique} />
@@ -264,6 +266,47 @@ export function ProprietesSymbole({ nom }: { nom: string }) {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+const CLE_BANNIERE = 'parnassa-trader:banniere-installation';
+
+/** Bannière discrète proposant l'installation sur l'écran d'accueil (une fois refusée, elle ne revient plus). */
+function BanniereInstallation() {
+  const { etat, installer } = useInstallation();
+  const { feuille } = useNav();
+  const [masquee, setMasquee] = useState(() => {
+    try {
+      return localStorage.getItem(CLE_BANNIERE) === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (masquee || (etat !== 'invite' && etat !== 'ios')) return null;
+  const masquer = () => {
+    setMasquee(true);
+    try {
+      localStorage.setItem(CLE_BANNIERE, '1');
+    } catch {
+      // stockage indisponible
+    }
+  };
+  return (
+    <div className="mm-banniere">
+      <img src={`${import.meta.env.BASE_URL}icone-192.png`} alt="" width={36} height={36} />
+      <div>
+        <b>Parnassa Trader</b>
+        <small>Installez l'application sur votre écran d'accueil</small>
+      </div>
+      <button
+        onClick={() => (etat === 'invite' ? void installer().then((ok) => ok && masquer()) : feuille("Installer sur l'iPhone", [{ libelle: 'Touchez Partager ⬆︎ puis « Sur l’écran d’accueil »', action: masquer }]))}
+      >
+        Installer
+      </button>
+      <button className="fermer" onClick={masquer} aria-label="Masquer">
+        ✕
+      </button>
     </div>
   );
 }

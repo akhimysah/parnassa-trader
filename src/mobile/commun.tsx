@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 export type Onglet = 'cotations' | 'graphique' | 'trade' | 'historique' | 'parametres';
 
 export type Ecran =
-  | { type: 'ordre'; symbole: string; attente?: boolean }
+  | { type: 'ordre'; symbole: string; attente?: boolean; typeAttente?: import('../compte/moteur').TypeEnAttente; prix?: number }
   | { type: 'resultat'; ok: boolean; titre: string; texte: string }
   | { type: 'position'; ticket: number }
   | { type: 'fermer'; ticket: number }
