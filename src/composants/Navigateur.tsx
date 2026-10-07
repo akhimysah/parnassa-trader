@@ -50,7 +50,7 @@ export function Navigateur() {
                 {etat.comptes.map((c) => (
                   <Noeud
                     key={c.login}
-                    libelle={`${c.login} : ${c.nom}`}
+                    libelle={`${c.login} : ${c.nom}${c.type === 'raw' ? ' (Raw)' : ''}`}
                     icone={c.login === etat.actif ? '🟢' : '⚪'}
                     actif={c.login === etat.actif}
                     onDoubleClick={() => maj((e) => ({ ...e, actif: c.login }))}

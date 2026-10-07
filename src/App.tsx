@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ContexteTerminal, useTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
 import { chargerEtat, nouveauGraphique, sauverEtat, type EtatTerminal, type Graphique } from './etat';
-import { definirAbonnements, useCotations } from './marche/cotations';
+import { definirAbonnements, definirTypeCompte, useCotations } from './marche/cotations';
 import { appliquerCotations, type Compte, type Resultat } from './compte/moteur';
 import { symbole } from './marche/symboles';
 import { jouer } from './sons';
@@ -52,6 +52,9 @@ export function App() {
     return [...noms].sort().join(',');
   }, [etat.observation, etat.comptes, etat.graphiques, etat.alertes]);
   useEffect(() => definirAbonnements(cleAbonnements.split(',').filter(Boolean)), [cleAbonnements]);
+  // Les Bid/Ask affichés suivent le type du compte actif (spreads Standard ou Raw).
+  const typeActif = compte.type ?? 'standard';
+  useEffect(() => definirTypeCompte(typeActif), [typeActif]);
 
   const signaler = useCallback((texte: string) => setToast({ texte, id: Date.now() }), []);
   // Compte Parnassa : copie en ligne et synchronisation entre appareils.

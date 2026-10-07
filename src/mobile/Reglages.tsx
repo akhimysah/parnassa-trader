@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTerminal } from '../contexte';
 import { nouveauCompte, SERVEUR } from '../compte/moteur';
 import { RELAIS } from '../marche/bougies';
-import { formaterPrix, symbole } from '../marche/symboles';
+import { TYPES_COMPTE, formaterPrix, symbole, type TypeCompte } from '../marche/symboles';
 import { MESSAGES } from '../composants/BoiteOutils';
 import { BlocSynchro } from '../composants/Synchro';
 import { argent, dateMT } from '../composants/ui';
@@ -37,7 +37,7 @@ export function Reglages() {
               {compte.login} — {compte.serveur}
             </small>
             <small>
-              {argent(compte.solde)} USD · 1:{compte.levier} · démo
+              {argent(compte.solde)} USD · 1:{compte.levier} · démo {TYPES_COMPTE[compte.type ?? 'standard'].nom}
             </small>
           </span>
           <span className="mm-chevron">›</span>
@@ -161,7 +161,7 @@ export function Comptes() {
               key={c.login}
               actif={c.login === etat.actif}
               titre={c.nom}
-              detail={`${c.login} · 1:${c.levier} · ${argent(c.solde)} USD`}
+              detail={`${c.login} · ${TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:${c.levier} · ${argent(c.solde)} USD`}
               choisir={() => {
                 vibrer();
                 maj((e) => ({ ...e, actif: c.login }));
@@ -218,6 +218,7 @@ export function OuvrirCompte() {
   const [nom, setNom] = useState('Compte démo');
   const [depot, setDepot] = useState(10000);
   const [levier, setLevier] = useState(100);
+  const [type, setType] = useState<TypeCompte>('standard');
   return (
     <div className="mm-ecran">
       <EnTete titre="Compte démo" gauche={<BoutonRetour />} />
@@ -228,6 +229,17 @@ export function OuvrirCompte() {
             <span>Nom</span>
             <input value={nom} maxLength={40} onChange={(e) => setNom(e.target.value)} />
           </label>
+          <label className="mm-ligne-champ">
+            <span>Type</span>
+            <select value={type} onChange={(e) => setType(e.target.value as TypeCompte)}>
+              {(Object.keys(TYPES_COMPTE) as TypeCompte[]).map((t) => (
+                <option key={t} value={t}>
+                  {TYPES_COMPTE[t].nom}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mm-aide-ligne">{TYPES_COMPTE[type].description}</div>
           <label className="mm-ligne-champ">
             <span>Dépôt</span>
             <select value={depot} onChange={(e) => setDepot(Number(e.target.value))}>
@@ -254,7 +266,7 @@ export function OuvrirCompte() {
         <button
           className="mm-bouton principal"
           onClick={() => {
-            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier);
+            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type);
             maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
             signaler(`Compte ${c.login} ouvert`);
             vibrer(20);

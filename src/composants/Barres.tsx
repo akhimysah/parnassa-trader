@@ -167,7 +167,7 @@ export function BarreMenus() {
         </div>
       ))}
       <span className="barre-menus-compte">
-        {a.etat.comptes.find((c) => c.login === a.etat.actif)?.login} : {a.etat.comptes.find((c) => c.login === a.etat.actif)?.nom} — Parnassa-Demo : Démo
+        {a.etat.comptes.find((c) => c.login === a.etat.actif)?.login} : {a.etat.comptes.find((c) => c.login === a.etat.actif)?.nom} — Parnassa-Demo : Démo {a.etat.comptes.find((c) => c.login === a.etat.actif)?.type === 'raw' ? 'Raw' : 'Standard'}
       </span>
     </div>
   );

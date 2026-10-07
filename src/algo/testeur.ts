@@ -4,7 +4,7 @@
  * barres déjà clôturées, puis les stop-loss / take-profit sont vérifiés à l'intérieur de la barre.
  */
 import type { Bougie } from '../marche/bougies';
-import { point, type SymboleMT } from '../marche/symboles';
+import { commissionParCote, point, type SymboleMT, type TypeCompte } from '../marche/symboles';
 import type { Sens, Transaction } from '../compte/moteur';
 import { NIVEAU_STOP_OUT } from '../compte/moteur';
 import { decider, type Expert } from './experts';
@@ -23,6 +23,8 @@ export interface ParametresTest {
   modelisation: Modelisation;
   /** Valeur en USD d'une unité de la devise de profit (taux actuel, supposé constant sur la période). */
   conversion: number;
+  /** Compte Raw : commission par lot à l'ouverture et à la fermeture. */
+  typeCompte?: TypeCompte;
 }
 
 export interface Marqueur {
@@ -77,9 +79,11 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
 
   const valeur = (p: PositionTest, bid: number) => (p.type === 'buy' ? bid - p.prix : p.prix - (bid + ecart)) * p.volume * s.contrat * conversion;
   const marge = (p: PositionTest) => (p.volume * s.contrat * p.prix * conversion) / levierEff;
+  const commission = (volume: number, prix: number) => -argent(commissionParCote(s, pt.typeCompte ?? 'standard', volume, volume * s.contrat * prix * conversion)) || 0;
   const fermer = (p: PositionTest, prix: number, heure: number, raison: string) => {
     const profit = argent((p.type === 'buy' ? prix - p.prix : p.prix - prix) * p.volume * s.contrat * conversion);
-    solde = argent(solde + profit);
+    const frais = commission(p.volume, prix);
+    solde = argent(solde + profit + frais);
     transactions.push({
       ticket: ticket++,
       ordre: 0,
@@ -90,7 +94,7 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
       entree: 'out',
       volume: p.volume,
       prix,
-      commission: 0,
+      commission: frais,
       swap: 0,
       profit,
       solde,
@@ -129,7 +133,9 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
         journal.push({ t: heure, message: `ordre ${d.ouvrir} ${volume.toFixed(2)} refusé : pas assez d'argent` });
       } else {
         positions.push(p);
-        transactions.push({ ticket: ticket++, ordre: p.ticket, position: p.ticket, heure, symbole: s.nom, type: p.type, entree: 'in', volume, prix, commission: 0, swap: 0, profit: 0, solde, commentaire: d.raison });
+        const frais = commission(volume, prix);
+        solde = argent(solde + frais);
+        transactions.push({ ticket: ticket++, ordre: p.ticket, position: p.ticket, heure, symbole: s.nom, type: p.type, entree: 'in', volume, prix, commission: frais, swap: 0, profit: 0, solde, commentaire: d.raison });
         marqueurs.push({ time: barre.time, sens: p.type, entree: true, prix, texte: d.raison });
       }
     }

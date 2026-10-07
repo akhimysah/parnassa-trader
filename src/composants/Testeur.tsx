@@ -59,7 +59,7 @@ const ONGLETS: [Onglet, string][] = [
 
 /** Testeur de stratégie (Ctrl+R) : backtest et optimisation des Expert Advisors sur l'historique. */
 export function Testeur() {
-  const { maj, cotations, etat, majGraphique, ouvrirGraphique, signaler } = useTerminal();
+  const { maj, cotations, etat, majGraphique, ouvrirGraphique, signaler, compte } = useTerminal();
   const [r, setR] = useState<Reglages>(charger);
   const [onglet, setOnglet] = useState<Onglet>('parametres');
   const [enCours, setEnCours] = useState<null | { texte: string; fait: number; total: number }>(null);
@@ -114,6 +114,7 @@ export function Testeur() {
     spread: r.spreadActuel ? spreadActuel : r.spread,
     modelisation: r.modelisation,
     conversion: conversion(s, cotations),
+    typeCompte: compte.type ?? 'standard',
   });
 
   const plagesActives = Object.fromEntries(Object.entries(r.optimiser).filter(([, v]) => v.actif)) as Record<string, PlageOptimisation>;
@@ -308,7 +309,9 @@ export function Testeur() {
                     Attacher au graphique
                   </button>
                 )}
-                <p className="aide">Les profits en devise étrangère sont convertis au taux actuel. Pas de swap ni de commission.</p>
+                <p className="aide">
+                  Compte {compte.type === 'raw' ? 'Raw : commission de 7 $ par lot aller-retour en forex et métaux' : 'Standard : sans commission'}. Profits en devise étrangère convertis au taux actuel, sans swap.
+                </p>
               </div>
             </div>
           )}

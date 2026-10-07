@@ -1,15 +1,17 @@
 /**
- * Cotations Bid/Ask de tous les symboles du terminal.
- *  - crypto : vrai meilleur acheteur / vendeur du carnet Binance (bookTicker) + statistiques 24 h (miniTicker) ;
- *  - autres : cotation « milieu » du hub src/marche/flux.ts (Yahoo en continu, or animé par PAXG, scanner),
- *    élargie de l'écart fixe du symbole.
+ * Cotations Bid/Ask de tous les symboles du terminal. Chaque source donne un prix « milieu » :
+ *  - crypto : milieu du carnet Binance (bookTicker) + statistiques 24 h (miniTicker) ;
+ *  - métaux : milieu des Bid/Ask réels de Swissquote (relais, chaque seconde) ;
+ *  - autres : hub src/marche/flux.ts (Yahoo en continu, or animé par PAXG, scanner).
+ * Le Bid/Ask affiché = milieu ± le spread du type de compte actif (Standard ou Raw), élargi au rollover
+ * et, pour les métaux, au rythme des variations du spread réel de Swissquote.
  * Les composants s'abonnent par useCotations() ; les rafraîchissements sont regroupés (4 par seconde au plus).
  */
 import { useSyncExternalStore } from 'react';
 import { abonner as abonnerFlux, lireTick, type SourceInstrument } from './flux';
 import { WS_BINANCE } from './binance';
 import { RELAIS } from './bougies';
-import { SYMBOLES_CONVERSION, point, symbole, type SymboleMT } from './symboles';
+import { SYMBOLES_CONVERSION, facteurRollover, point, spreadPoints, symbole, type SymboleMT, type TypeCompte } from './symboles';
 
 export interface Cotation {
   bid: number;
@@ -44,6 +46,35 @@ function publier() {
     instantane = { ...cotations };
     for (const f of ecouteurs) f();
   }, 250);
+}
+
+// ---------- Spread du courtier ----------
+
+let typeCompte: TypeCompte = 'standard';
+const milieux: Record<string, { milieu: number; stats?: { haut: number; bas: number; ouverture: number }; facteur: number }> = {};
+
+/** Publie un prix milieu : Bid/Ask = milieu ∓ demi-spread du type de compte actif. */
+function coter(s: SymboleMT, milieu: number, stats?: { haut: number; bas: number; ouverture: number }, facteur = 1) {
+  if (!(milieu > 0)) return;
+  milieux[s.nom] = { milieu, stats, facteur };
+  const ecart = Math.max(1, Math.round(spreadPoints(s, typeCompte) * facteur * facteurRollover(s))) * point(s);
+  const bid = Number((milieu - ecart / 2).toFixed(s.chiffres));
+  const ask = Number((bid + ecart).toFixed(s.chiffres));
+  enregistrer(s.nom, bid, ask, stats);
+}
+
+/** Change le type du compte actif : tous les Bid/Ask sont recalculés avec ses spreads. */
+export function definirTypeCompte(t: TypeCompte) {
+  if (t === typeCompte) return;
+  typeCompte = t;
+  for (const [nom, m] of Object.entries(milieux)) {
+    const s = symbole(nom);
+    if (s) coter(s, m.milieu, m.stats, m.facteur);
+  }
+}
+
+export function typeCompteActif(): TypeCompte {
+  return typeCompte;
 }
 
 function enregistrer(nom: string, bid: number, ask: number, stats?: { haut: number; bas: number; ouverture: number }) {
@@ -103,12 +134,14 @@ function synchroniserBinance(syms: SymboleMT[]) {
       if (!d || !m.stream) return;
       const nom = parPaire.get(d.s);
       if (!nom) return;
+      const s = symbole(nom);
+      if (!s) return;
       if (m.stream.endsWith('@bookTicker')) {
-        enregistrer(nom, Number(d.b), Number(d.a), stats24h[nom]);
+        coter(s, (Number(d.b) + Number(d.a)) / 2, stats24h[nom]);
       } else {
         stats24h[nom] = { haut: Number(d.h), bas: Number(d.l), ouverture: Number(d.o) };
-        const c = cotations[nom];
-        if (c) enregistrer(nom, c.bid, c.ask, stats24h[nom]);
+        const c = milieux[nom];
+        if (c) coter(s, c.milieu, stats24h[nom], c.facteur);
       }
     };
     ws.onclose = () => {
@@ -139,10 +172,7 @@ function lireFlux() {
       statsFlux[s.nom] = { haut: t.haut24h, bas: t.bas24h, ouverture: t.ouverture24h };
       continue;
     }
-    const demi = (s.spread * point(s)) / 2;
-    const bid = Number((t.prix - demi).toFixed(s.chiffres));
-    const ask = Number((t.prix + demi).toFixed(s.chiffres));
-    enregistrer(s.nom, bid, ask, { haut: t.haut24h, bas: t.bas24h, ouverture: t.ouverture24h });
+    coter(s, t.prix, { haut: t.haut24h, bas: t.bas24h, ouverture: t.ouverture24h });
   }
 }
 
@@ -163,6 +193,8 @@ function synchroniserFlux(syms: SymboleMT[]) {
 // ---------- Métaux : Bid/Ask réels Swissquote (relais, chaque seconde) ----------
 
 const swissquote: Record<string, { recuLe: number }> = {};
+/** Spread Swissquote habituel (moyenne mobile) : son écart à la moyenne élargit ou resserre le spread affiché. */
+const spreadMoyenSwissquote: Record<string, number> = {};
 let symbolesSwissquote: SymboleMT[] = [];
 let minuteurSwissquote: number | undefined;
 let swissquoteEnCours = false;
@@ -189,7 +221,11 @@ async function tourSwissquote() {
       const q = d.cotations?.[s.direct.swissquote!.replace('/', '')];
       if (!q) continue;
       swissquote[s.nom] = { recuLe: Date.now() };
-      enregistrer(s.nom, Number(q.bid.toFixed(s.chiffres)), Number(q.ask.toFixed(s.chiffres)), statsFlux[s.nom]);
+      const ecart = q.ask - q.bid;
+      const moyen = (spreadMoyenSwissquote[s.nom] = spreadMoyenSwissquote[s.nom] ? spreadMoyenSwissquote[s.nom] * 0.97 + ecart * 0.03 : ecart);
+      // Annonce, faible liquidité : le spread réel s'écarte, le spread affiché suit dans la même proportion.
+      const facteur = Math.min(4, Math.max(0.8, moyen > 0 ? ecart / moyen : 1));
+      coter(s, (q.bid + q.ask) / 2, statsFlux[s.nom], facteur);
     }
   } catch {
     // relais indisponible : la cotation de secours (hub) reprend après 10 s

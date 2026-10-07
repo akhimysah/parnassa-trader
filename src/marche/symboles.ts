@@ -221,3 +221,54 @@ export function libelleSeances(s: SymboleMT): string {
   if (s.categorie === 'actions-fr') return 'Lundi – vendredi, 07:00 – 15:30 UTC';
   return 'Dimanche 22:00 – vendredi 21:00 UTC';
 }
+
+// ---------- Types de compte : spreads et commissions façon courtier MT5 ----------
+
+/** Standard : spreads de compte classique, sans commission. Raw : spreads serrés + commission par lot. */
+export type TypeCompte = 'standard' | 'raw';
+
+export const TYPES_COMPTE: Record<TypeCompte, { nom: string; description: string }> = {
+  standard: { nom: 'Standard', description: 'Spreads à partir de 1,2 pip, sans commission' },
+  raw: { nom: 'Raw', description: 'Spreads à partir de 0,2 pip + 7 $ par lot aller-retour (forex, métaux)' },
+};
+
+/**
+ * Spread moyen en points [Standard, Raw], aux ordres de grandeur des courtiers MT5 (heures normales).
+ * Ex. XAUUSD (2 décimales) : 30 points = 0,30 $ ; EURUSD (5 décimales) : 12 points = 1,2 pip.
+ */
+const SPREADS: Record<string, [number, number]> = {
+  EURUSD: [12, 2], GBPUSD: [15, 4], USDJPY: [13, 2], USDCHF: [15, 4], AUDUSD: [13, 3], USDCAD: [16, 4], NZDUSD: [18, 5],
+  EURGBP: [15, 5], EURJPY: [18, 5], GBPJPY: [25, 9], EURCHF: [18, 6], AUDJPY: [18, 6], EURAUD: [22, 8], GBPCHF: [25, 10],
+  XAUUSD: [30, 10], XAGUSD: [30, 15], XPTUSD: [300, 150], XPDUSD: [500, 300], COPPER: [30, 20],
+  US500: [50, 40], NAS100: [150, 100], US30: [250, 180], GER40: [150, 100], FRA40: [150, 100], UK100: [150, 100], JPN225: [1000, 700],
+  USOIL: [4, 3], UKOIL: [5, 3], NATGAS: [8, 5],
+  BTCUSD: [2500, 1000], ETHUSD: [250, 100], SOLUSD: [20, 10], BNBUSD: [50, 20], XRPUSD: [30, 15], DOGUSD: [50, 25],
+  ADAUSD: [30, 15], LTCUSD: [20, 10], LNKUSD: [30, 15], AVAUSD: [50, 25],
+};
+
+/** Spread de base en points du symbole pour un type de compte. */
+export function spreadPoints(s: SymboleMT, type: TypeCompte): number {
+  const t = SPREADS[s.nom];
+  if (t) return t[type === 'raw' ? 1 : 0];
+  // Actions : 6 cents (US) / 8 cents (FR) en standard, 2 / 3 cents en raw.
+  return type === 'raw' ? Math.max(1, Math.round(s.spread / 3)) : s.spread;
+}
+
+/**
+ * Commission (USD, positive) d'un côté de transaction (ouverture ou fermeture) sur un compte Raw :
+ * 3,50 $ par lot en forex et métaux, 0,025 % du notionnel en crypto, rien ailleurs.
+ */
+export function commissionParCote(s: SymboleMT, type: TypeCompte, volume: number, notionnelUsd: number): number {
+  if (type !== 'raw') return 0;
+  if (s.categorie === 'forex' || s.categorie === 'metaux') return 3.5 * volume;
+  if (s.categorie === 'crypto') return notionnelUsd * 0.00025;
+  return 0;
+}
+
+/** Élargissement au rollover (heure de minuit des serveurs MT5, vers 21:55–22:10 UTC), sauf crypto. */
+export function facteurRollover(s: SymboleMT, t = Date.now()): number {
+  if (s.categorie === 'crypto') return 1;
+  const d = new Date(t);
+  const m = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return m >= 21 * 60 + 55 && m < 22 * 60 + 10 ? 3 : 1;
+}

@@ -4,7 +4,7 @@
  * une position acheteuse se ferme au Bid, une position vendeuse à l'Ask.
  */
 import type { Cotation } from '../marche/cotations';
-import { formaterPrix, marcheOuvert, point, symbole, versUsd, type SymboleMT } from '../marche/symboles';
+import { commissionParCote, formaterPrix, marcheOuvert, point, symbole, versUsd, type SymboleMT, type TypeCompte } from '../marche/symboles';
 
 export type Sens = 'buy' | 'sell';
 export type TypeEnAttente = 'buy_limit' | 'sell_limit' | 'buy_stop' | 'sell_stop' | 'buy_stop_limit' | 'sell_stop_limit';
@@ -20,6 +20,7 @@ export interface Position {
   sl: number;
   tp: number;
   heure: number;
+  /** Commission payée à l'ouverture (négative, déjà retirée du solde comme dans MT5 : pour l'affichage). */
   commission: number;
   swap: number;
   commentaire: string;
@@ -93,6 +94,8 @@ export interface EntreeJournal {
 export interface Compte {
   login: number;
   nom: string;
+  /** Standard (spreads larges, sans commission) ou Raw (spreads serrés + commission) ; Standard si absent. */
+  type?: TypeCompte;
   serveur: string;
   devise: 'USD';
   levier: number;
@@ -191,7 +194,7 @@ export function etatCompte(c: Compte, cot: Cotations): EtatCompte {
   for (const p of c.positions) {
     const s = symbole(p.symbole);
     if (!s) continue;
-    profit += profitPosition(p, cot) + p.swap + p.commission;
+    profit += profitPosition(p, cot) + p.swap;
     marge += margeRequise(s, p.volume, p.prixOuverture, c.levier, cot);
   }
   const fondsPropres = c.solde + c.credit + profit;
@@ -208,13 +211,14 @@ export function etatCompte(c: Compte, cot: Cotations): EtatCompte {
 
 // ---------- Création ----------
 
-export function nouveauCompte(nom: string, depot: number, levier: number): Compte {
+export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard'): Compte {
   const login = 50000000 + Math.floor(Math.random() * 49999999);
   const maintenant = Date.now();
   const ticket = 100000000 + Math.floor(Math.random() * 9000000);
   return {
     login,
     nom,
+    type,
     serveur: SERVEUR,
     devise: 'USD',
     levier,
@@ -226,7 +230,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number): Compt
       { ticket, ordre: 0, position: 0, heure: maintenant, symbole: '', type: 'balance', entree: '', volume: 0, prix: 0, commission: 0, swap: 0, profit: depot, solde: depot, commentaire: 'Dépôt de démonstration' },
     ],
     ordresHisto: [],
-    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} USD, levier 1:${levier}` }],
+    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} USD, levier 1:${levier}, compte ${type === 'raw' ? 'Raw' : 'Standard'}` }],
     ticketSuivant: ticket + 1,
     creeLe: maintenant,
     appelMarge: false,
@@ -313,7 +317,8 @@ export function ouvrirMarche(c: Compte, d: DemandeMarche, cot: Cotations, origin
   if (es) return echec(c, es, demande);
   const marge = margeRequise(s, d.volume, prix, c.levier, cot);
   const etat = etatCompte(c, cot);
-  if (marge > etat.margeLibre) return echec(c, 'Pas assez d\'argent', demande);
+  const commission = -arrondir(commissionParCote(s, c.type ?? 'standard', d.volume, d.volume * s.contrat * prix * conversion(s, cot))) || 0;
+  if (marge - commission > etat.margeLibre) return echec(c, 'Pas assez d\'argent', demande);
 
   const ticketOrdre = origine?.ordre ?? c.ticketSuivant;
   const ticketDeal = origine ? c.ticketSuivant : c.ticketSuivant + 1;
@@ -327,7 +332,7 @@ export function ouvrirMarche(c: Compte, d: DemandeMarche, cot: Cotations, origin
     sl: d.sl,
     tp: d.tp,
     heure: maintenant,
-    commission: 0,
+    commission,
     swap: 0,
     commentaire: d.commentaire,
     suiveur: 0,
@@ -343,10 +348,10 @@ export function ouvrirMarche(c: Compte, d: DemandeMarche, cot: Cotations, origin
     entree: 'in',
     volume: d.volume,
     prix,
-    commission: 0,
+    commission,
     swap: 0,
     profit: 0,
-    solde: c.solde,
+    solde: arrondir(c.solde + commission),
     commentaire: d.commentaire,
   };
   const histo: OrdreHistorique = {
@@ -364,6 +369,7 @@ export function ouvrirMarche(c: Compte, d: DemandeMarche, cot: Cotations, origin
   };
   const suite: Compte = {
     ...c,
+    solde: arrondir(c.solde + commission),
     positions: [...c.positions, position],
     transactions: [...c.transactions, deal],
     ordresHisto: [...c.ordresHisto, histo],
@@ -513,7 +519,9 @@ export function fermerPosition(c: Compte, ticket: number, cot: Cotations, volume
   const ecart = p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix;
   const profit = arrondir(ecart * v * s.contrat * conversion(s, cot));
   const swap = arrondir(p.swap * part);
-  const commission = arrondir(p.commission * part);
+  // Commission de sortie (compte Raw) ; celle d'entrée a déjà été prélevée à l'ouverture.
+  const commission = -arrondir(commissionParCote(s, c.type ?? 'standard', v, v * s.contrat * prix * conversion(s, cot))) || 0;
+  const commissionEntree = arrondir(p.commission * part);
   const solde = arrondir(c.solde + profit + swap + commission);
   const maintenant = Date.now();
   const ticketOrdre = c.ticketSuivant;
@@ -554,7 +562,7 @@ export function fermerPosition(c: Compte, ticket: number, cot: Cotations, volume
   const positions =
     reste <= 1e-9
       ? c.positions.filter((x) => x.ticket !== ticket)
-      : c.positions.map((x) => (x.ticket === ticket ? { ...x, volume: reste, swap: x.swap - swap, commission: x.commission - commission } : x));
+      : c.positions.map((x) => (x.ticket === ticket ? { ...x, volume: reste, swap: x.swap - swap, commission: x.commission - commissionEntree } : x));
   const suite: Compte = { ...c, solde, positions, transactions: [...c.transactions, deal], ordresHisto: [...c.ordresHisto, histo], ticketSuivant: c.ticketSuivant + 2 };
   const message = `${deal.type} ${fmtVolume(v)} ${p.symbole} à ${formaterPrix(s, prix)}, profit ${profit.toFixed(2)} USD`;
   return { compte: journaliser(suite, 'Trades', `'${c.login}' : ${demande} — exécuté, deal #${deal.ticket} ${message}`), erreur: null, message };

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useTerminal } from '../contexte';
-import { SYMBOLES, formaterPrix, libelleSeances, marcheOuvert, point, symbole, type Categorie } from '../marche/symboles';
+import { SYMBOLES, TYPES_COMPTE, formaterPrix, libelleSeances, marcheOuvert, point, spreadPoints, symbole, type Categorie } from '../marche/symboles';
 import { levierEffectif } from '../compte/moteur';
 import { PrixGros, argent, heureMT } from '../composants/ui';
 import { BoutonIcone, BoutonRetour, EnTete, IconePlus, useAppuiLong, useNav, vibrer } from './commun';
@@ -226,7 +226,9 @@ export function ProprietesSymbole({ nom }: { nom: string }) {
   const lignes: [string, string][] = [
     ['Description', s.description],
     ['Chiffres', String(s.chiffres)],
-    ['Spread', s.direct.binance || s.direct.swissquote ? 'flottant' : `${s.spread} points`],
+    ['Type de compte', TYPES_COMPTE[compte.type ?? 'standard'].nom],
+    ['Spread moyen', `${spreadPoints(s, compte.type ?? 'standard')} points`],
+    ['Commission', compte.type === 'raw' ? (s.categorie === 'forex' || s.categorie === 'metaux' ? '7 $ par lot aller-retour' : s.categorie === 'crypto' ? '0,025 % par côté' : 'aucune') : 'aucune'],
     ['Cotations', s.direct.swissquote ? 'Swissquote, chaque seconde' : s.direct.binance ? 'Binance, temps réel' : s.direct.yahoo ? 'Flux continu' : 'Rafraîchies chaque seconde'],
     ['Taille du contrat', `${argent(s.contrat, 0)} ${s.base}`],
     ['Devise de profit', s.profit],

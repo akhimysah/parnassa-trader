@@ -33,7 +33,16 @@ export interface Stats {
 export function calculerStats(transactions: Transaction[]): Stats {
   const deals = [...transactions].sort((a, b) => a.heure - b.heure || a.ticket - b.ticket);
   const sorties = deals.filter((d) => d.entree === 'out');
-  const resultat = (d: (typeof deals)[number]) => d.profit + d.swap + d.commission;
+  // Commission d'entrée (compte Raw) rattachée à la première sortie de la position : chaque trade porte tous ses coûts.
+  const entrees = new Map<number, number>();
+  for (const d of deals) if (d.entree === 'in' && d.commission) entrees.set(d.position, (entrees.get(d.position) ?? 0) + d.commission);
+  const supplement = new Map<number, number>();
+  for (const d of deals) {
+    if (d.entree !== 'out' || !entrees.has(d.position)) continue;
+    supplement.set(d.ticket, entrees.get(d.position)!);
+    entrees.delete(d.position);
+  }
+  const resultat = (d: (typeof deals)[number]) => d.profit + d.swap + d.commission + (supplement.get(d.ticket) ?? 0);
   const gains = sorties.filter((d) => resultat(d) > 0);
   const pertes = sorties.filter((d) => resultat(d) <= 0);
   const brutGain = gains.reduce((s, d) => s + resultat(d), 0);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTerminal, type Dialogue } from '../contexte';
 import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
-import { SYMBOLES, formaterPrix, libelleSeances, point, symbole, type Categorie } from '../marche/symboles';
+import { SYMBOLES, TYPES_COMPTE, formaterPrix, libelleSeances, point, spreadPoints, symbole, type Categorie, type TypeCompte } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { sourceDirecte } from '../marche/cotations';
 import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA } from '../graphique/indicateurs';
@@ -153,7 +153,9 @@ function DialogueSpecification({ nom }: { nom: string }) {
     ['Catégorie', `${NOMS_CATEGORIES[s.categorie]} (${s.chemin})`],
     ['Chiffres', String(s.chiffres)],
     ['Taille du point', point(s).toFixed(s.chiffres)],
-    ['Spread', s.direct.binance ? 'flottant (carnet Binance)' : s.direct.swissquote ? `flottant (Swissquote)${sourceDirecte(nom) === 'swissquote' ? '' : ` — secours : ${s.spread} points fixes`}` : `${s.spread} points (fixe)`],
+    ['Type de compte', `${TYPES_COMPTE[compte.type ?? 'standard'].nom} — ${TYPES_COMPTE[compte.type ?? 'standard'].description}`],
+    ['Spread', `${spreadPoints(s, compte.type ?? 'standard')} points en moyenne (Standard ${spreadPoints(s, 'standard')}, Raw ${spreadPoints(s, 'raw')})${s.direct.swissquote && sourceDirecte(nom) === 'swissquote' ? ', flottant au rythme de Swissquote' : ''}, élargi au rollover`],
+    ['Commission', compte.type === 'raw' ? (s.categorie === 'forex' || s.categorie === 'metaux' ? '3,50 $ par lot et par côté (7 $ aller-retour)' : s.categorie === 'crypto' ? '0,025 % du montant par côté' : 'aucune') : 'aucune'],
     ['Taille du contrat', `${argent(s.contrat, 0)} ${s.base}`],
     ['Devise de marge', s.base.length === 3 && s.categorie === 'forex' ? s.base : 'USD'],
     ['Devise de profit', s.profit],
@@ -238,6 +240,7 @@ function DialogueCompte() {
   const [nom, setNom] = useState('Compte démo');
   const [depot, setDepot] = useState(10000);
   const [levier, setLevier] = useState(100);
+  const [type, setType] = useState<TypeCompte>('standard');
   return (
     <Fenetre titre="Ouvrir un compte de démonstration" fermer={fermer} largeur={440}>
       <p className="aide">Serveur : {SERVEUR} — compte de couverture en USD. Aucune donnée personnelle n'est demandée : le compte est conservé dans ce navigateur.</p>
@@ -245,6 +248,16 @@ function DialogueCompte() {
         <label>
           <span>Nom du compte :</span>
           <input value={nom} onChange={(e) => setNom(e.target.value)} maxLength={40} />
+        </label>
+        <label>
+          <span>Type de compte :</span>
+          <select value={type} onChange={(e) => setType(e.target.value as TypeCompte)}>
+            {(Object.keys(TYPES_COMPTE) as TypeCompte[]).map((t) => (
+              <option key={t} value={t}>
+                {TYPES_COMPTE[t].nom} — {TYPES_COMPTE[t].description}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           <span>Dépôt :</span>
@@ -272,9 +285,9 @@ function DialogueCompte() {
         <button
           className="principal"
           onClick={() => {
-            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier);
+            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type);
             maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
-            signaler(`Compte ${c.login} ouvert sur ${SERVEUR}`);
+            signaler(`Compte ${TYPES_COMPTE[type].nom} ${c.login} ouvert sur ${SERVEUR}`);
             fermer();
           }}
         >
@@ -301,7 +314,7 @@ function DialogueConnexion() {
           >
             <b>{c.login}</b> — {c.nom}
             <small>
-              {c.serveur} · 1:{c.levier} · solde {argent(c.solde)} USD
+              {c.serveur} · {TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:{c.levier} · solde {argent(c.solde)} USD
             </small>
           </button>
         ))}
