@@ -3,6 +3,7 @@ import { useTerminal, type Dialogue } from '../contexte';
 import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
 import { SYMBOLES, formaterPrix, libelleSeances, point, symbole, type Categorie } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
+import { sourceDirecte } from '../marche/cotations';
 import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA } from '../graphique/indicateurs';
 import { SCHEMAS } from '../graphique/couleurs';
 import { definirSuiveur, fermerPosition, levierEffectif, nouveauCompte, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
@@ -152,7 +153,7 @@ function DialogueSpecification({ nom }: { nom: string }) {
     ['Catégorie', `${NOMS_CATEGORIES[s.categorie]} (${s.chemin})`],
     ['Chiffres', String(s.chiffres)],
     ['Taille du point', point(s).toFixed(s.chiffres)],
-    ['Spread', s.direct.binance ? 'flottant (carnet Binance)' : `${s.spread} points (fixe)`],
+    ['Spread', s.direct.binance ? 'flottant (carnet Binance)' : s.direct.swissquote ? `flottant (Swissquote)${sourceDirecte(nom) === 'swissquote' ? '' : ` — secours : ${s.spread} points fixes`}` : `${s.spread} points (fixe)`],
     ['Taille du contrat', `${argent(s.contrat, 0)} ${s.base}`],
     ['Devise de marge', s.base.length === 3 && s.categorie === 'forex' ? s.base : 'USD'],
     ['Devise de profit', s.profit],
@@ -168,7 +169,7 @@ function DialogueSpecification({ nom }: { nom: string }) {
     ['Ordres', 'Market, Limit, Stop, Stop Limit, SL, TP'],
     ['Swap', '0 (non facturé sur le compte démo)'],
     ['Séances', libelleSeances(s)],
-    ['Cotations', s.direct.binance ? `Binance ${s.direct.binance} (temps réel)` : s.direct.yahoo ? 'Flux continu (≈ 1 mise à jour par seconde)' : s.direct.pilote ? `TradingView, animé par ${s.direct.pilote}` : 'TradingView (rafraîchi chaque seconde)'],
+    ['Cotations', s.direct.swissquote ? `Swissquote ${s.direct.swissquote}, Bid/Ask réels chaque seconde${sourceDirecte(nom) === 'swissquote' ? '' : ' (indisponible : source de secours)'}` : s.direct.binance ? `Binance ${s.direct.binance} (temps réel)` : s.direct.yahoo ? 'Flux continu (≈ 1 mise à jour par seconde)' : s.direct.pilote ? `TradingView, animé par ${s.direct.pilote}` : 'TradingView (rafraîchi chaque seconde)'],
     ['Historique', s.histo.binance ? `Binance ${s.histo.binance}` : `Yahoo Finance ${s.histo.yahoo}${s.histo.recaler ? ' (contrat à terme recalé sur le comptant)' : ''}`],
   ];
   return (

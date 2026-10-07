@@ -28,7 +28,8 @@ export interface SymboleMT {
   /** Levier maximal appliqué par le courtier sur ce symbole (le levier du compte est plafonné à cette valeur). */
   levierMax: number;
   /** Cotations en direct. */
-  direct: { binance?: string; tradingview?: string; yahoo?: string; pilote?: string };
+  /** `swissquote` : Bid/Ask réels du courtier Swissquote (via le relais), prioritaires sur les autres sources. */
+  direct: { binance?: string; tradingview?: string; yahoo?: string; pilote?: string; swissquote?: string };
   /** Historique : paire Binance, ou symbole Yahoo servi par le relais. `recaler` aligne une source voisine sur la cotation. */
   histo: { binance?: string; yahoo?: string; recaler?: boolean };
 }
@@ -115,9 +116,10 @@ export const SYMBOLES: SymboleMT[] = [
   fx('EURAUD', 'Euro vs Dollar australien', 'Croisées', 5, 25),
   fx('GBPCHF', 'Livre sterling vs Franc suisse', 'Croisées', 5, 30),
   // Métaux
-  cfd('XAUUSD', 'Or vs Dollar US', 'Métaux', 'metaux', 2, 25, { tradingview: 'OANDA:XAUUSD', pilote: 'PAXGUSDT' }, { yahoo: 'GC=F', recaler: true }, { contrat: 100, levierMax: 500, base: 'XAU' }),
-  cfd('XAGUSD', 'Argent vs Dollar US', 'Métaux', 'metaux', 3, 30, { tradingview: 'TVC:SILVER' }, { yahoo: 'SI=F', recaler: true }, { contrat: 5000, levierMax: 200, base: 'XAG' }),
-  cfd('XPTUSD', 'Platine vs Dollar US', 'Métaux', 'metaux', 2, 300, { tradingview: 'TVC:PLATINUM' }, { yahoo: 'PL=F', recaler: true }, { contrat: 100, levierMax: 100, base: 'XPT' }),
+  cfd('XAUUSD', 'Or vs Dollar US', 'Métaux', 'metaux', 2, 25, { tradingview: 'OANDA:XAUUSD', pilote: 'PAXGUSDT', swissquote: 'XAU/USD' }, { yahoo: 'GC=F', recaler: true }, { contrat: 100, levierMax: 500, base: 'XAU' }),
+  cfd('XAGUSD', 'Argent vs Dollar US', 'Métaux', 'metaux', 3, 30, { tradingview: 'TVC:SILVER', swissquote: 'XAG/USD' }, { yahoo: 'SI=F', recaler: true }, { contrat: 5000, levierMax: 200, base: 'XAG' }),
+  cfd('XPTUSD', 'Platine vs Dollar US', 'Métaux', 'metaux', 2, 300, { tradingview: 'TVC:PLATINUM', swissquote: 'XPT/USD' }, { yahoo: 'PL=F', recaler: true }, { contrat: 100, levierMax: 100, base: 'XPT' }),
+  cfd('XPDUSD', 'Palladium vs Dollar US', 'Métaux', 'metaux', 2, 300, { tradingview: 'TVC:PALLADIUM', swissquote: 'XPD/USD' }, { yahoo: 'PA=F', recaler: true }, { contrat: 100, levierMax: 100, base: 'XPD' }),
   cfd('COPPER', 'Cuivre (contrat à terme)', 'Métaux', 'metaux', 4, 30, { tradingview: 'COMEX:HG1!' }, { yahoo: 'HG=F' }, { contrat: 25000, levierMax: 100 }),
   // Indices
   cfd('US500', 'S&P 500', 'Indices\\États-Unis', 'indices', 2, 50, { tradingview: 'SP:SPX', yahoo: '^GSPC' }, { yahoo: '^GSPC' }, { levierMax: 200 }),

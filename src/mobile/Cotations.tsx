@@ -226,7 +226,8 @@ export function ProprietesSymbole({ nom }: { nom: string }) {
   const lignes: [string, string][] = [
     ['Description', s.description],
     ['Chiffres', String(s.chiffres)],
-    ['Spread', s.direct.binance ? 'flottant' : `${s.spread} points`],
+    ['Spread', s.direct.binance || s.direct.swissquote ? 'flottant' : `${s.spread} points`],
+    ['Cotations', s.direct.swissquote ? 'Swissquote, chaque seconde' : s.direct.binance ? 'Binance, temps réel' : s.direct.yahoo ? 'Flux continu' : 'Rafraîchies chaque seconde'],
     ['Taille du contrat', `${argent(s.contrat, 0)} ${s.base}`],
     ['Devise de profit', s.profit],
     ['Levier', `1:${levierEffectif(s, compte.levier)}`],

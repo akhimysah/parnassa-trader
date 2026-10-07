@@ -8,6 +8,7 @@
 import { useSyncExternalStore } from 'react';
 import { abonner as abonnerFlux, lireTick, type SourceInstrument } from './flux';
 import { WS_BINANCE } from './binance';
+import { RELAIS } from './bougies';
 import { SYMBOLES_CONVERSION, point, symbole, type SymboleMT } from './symboles';
 
 export interface Cotation {
@@ -126,10 +127,18 @@ let desabonnerFlux: (() => void) | null = null;
 let cleFlux = '';
 let sourcesFlux: { s: SymboleMT; source: SourceInstrument }[] = [];
 
+/** Statistiques du jour (haut, bas, ouverture) des symboles cotés par Swissquote, prises au hub. */
+const statsFlux: Record<string, { haut: number; bas: number; ouverture: number }> = {};
+
 function lireFlux() {
   for (const { s, source } of sourcesFlux) {
     const t = lireTick(source);
     if (!t) continue;
+    // Swissquote frais : il fixe le Bid/Ask, le hub ne fournit plus que les statistiques du jour.
+    if (s.direct.swissquote && swissquoteFrais(s.nom)) {
+      statsFlux[s.nom] = { haut: t.haut24h, bas: t.bas24h, ouverture: t.ouverture24h };
+      continue;
+    }
     const demi = (s.spread * point(s)) / 2;
     const bid = Number((t.prix - demi).toFixed(s.chiffres));
     const ask = Number((t.prix + demi).toFixed(s.chiffres));
@@ -151,11 +160,67 @@ function synchroniserFlux(syms: SymboleMT[]) {
   if (sourcesFlux.length) desabonnerFlux = abonnerFlux(sourcesFlux.map((x) => x.source), lireFlux);
 }
 
+// ---------- Métaux : Bid/Ask réels Swissquote (relais, chaque seconde) ----------
+
+const swissquote: Record<string, { recuLe: number }> = {};
+let symbolesSwissquote: SymboleMT[] = [];
+let minuteurSwissquote: number | undefined;
+let swissquoteEnCours = false;
+let toursSwissquote = 0;
+
+function swissquoteFrais(nom: string): boolean {
+  const q = swissquote[nom];
+  return Boolean(q && Date.now() - q.recuLe < 10000);
+}
+
+async function tourSwissquote() {
+  if (swissquoteEnCours || symbolesSwissquote.length === 0) return;
+  // Onglet caché : un appel toutes les 5 s seulement (le relais est partagé et limité), assez pour que
+  // les stops et ordres en attente suivent toujours les vrais prix.
+  toursSwissquote += 1;
+  if (document.visibilityState === 'hidden' && toursSwissquote % 5 !== 0) return;
+  swissquoteEnCours = true;
+  try {
+    const liste = symbolesSwissquote.map((s) => s.direct.swissquote).join(',');
+    const r = await fetch(`${RELAIS}/swissquote?i=${encodeURIComponent(liste)}`, { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) return;
+    const d = (await r.json()) as { cotations?: Record<string, { bid: number; ask: number }> };
+    for (const s of symbolesSwissquote) {
+      const q = d.cotations?.[s.direct.swissquote!.replace('/', '')];
+      if (!q) continue;
+      swissquote[s.nom] = { recuLe: Date.now() };
+      enregistrer(s.nom, Number(q.bid.toFixed(s.chiffres)), Number(q.ask.toFixed(s.chiffres)), statsFlux[s.nom]);
+    }
+  } catch {
+    // relais indisponible : la cotation de secours (hub) reprend après 10 s
+  } finally {
+    swissquoteEnCours = false;
+  }
+}
+
+function synchroniserSwissquote(syms: SymboleMT[]) {
+  symbolesSwissquote = syms.filter((s) => s.direct.swissquote);
+  if (symbolesSwissquote.length && minuteurSwissquote === undefined) {
+    void tourSwissquote();
+    minuteurSwissquote = window.setInterval(() => void tourSwissquote(), 1000);
+  } else if (!symbolesSwissquote.length && minuteurSwissquote !== undefined) {
+    window.clearInterval(minuteurSwissquote);
+    minuteurSwissquote = undefined;
+  }
+}
+
+/** Source affichée pour un symbole (spécification, Observation du marché). */
+export function sourceDirecte(nom: string): 'swissquote' | 'binance' | 'secours' {
+  if (swissquoteFrais(nom)) return 'swissquote';
+  return symbole(nom)?.direct.binance ? 'binance' : 'secours';
+}
+
 /** Définit les symboles à coter (Observation du marché, positions, ordres) ; les taux de conversion sont toujours inclus. */
 export function definirAbonnements(noms: string[]) {
   const syms = [...new Set([...noms, ...SYMBOLES_CONVERSION])].map(symbole).filter((s): s is SymboleMT => Boolean(s));
   synchroniserBinance(syms);
   synchroniserFlux(syms);
+  synchroniserSwissquote(syms);
 }
 
 function souscrire(f: () => void) {
