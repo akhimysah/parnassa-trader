@@ -9,7 +9,7 @@ import { argent, dateMT } from '../composants/ui';
 import { choisirInterface } from '../interface';
 import { demanderPermission, notificationsDisponibles } from '../notifications';
 import { useInstallation } from '../installation';
-import { BoutonIcone, BoutonRetour, ChampPas, EnTete, IconePlus, Interrupteur, useAppuiLong, useNav, vibrer } from './commun';
+import { BoutonIcone, BoutonRetour, ChampPas, EnTete, IconePlus, Interrupteur, Segments, useAppuiLong, useNav, vibrer } from './commun';
 
 /** Onglet Paramètres : compte, messagerie, outils et réglages, comme le menu de MT5 mobile. */
 export function Reglages() {
@@ -81,8 +81,15 @@ export function Reglages() {
               <ChampPas valeur={etat.volumeDefaut} changer={(v) => maj((e) => ({ ...e, volumeDefaut: v }))} pas={0.01} min={0.01} max={100} decimales={2} />
             </span>
           </li>
-          <li className="fleche" onClick={() => ouvrir({ type: 'rapport' })}>
+          <li className="fleche" onClick={() => pousser({ type: 'experts' })}>
+            <span className="mm-ico bleu">🎓</span>Expert Advisors
+            <small className="mm-compte">{etat.graphiques.filter((g) => g.expert).length || ''}</small>
+          </li>
+          <li className="fleche" onClick={() => pousser({ type: 'rapport' })}>
             <span className="mm-ico violet">📊</span>Rapport de trading
+          </li>
+          <li className="fleche" onClick={() => pousser({ type: 'depot' })}>
+            <span className="mm-ico vert">$</span>Dépôt / retrait
           </li>
           {notificationsDisponibles() && (
             <li>
@@ -141,7 +148,7 @@ export function Reglages() {
 
 /** Liste des comptes : changer de compte, en ouvrir un, synchroniser. */
 export function Comptes() {
-  const { etat, maj, ouvrir } = useTerminal();
+  const { etat, maj } = useTerminal();
   const { pousser, feuille } = useNav();
   return (
     <div className="mm-ecran">
@@ -170,7 +177,7 @@ export function Comptes() {
               menu={() =>
                 feuille(`${c.login} — ${c.nom}`, [
                   { libelle: 'Se connecter', action: () => maj((e) => ({ ...e, actif: c.login })) },
-                  ...(c.login === etat.actif ? [{ libelle: 'Dépôt / retrait', action: () => ouvrir({ type: 'depot' }) }] : []),
+                  ...(c.login === etat.actif ? [{ libelle: 'Dépôt / retrait', action: () => pousser({ type: 'depot' }) }] : []),
                   ...(etat.comptes.length > 1
                     ? [
                         {
@@ -293,7 +300,7 @@ export function OuvrirCompte() {
 const TITRES = { courrier: 'Boîte aux lettres', actualites: 'Actualités', calendrier: 'Calendrier économique', journal: 'Journal', alertes: 'Alertes' };
 
 export function EcranListe({ quoi }: { quoi: keyof typeof TITRES }) {
-  const { ouvrir } = useTerminal();
+  const { pousser } = useNav();
   return (
     <div className="mm-ecran">
       <EnTete
@@ -301,7 +308,7 @@ export function EcranListe({ quoi }: { quoi: keyof typeof TITRES }) {
         gauche={<BoutonRetour />}
         droite={
           quoi === 'alertes' ? (
-            <BoutonIcone titre="Créer une alerte" onClick={() => ouvrir({ type: 'alerte' })}>
+            <BoutonIcone titre="Créer une alerte" onClick={() => pousser({ type: 'alerte' })}>
               <IconePlus />
             </BoutonIcone>
           ) : undefined
@@ -402,40 +409,74 @@ interface Evenement {
   echelle: string;
 }
 
+const DEVISES_CAL = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD', 'CNY'];
+
 function Calendrier() {
   const [liste, setListe] = useState<Evenement[] | null>(null);
-  const [importants, setImportants] = useState(true);
+  const [importance, setImportance] = useState<'toutes' | 'moyenne' | 'haute'>('moyenne');
+  const [devises, setDevises] = useState<string[]>([]);
   useEffect(() => {
     fetch(`${RELAIS}/calendrier`)
       .then((r) => r.json() as Promise<{ evenements: Evenement[] }>)
       .then((d) => setListe(d.evenements))
       .catch(() => setListe([]));
   }, []);
+  // À l'ouverture, la liste se place sur le prochain événement (les jours passés restent au-dessus).
+  useEffect(() => {
+    if (liste) requestAnimationFrame(() => document.querySelector('.mm-calendrier li.prochain')?.scrollIntoView({ block: 'center' }));
+  }, [liste]);
   if (!liste) return <div className="mm-vide">Chargement…</div>;
   const v = (x: number | null, e: Evenement) => (x === null ? '—' : `${x}${e.echelle}${e.unite}`);
+  const seuil = importance === 'haute' ? 1 : importance === 'moyenne' ? 0 : -9;
+  const filtres = liste.filter((e) => e.importance >= seuil && (devises.length === 0 || devises.includes(e.devise)));
+  // Regroupement par jour, comme le calendrier de MT5 mobile.
+  const jours = new Map<string, Evenement[]>();
+  for (const e of filtres) {
+    const j = new Date(e.date).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    jours.set(j, [...(jours.get(j) ?? []), e]);
+  }
+  const prochain = filtres.find((e) => e.date > Date.now());
   return (
     <>
-      <div className="mm-bloc ligne">
-        Importance moyenne et haute seulement
-        <Interrupteur actif={importants} libelle="Importants seulement" changer={setImportants} />
+      <div className="mm-segments-cadre">
+        <Segments<'toutes' | 'moyenne' | 'haute'>
+          valeur={importance}
+          changer={setImportance}
+          options={[
+            ['toutes', 'Toutes'],
+            ['moyenne', 'Moyenne +'],
+            ['haute', 'Haute'],
+          ]}
+        />
       </div>
-      <ul className="mm-liste mm-calendrier">
-        {liste
-          .filter((e) => !importants || e.importance >= 0)
-          .map((e) => (
-            <li key={e.id} className={e.date < Date.now() ? 'passe' : ''}>
-              <span className={`mm-impact i${e.importance}`} />
-              <div className="mm-liste-texte">
-                <b>
-                  {e.devise} · {e.titreFr ?? e.titre}
-                </b>
-                <small>
-                  {dateMT(e.date, false)} · actuel <b>{v(e.actuel, e)}</b> · prév. {v(e.prevision, e)} · préc. {v(e.precedent, e)}
-                </small>
-              </div>
-            </li>
-          ))}
-      </ul>
+      <div className="mm-puces">
+        {DEVISES_CAL.map((d) => (
+          <button key={d} className={devises.includes(d) ? 'actif' : ''} onClick={() => setDevises((x) => (x.includes(d) ? x.filter((k) => k !== d) : [...x, d]))}>
+            {d}
+          </button>
+        ))}
+      </div>
+      {[...jours.entries()].map(([jour, evs]) => (
+        <div key={jour}>
+          <div className="mm-section">{jour}</div>
+          <ul className="mm-liste mm-calendrier">
+            {evs.map((e) => (
+              <li key={e.id} className={`${e.date < Date.now() ? 'passe' : ''}${prochain?.id === e.id ? ' prochain' : ''}`}>
+                <span className={`mm-impact i${e.importance}`} />
+                <div className="mm-liste-texte">
+                  <b>
+                    {new Date(e.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · {e.devise} · {e.titreFr ?? e.titre}
+                  </b>
+                  <small>
+                    actuel <b className={e.actuel !== null && e.prevision !== null ? (e.actuel >= e.prevision ? 'positif' : 'negatif') : ''}>{v(e.actuel, e)}</b> · prévision {v(e.prevision, e)} · précédent {v(e.precedent, e)}
+                  </small>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+      {filtres.length === 0 && <div className="mm-vide grand">Aucun événement pour ces filtres.</div>}
     </>
   );
 }
@@ -462,8 +503,8 @@ function Journal() {
 }
 
 function Alertes() {
-  const { etat, maj, cotations, ouvrir } = useTerminal();
-  const { feuille } = useNav();
+  const { etat, maj, cotations } = useTerminal();
+  const { feuille, pousser } = useNav();
   if (etat.alertes.length === 0) return <div className="mm-vide grand">Aucune alerte. Touchez + pour en créer une.</div>;
   return (
     <ul className="mm-liste">
@@ -476,7 +517,7 @@ function Alertes() {
             className={a.active ? '' : 'muet'}
             onClick={() =>
               feuille(`${a.symbole} ${a.condition.slice(0, 3).toUpperCase()} ${a.condition.slice(3)} ${formaterPrix(s, a.valeur)}`, [
-                { libelle: 'Modifier', action: () => ouvrir({ type: 'alerte', id: a.id }) },
+                { libelle: 'Modifier', action: () => pousser({ type: 'alerte', id: a.id }) },
                 { libelle: a.active ? 'Désactiver' : 'Réactiver', action: () => maj((e) => ({ ...e, alertes: e.alertes.map((x) => (x.id === a.id ? { ...x, active: !x.active, declencheeLe: undefined } : x)) })) },
                 { libelle: 'Supprimer', danger: true, action: () => maj((e) => ({ ...e, alertes: e.alertes.filter((x) => x.id !== a.id) })) },
               ])

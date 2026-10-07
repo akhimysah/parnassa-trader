@@ -7,6 +7,7 @@ import { GraphiqueMobile } from './GraphiqueMobile';
 import { EcranFermer, EcranOrdre, EcranOrdreAttente, EcranPosition, EcranResultat } from './Ordre';
 import { Historique, Trade } from './Trade';
 import { Comptes, EcranListe, OuvrirCompte, Reglages } from './Reglages';
+import { EcranAlerte, EcranDepot, EcranExpert, EcranExperts, EcranIndicateur, EcranIndicateurs, EcranProfondeur, EcranRapport } from './Outils';
 import './mobile.css';
 
 const ONGLETS: [Onglet, string][] = [
@@ -122,5 +123,21 @@ function EcranPile({ e }: { e: Ecran }) {
       return <OuvrirCompte />;
     case 'liste':
       return <EcranListe quoi={e.quoi} />;
+    case 'rapport':
+      return <EcranRapport />;
+    case 'indicateurs':
+      return <EcranIndicateurs />;
+    case 'indicateur':
+      return <EcranIndicateur type={e.indicateur} existant={e.existant} />;
+    case 'alerte':
+      return <EcranAlerte id={e.id} symboleInitial={e.symbole} />;
+    case 'profondeur':
+      return <EcranProfondeur nom={e.symbole} />;
+    case 'experts':
+      return <EcranExperts />;
+    case 'expert':
+      return <EcranExpert graphique={e.graphique} expert={e.expert} />;
+    case 'depot':
+      return <EcranDepot />;
   }
 }

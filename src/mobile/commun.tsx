@@ -15,7 +15,15 @@ export type Ecran =
   | { type: 'editer' }
   | { type: 'comptes' }
   | { type: 'ouvrir-compte' }
-  | { type: 'liste'; quoi: 'courrier' | 'actualites' | 'calendrier' | 'journal' | 'alertes' };
+  | { type: 'liste'; quoi: 'courrier' | 'actualites' | 'calendrier' | 'journal' | 'alertes' }
+  | { type: 'rapport' }
+  | { type: 'indicateurs' }
+  | { type: 'indicateur'; indicateur: import('../graphique/indicateurs').TypeIndicateur; existant?: string }
+  | { type: 'alerte'; id?: string; symbole?: string }
+  | { type: 'profondeur'; symbole: string }
+  | { type: 'experts' }
+  | { type: 'expert'; graphique: string; expert?: import('../algo/experts').TypeExpert }
+  | { type: 'depot' };
 
 export interface Action {
   libelle: string;

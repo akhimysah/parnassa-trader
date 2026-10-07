@@ -69,6 +69,11 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
         }
       />
       <div className="mm-defile">
+        {e.niveauMarge !== null && e.niveauMarge < 100 && (
+          <div className="mm-bandeau danger">
+            <b>Appel de marge</b> — niveau {argent(e.niveauMarge)} %. Sous 50 %, les positions les plus perdantes sont fermées (stop-out).
+          </div>
+        )}
         <dl className="mm-resume">
           <div>
             <dt>Solde :</dt>
@@ -311,8 +316,8 @@ const PERIODES: [Periode, string][] = [
 ];
 
 export function Historique() {
-  const { compte, ouvrir } = useTerminal();
-  const { feuille } = useNav();
+  const { compte } = useTerminal();
+  const { feuille, pousser } = useNav();
   const [mode, setMode] = useState<Mode>('positions');
   const [periode, setPeriode] = useState<Periode>('tout');
   const [symboleFiltre, setSymboleFiltre] = useState<string | null>(null);
@@ -517,7 +522,7 @@ export function Historique() {
         </ul>
         {mode === 'positions' && sorties.length === 0 && <div className="mm-vide">Aucune position fermée sur la période.</div>}
         <div className="mm-boutons-bas statique">
-          <button className="mm-bouton secondaire" onClick={() => ouvrir({ type: 'rapport' })}>
+          <button className="mm-bouton secondaire" onClick={() => pousser({ type: 'rapport' })}>
             Rapport détaillé
           </button>
         </div>

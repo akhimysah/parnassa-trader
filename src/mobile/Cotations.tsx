@@ -59,7 +59,7 @@ export function Cotations({ voirGraphique }: { voirGraphique: (s: string) => voi
 }
 
 function LigneCotation({ nom, avance, voirGraphique }: { nom: string; avance: boolean; voirGraphique: (s: string) => void }) {
-  const { cotations, ouvrir } = useTerminal();
+  const { cotations } = useTerminal();
   const { pousser, feuille } = useNav();
   const s = symbole(nom)!;
   const c = cotations[nom];
@@ -70,8 +70,8 @@ function LigneCotation({ nom, avance, voirGraphique }: { nom: string; avance: bo
       { libelle: 'Nouvel ordre', action: () => pousser({ type: 'ordre', symbole: nom }) },
       { libelle: 'Graphique', action: () => voirGraphique(nom) },
       { libelle: 'Propriétés', action: () => pousser({ type: 'symbole', symbole: nom }) },
-      ...(s.direct.binance ? [{ libelle: 'Profondeur du marché', action: () => ouvrir({ type: 'profondeur', symbole: nom }) }] : []),
-      { libelle: 'Alerte de prix', action: () => ouvrir({ type: 'alerte', symbole: nom }) },
+      ...(s.direct.binance ? [{ libelle: 'Profondeur du marché', action: () => pousser({ type: 'profondeur', symbole: nom }) }] : []),
+      { libelle: 'Alerte de prix', action: () => pousser({ type: 'alerte', symbole: nom }) },
     ]);
   const appui = useAppuiLong(menu, menu);
   return (

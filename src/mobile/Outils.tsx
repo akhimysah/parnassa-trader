@@ -1,0 +1,556 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useTerminal } from '../contexte';
+import { identifiant, type Alerte } from '../etat';
+import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
+import { abonnerProfondeur, type Carnet } from '../marche/binance';
+import { DEFINITIONS, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
+import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
+import { calculerStats } from '../algo/statistiques';
+import { operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
+import { CourbeSolde } from '../composants/Courbe';
+import { PrixGros, argent } from '../composants/ui';
+import { BoutonRetour, ChampPas, ChampVolume, EnTete, Interrupteur, Segments, useNav, vibrer } from './commun';
+
+// ---------- Rapport de trading ----------
+
+export function EcranRapport() {
+  const { compte, cotations } = useTerminal();
+  const s = useMemo(() => calculerStats(compte.transactions), [compte.transactions]);
+  const flottant = compte.positions.reduce((t, p) => t + profitPosition(p, cotations) + p.swap, 0);
+  const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(1)} %` : '—');
+  const signe = (v: number) => (v > 0 ? 'positif' : v < 0 ? 'negatif' : '');
+  const L = ({ l, v, c }: { l: string; v: string; c?: string }) => (
+    <div>
+      <dt>{l}</dt>
+      <dd className={c}>{v}</dd>
+    </div>
+  );
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Rapport" sousTitre={`${compte.login} · ${compte.nom}`} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-tuiles">
+          <div>
+            <small>Bénéfice net</small>
+            <b className={signe(s.net)}>{argent(s.net)}</b>
+          </div>
+          <div>
+            <small>Facteur de profit</small>
+            <b>{s.facteur === null ? '—' : s.facteur.toFixed(2)}</b>
+          </div>
+          <div>
+            <small>Drawdown max.</small>
+            <b className="negatif">{s.ddMaxPct.toFixed(2)} %</b>
+          </div>
+          <div>
+            <small>Trades gagnants</small>
+            <b>{pct(s.gagnants, s.trades)}</b>
+          </div>
+        </div>
+        <div className="mm-courbe">
+          <CourbeSolde points={s.courbe} hauteur={170} />
+        </div>
+        <div className="mm-section">Résultats</div>
+        <dl className="mm-details">
+          <L l="Solde" v={argent(compte.solde)} />
+          <L l="Profit flottant" v={argent(flottant)} c={signe(flottant)} />
+          <L l="Dépôts / retraits" v={`${argent(s.depots)} / ${argent(s.retraits)}`} />
+          <L l="Profit brut" v={argent(s.brutGain)} c="positif" />
+          <L l="Perte brute" v={argent(s.brutPerte)} c="negatif" />
+          <L l="Gain espéré par trade" v={argent(s.esperance)} c={signe(s.esperance)} />
+          <L l="Ratio de Sharpe" v={s.sharpe === null ? '—' : s.sharpe.toFixed(2)} />
+          <L l="Facteur de récupération" v={s.recouvrement === null ? '—' : s.recouvrement.toFixed(2)} />
+          <L l="Drawdown maximal" v={`${argent(s.ddMax)} (${s.ddMaxPct.toFixed(2)} %)`} c="negatif" />
+        </dl>
+        <div className="mm-section">Trades</div>
+        <dl className="mm-details">
+          <L l="Trades au total" v={String(s.trades)} />
+          <L l="Longs (% gagnants)" v={`${s.longs} (${pct(s.longsGagnants, s.longs)})`} />
+          <L l="Courts (% gagnants)" v={`${s.courts} (${pct(s.courtsGagnants, s.courts)})`} />
+          <L l="Plus gros gain" v={argent(s.plusGrosGain)} c="positif" />
+          <L l="Plus grosse perte" v={argent(s.plusGrossePerte)} c="negatif" />
+          <L l="Gain moyen / perte moyenne" v={`${argent(s.gainMoyen)} / ${argent(s.perteMoyenne)}`} />
+          <L l="Gains consécutifs max." v={`${s.seriesGains.n} (${argent(s.seriesGains.montant)})`} />
+          <L l="Pertes consécutives max." v={`${s.seriesPertes.n} (${argent(s.seriesPertes.montant)})`} />
+        </dl>
+        {s.parSymbole.length > 0 && (
+          <>
+            <div className="mm-section">Par symbole</div>
+            <ul className="mm-liste">
+              {s.parSymbole.map((x) => (
+                <li key={x.symbole}>
+                  <div className="mm-liste-texte">
+                    <b>{x.symbole}</b>
+                    <small>
+                      {x.trades} trades · {pct(x.gagnants, x.trades)} gagnants
+                    </small>
+                  </div>
+                  <b className={signe(x.net)}>{argent(x.net)}</b>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Indicateurs du graphique ----------
+
+export function EcranIndicateurs() {
+  const { etat, majGraphique } = useTerminal();
+  const { pousser } = useNav();
+  const g = etat.graphiques.find((x) => x.id === etat.graphiqueActif) ?? etat.graphiques[0];
+  if (!g) return null;
+  const groupes = ['Tendance', 'Oscillateurs', 'Volumes'] as const;
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Indicateurs" sousTitre={`${g.symbole}, ${g.periode}`} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-section">Sur le graphique</div>
+        <ul className="mm-liste">
+          {g.indicateurs.map((i) => (
+            <li key={i.id} className="fleche" onClick={() => pousser({ type: 'indicateur', indicateur: i.type, existant: i.id })}>
+              <span className="mm-pastille-couleur" style={{ background: i.couleur }} />
+              <div className="mm-liste-texte">
+                <b>{nomCourt(i)}</b>
+                <small>{definition(i.type).superpose ? 'Fenêtre principale' : 'Sous-fenêtre'}</small>
+              </div>
+              <button
+                className="mm-supprimer-texte"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  vibrer();
+                  majGraphique(g.id, (gr) => ({ indicateurs: gr.indicateurs.filter((x) => x.id !== i.id) }));
+                }}
+              >
+                Retirer
+              </button>
+            </li>
+          ))}
+          {g.indicateurs.length === 0 && <li className="mm-vide">Aucun indicateur</li>}
+        </ul>
+        {groupes.map((gr) => (
+          <div key={gr}>
+            <div className="mm-section">{gr}</div>
+            <ul className="mm-liste">
+              {DEFINITIONS.filter((d) => d.groupe === gr).map((d) => (
+                <li key={d.type} onClick={() => pousser({ type: 'indicateur', indicateur: d.type })}>
+                  <span className="mm-ajout-rond">+</span>
+                  <div className="mm-liste-texte">
+                    <b>{d.nom}</b>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const COULEURS = ['#ff3b30', '#007aff', '#20b2aa', '#ff9500', '#af52de', '#34c759', '#ff2d55', '#8e8e93', '#000000', '#ffcc00'];
+
+export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; existant?: string }) {
+  const { etat, majGraphique } = useTerminal();
+  const { retour } = useNav();
+  const g = etat.graphiques.find((x) => x.id === etat.graphiqueActif) ?? etat.graphiques[0];
+  const def = definition(type);
+  const actuel = g?.indicateurs.find((i) => i.id === existant);
+  const [p, setP] = useState<Record<string, number>>(actuel?.p ?? def.defaut);
+  const [methode, setMethode] = useState<MethodeMA>(actuel?.methode ?? 'sma');
+  const [couleur, setCouleur] = useState(actuel?.couleur ?? def.couleur);
+  if (!g) return null;
+  const pas = (k: string) => (k === 'pas' || k === 'max' ? 0.01 : k === 'ecart' ? 0.05 : k === 'ecarts' ? 0.5 : 1);
+  const dec = (k: string) => (k === 'pas' || k === 'max' || k === 'ecart' ? 2 : k === 'ecarts' ? 1 : 0);
+  return (
+    <div className="mm-ecran">
+      <EnTete titre={def.nom} sousTitre={`${g.symbole}, ${g.periode}`} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-formulaire">
+          {Object.keys(def.defaut).map((k) => (
+            <div key={k} className="mm-ligne-champ">
+              <span>{def.libelles[k]}</span>
+              <ChampPas valeur={p[k]} changer={(v) => setP({ ...p, [k]: v })} pas={pas(k)} min={k === 'decalage' ? -100 : 0} decimales={dec(k)} />
+            </div>
+          ))}
+          {(type === 'ma' || type === 'env') && (
+            <label className="mm-ligne-champ">
+              <span>Méthode</span>
+              <select value={methode} onChange={(e) => setMethode(e.target.value as MethodeMA)}>
+                <option value="sma">Simple</option>
+                <option value="ema">Exponentielle</option>
+                <option value="smma">Lissée</option>
+                <option value="lwma">Pondérée linéairement</option>
+              </select>
+            </label>
+          )}
+          {!['ichimoku', 'env', 'macd', 'stoch'].includes(type) && (
+            <div className="mm-ligne-champ">
+              <span>Couleur</span>
+              <div className="mm-palette">
+                {COULEURS.map((c) => (
+                  <button key={c} className={c === couleur ? 'actif' : ''} style={{ background: c }} onClick={() => setCouleur(c)} aria-label={c} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <p className="mm-note">Calculé sur les prix de clôture (Bid) des bougies du graphique.</p>
+      </div>
+      <div className="mm-boutons-bas">
+        {actuel && (
+          <button
+            className="mm-bouton vente"
+            onClick={() => {
+              majGraphique(g.id, (gr) => ({ indicateurs: gr.indicateurs.filter((i) => i.id !== actuel.id) }));
+              retour();
+            }}
+          >
+            RETIRER
+          </button>
+        )}
+        <button
+          className="mm-bouton principal"
+          onClick={() => {
+            const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur };
+            majGraphique(g.id, (gr) => ({ indicateurs: actuel ? gr.indicateurs.map((i) => (i.id === actuel.id ? ind : i)) : [...gr.indicateurs, ind] }));
+            vibrer(15);
+            retour();
+          }}
+        >
+          {actuel ? 'ENREGISTRER' : 'AJOUTER'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Alertes ----------
+
+export function EcranAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: string }) {
+  const { etat, maj, cotations } = useTerminal();
+  const { retour } = useNav();
+  const actuelle = etat.alertes.find((a) => a.id === id);
+  const [sym, setSym] = useState(actuelle?.symbole ?? symboleInitial ?? etat.observation[0] ?? 'EURUSD');
+  const [condition, setCondition] = useState<Alerte['condition']>(actuelle?.condition ?? 'bid>');
+  const [valeur, setValeur] = useState(actuelle?.valeur ?? 0);
+  const [commentaire, setCommentaire] = useState(actuelle?.commentaire ?? '');
+  const s = symbole(sym)!;
+  const q = cotations[sym];
+  useEffect(() => {
+    if (valeur === 0 && q) setValeur(q.bid);
+  }, [q, valeur]);
+  return (
+    <div className="mm-ecran">
+      <EnTete titre={actuelle ? "Modifier l'alerte" : 'Nouvelle alerte'} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-formulaire">
+          <label className="mm-ligne-champ">
+            <span>Symbole</span>
+            <select value={sym} onChange={(e) => { setSym(e.target.value); setValeur(0); }}>
+              {SYMBOLES.map((x) => (
+                <option key={x.nom}>{x.nom}</option>
+              ))}
+            </select>
+          </label>
+          <label className="mm-ligne-champ">
+            <span>Condition</span>
+            <select value={condition} onChange={(e) => setCondition(e.target.value as Alerte['condition'])}>
+              <option value="bid>">Bid supérieur à</option>
+              <option value="bid<">Bid inférieur à</option>
+              <option value="ask>">Ask supérieur à</option>
+              <option value="ask<">Ask inférieur à</option>
+            </select>
+          </label>
+          <div className="mm-ligne-champ">
+            <span>Valeur</span>
+            <ChampPas valeur={valeur} changer={setValeur} pas={point(s)} decimales={s.chiffres} />
+          </div>
+          <label className="mm-ligne-champ">
+            <span>Commentaire</span>
+            <input value={commentaire} maxLength={60} placeholder="facultatif" onChange={(e) => setCommentaire(e.target.value)} />
+          </label>
+        </div>
+        {q && (
+          <div className="mm-carte-prix">
+            <div className="baisse">
+              <small>Bid</small>
+              <PrixGros s={s} prix={q.bid} />
+            </div>
+            <div className="hausse">
+              <small>Ask</small>
+              <PrixGros s={s} prix={q.ask} />
+            </div>
+          </div>
+        )}
+        <p className="mm-note">Activez les notifications dans Paramètres pour être prévenu même application fermée en arrière-plan.</p>
+      </div>
+      <div className="mm-boutons-bas">
+        <button
+          className="mm-bouton principal"
+          onClick={() => {
+            const a: Alerte = { id: actuelle?.id ?? identifiant(), symbole: sym, condition, valeur, commentaire, active: true };
+            maj((e) => ({ ...e, alertes: actuelle ? e.alertes.map((x) => (x.id === a.id ? a : x)) : [...e.alertes, a] }));
+            vibrer(15);
+            retour();
+          }}
+        >
+          {actuelle ? 'ENREGISTRER' : 'CRÉER'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Profondeur du marché ----------
+
+export function EcranProfondeur({ nom }: { nom: string }) {
+  const { etat, cotations, operer, ouvrir } = useTerminal();
+  const s = symbole(nom)!;
+  const [carnet, setCarnet] = useState<Carnet | null>(null);
+  const [volume, setVolume] = useState(Math.max(s.volumeMin, etat.volumeDefaut));
+  useEffect(() => (s.direct.binance ? abonnerProfondeur(s.direct.binance, setCarnet) : undefined), [s]);
+  const max = carnet ? Math.max(...carnet.bids.slice(0, 10).map((b) => b[1]), ...carnet.asks.slice(0, 10).map((a) => a[1])) : 1;
+  const passer = (type: 'buy' | 'sell') => {
+    if (!etat.unClicAccepte) return ouvrir({ type: 'unclic' });
+    const r = operer((c) => ouvrirMarche(c, { symbole: nom, type, volume, sl: 0, tp: 0, commentaire: '' }, cotations), { confirmation: false });
+    vibrer(r.erreur ? 40 : 20);
+  };
+  const q = cotations[nom];
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Profondeur du marché" sousTitre={nom} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        {!s.direct.binance ? (
+          <div className="mm-vide grand">La profondeur du marché n'est disponible que pour la crypto (carnet d'ordres Binance).</div>
+        ) : !carnet ? (
+          <div className="mm-vide grand">Connexion au carnet d'ordres…</div>
+        ) : (
+          <table className="mm-dom">
+            <tbody>
+              {carnet.asks
+                .slice(0, 10)
+                .reverse()
+                .map(([p, v]) => (
+                  <tr key={`a${p}`} className="ask">
+                    <td />
+                    <td className="prix">{formaterPrix(s, p)}</td>
+                    <td className="vol">
+                      <i style={{ width: `${(v / max) * 100}%` }} />
+                      <span>{v.toFixed(4)}</span>
+                    </td>
+                  </tr>
+                ))}
+              <tr className="milieu">
+                <td colSpan={3}>{q ? `Spread du carnet : ${(carnet.asks[0][0] - carnet.bids[0][0]).toFixed(s.chiffres)}` : ''}</td>
+              </tr>
+              {carnet.bids.slice(0, 10).map(([p, v]) => (
+                <tr key={`b${p}`} className="bid">
+                  <td className="vol">
+                    <i style={{ width: `${(v / max) * 100}%` }} />
+                    <span>{v.toFixed(4)}</span>
+                  </td>
+                  <td className="prix">{formaterPrix(s, p)}</td>
+                  <td />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="mm-note">Volumes en {s.base}, carnet réel Binance {s.direct.binance}. Vos ordres s'exécutent au Bid / Ask de votre compte.</p>
+      </div>
+      {s.direct.binance && (
+        <div className="mm-boutons-bas colonne">
+          <ChampVolume valeur={volume} changer={setVolume} min={s.volumeMin} max={s.volumeMax} pasMin={s.pasVolume} />
+          <div className="mm-ligne-boutons">
+            <button className="mm-bouton vente" disabled={!q} onClick={() => passer('sell')}>
+              SELL {q ? formaterPrix(s, q.bid) : ''}
+            </button>
+            <button className="mm-bouton achat" disabled={!q} onClick={() => passer('buy')}>
+              BUY {q ? formaterPrix(s, q.ask) : ''}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------- Expert Advisors ----------
+
+export function EcranExperts() {
+  const { etat, maj, compte, cotations } = useTerminal();
+  const { pousser } = useNav();
+  const attaches = etat.graphiques.filter((g) => g.expert);
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Expert Advisors" gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-bloc ligne">
+          <div>
+            <b>Algo Trading</b>
+            <div className="mm-note sans-marge">Autorise les experts à trader sur cet appareil.</div>
+          </div>
+          <Interrupteur actif={etat.algo} libelle="Algo Trading" changer={(v) => maj((e) => ({ ...e, algo: v }))} />
+        </div>
+        <div className="mm-section">Experts attachés</div>
+        <ul className="mm-liste">
+          {attaches.map((g) => {
+            const e = g.expert!;
+            const pos = compte.positions.filter((p) => p.magic === e.magic);
+            const flottant = pos.reduce((t, p) => t + profitPosition(p, cotations), 0);
+            return (
+              <li key={g.id} className="fleche" onClick={() => pousser({ type: 'expert', graphique: g.id, expert: e.type })}>
+                <span className={`mm-ico ${etat.algo ? 'bleu' : 'gris'}`}>🎓</span>
+                <div className="mm-liste-texte">
+                  <b>{definitionExpert(e.type).nom}</b>
+                  <small>
+                    {g.symbole}, {g.periode} · {pos.length} position{pos.length > 1 ? 's' : ''}
+                    {pos.length ? ` · ${argent(flottant)} USD` : ''}
+                  </small>
+                </div>
+              </li>
+            );
+          })}
+          {attaches.length === 0 && <li className="mm-vide">Aucun expert attaché</li>}
+        </ul>
+        <div className="mm-section">Attacher au graphique actuel</div>
+        <ul className="mm-liste">
+          {EXPERTS.map((x) => (
+            <li key={x.type} className="fleche" onClick={() => pousser({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })}>
+              <span className="mm-ico violet">🎓</span>
+              <div className="mm-liste-texte">
+                <b>{x.nom}</b>
+                <small>{x.description}</small>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <p className="mm-note">Les experts décident à la clôture de chaque barre et ne tradent que pendant que l'application est ouverte. Activez l'Algo Trading sur un seul appareil.</p>
+      </div>
+    </div>
+  );
+}
+
+export function EcranExpert({ graphique, expert }: { graphique: string; expert?: TypeExpert }) {
+  const { etat, majGraphique } = useTerminal();
+  const { retour } = useNav();
+  const g = etat.graphiques.find((x) => x.id === graphique) ?? etat.graphiques[0];
+  const [type, setType] = useState<TypeExpert>(expert ?? g?.expert?.type ?? 'croisement-ma');
+  const def = definitionExpert(type);
+  const [p, setP] = useState<Record<string, number>>(g?.expert?.type === type ? g.expert.p : def.defaut);
+  useEffect(() => {
+    setP(g?.expert?.type === type ? g.expert.p : definitionExpert(type).defaut);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [type]);
+  if (!g) return null;
+  const actuel = g.expert;
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Expert Advisor" sousTitre={`${g.symbole}, ${g.periode}`} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-formulaire">
+          <label className="mm-ligne-champ">
+            <span>Expert</span>
+            <select value={type} onChange={(e) => setType(e.target.value as TypeExpert)}>
+              {EXPERTS.map((x) => (
+                <option key={x.type} value={x.type}>
+                  {x.nom}
+                </option>
+              ))}
+            </select>
+          </label>
+          {Object.keys(def.defaut).map((k) => (
+            <div key={k} className="mm-ligne-champ">
+              <span>{def.libelles[k]}</span>
+              <ChampPas valeur={p[k] ?? def.defaut[k]} changer={(v) => setP({ ...p, [k]: v })} pas={k === 'volume' ? 0.01 : k === 'sl' || k === 'tp' ? 50 : 1} min={k === 'volume' ? 0.01 : 0} decimales={k === 'volume' ? 2 : 0} />
+            </div>
+          ))}
+        </div>
+        <p className="mm-note">{def.description}</p>
+      </div>
+      <div className="mm-boutons-bas">
+        {actuel && (
+          <button
+            className="mm-bouton vente"
+            onClick={() => {
+              majGraphique(g.id, { expert: null });
+              retour();
+            }}
+          >
+            RETIRER
+          </button>
+        )}
+        <button
+          className="mm-bouton principal"
+          onClick={() => {
+            const magic = actuel?.type === type ? actuel.magic : 100000 + Math.floor(Math.random() * 900000);
+            majGraphique(g.id, { expert: { type, p, magic } });
+            vibrer(15);
+            retour();
+          }}
+        >
+          {actuel ? 'ENREGISTRER' : 'ATTACHER'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Dépôt / retrait ----------
+
+export function EcranDepot() {
+  const { compte, operer } = useTerminal();
+  const { retour } = useNav();
+  const [sens, setSens] = useState<'depot' | 'retrait'>('depot');
+  const [montant, setMontant] = useState(1000);
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Dépôt / retrait" sousTitre={`${compte.login} · démo`} gauche={<BoutonRetour />} />
+      <div className="mm-defile">
+        <div className="mm-segments-cadre">
+          <Segments<'depot' | 'retrait'>
+            valeur={sens}
+            changer={setSens}
+            options={[
+              ['depot', 'Dépôt'],
+              ['retrait', 'Retrait'],
+            ]}
+          />
+        </div>
+        <div className="mm-formulaire">
+          <div className="mm-ligne-champ">
+            <span>Montant (USD)</span>
+            <ChampPas valeur={montant} changer={setMontant} pas={100} min={1} decimales={2} />
+          </div>
+          <div className="mm-raccourcis">
+            {[100, 1000, 5000, 10000].map((v) => (
+              <button key={v} onClick={() => setMontant(v)}>
+                {argent(v, 0)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="mm-note">Solde actuel : {argent(compte.solde)} USD. Argent fictif : compte de démonstration.</p>
+      </div>
+      <div className="mm-boutons-bas">
+        <button
+          className="mm-bouton principal"
+          onClick={() => {
+            const r = operer((c) => operationBalance(c, sens === 'depot' ? montant : -montant, sens === 'depot' ? 'Dépôt de démonstration' : 'Retrait de démonstration'), { confirmation: false });
+            if (!r.erreur) {
+              vibrer(20);
+              retour();
+            }
+          }}
+        >
+          {sens === 'depot' ? 'DÉPOSER' : 'RETIRER'} {argent(montant)} USD
+        </button>
+      </div>
+    </div>
+  );
+}
+

@@ -3,7 +3,6 @@ import { identifiant, nouveauGraphique } from '../etat';
 import { PERIODES } from '../marche/bougies';
 import { formaterPrix, symbole } from '../marche/symboles';
 import type { TypeEnAttente } from '../compte/moteur';
-import { DEFINITIONS, nomCourt } from '../graphique/indicateurs';
 import { FenetreGraphique } from '../graphique/FenetreGraphique';
 import { registreGraphiques } from '../graphique/registre';
 import { BoutonIcone, EnTete, IconePlus, useNav, vibrer } from './commun';
@@ -52,11 +51,7 @@ export function GraphiqueMobile() {
   };
   const d = survolActuel;
   const changerSymbole = () => feuille('Symbole', etat.observation.map((n) => ({ libelle: `${n} — ${symbole(n)?.description}`, action: () => majGraphique(g.id, { symbole: n }) })));
-  const indicateurs = () =>
-    feuille('Indicateurs', [
-      ...g.indicateurs.map((i) => ({ libelle: `Retirer ${nomCourt(i)}`, danger: true, action: () => majGraphique(g.id, (gr) => ({ indicateurs: gr.indicateurs.filter((x) => x.id !== i.id) })) })),
-      ...DEFINITIONS.map((d) => ({ libelle: `Ajouter ${d.nom}`, action: () => ouvrir({ type: 'indicateur', indicateur: d.type, graphique: g.id }) })),
-    ]);
+  const indicateurs = () => pousser({ type: 'indicateurs' });
   const objets = () =>
     feuille('Objets', [
       { libelle: 'Ligne horizontale', action: () => choisirOutil('horizontale') },
@@ -73,7 +68,7 @@ export function GraphiqueMobile() {
       { libelle: `${g.niveauxTrading ? 'Masquer' : 'Afficher'} les niveaux de trading`, action: () => majGraphique(g.id, { niveauxTrading: !g.niveauxTrading }) },
       { libelle: `${g.indicateurs.some((i) => i.type === 'volumes') ? 'Masquer' : 'Afficher'} les volumes`, action: () => majGraphique(g.id, (gr) => ({ indicateurs: gr.indicateurs.some((i) => i.type === 'volumes') ? gr.indicateurs.filter((i) => i.type !== 'volumes') : [...gr.indicateurs, { id: identifiant(), type: 'volumes', p: {}, couleur: '#32cd32' }] })) },
       { libelle: 'Couleurs et propriétés…', action: () => ouvrir({ type: 'proprietes', graphique: g.id }) },
-      { libelle: 'Expert Advisor…', action: () => ouvrir({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
+      { libelle: 'Expert Advisor…', action: () => pousser({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
       { libelle: 'Enregistrer comme image', action: () => registreGraphiques.get(g.id)?.capturer() },
     ]);
   return (
