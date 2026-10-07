@@ -276,7 +276,7 @@ type ModeHisto = 'positions' | 'transactions' | 'ordres';
 type PeriodeHisto = 'jour' | 'semaine' | 'mois' | '3mois' | 'tout';
 
 export function OngletHistorique() {
-  const { compte } = useTerminal();
+  const { compte, ouvrir } = useTerminal();
   const [mode, setMode] = useState<ModeHisto>('positions');
   const [periode, setPeriode] = useState<PeriodeHisto>('tout');
   const { ouvrirMenu, element: menu } = useMenuContextuel();
@@ -320,7 +320,8 @@ export function OngletHistorique() {
       { libelle: '3 derniers mois', coche: periode === '3mois', action: () => setPeriode('3mois') },
       { libelle: 'Tout l\'historique', coche: periode === 'tout', action: () => setPeriode('tout') },
       { separateur: true },
-      { libelle: 'Rapport (CSV)', action: exporter },
+      { libelle: 'Rapport…', action: () => ouvrir({ type: 'rapport' }) },
+      { libelle: 'Exporter (CSV)', action: exporter },
     ]);
   };
 
@@ -339,7 +340,8 @@ export function OngletHistorique() {
           <option value="3mois">3 derniers mois</option>
           <option value="tout">Tout l'historique</option>
         </select>
-        <button onClick={exporter}>Rapport CSV</button>
+        <button onClick={() => ouvrir({ type: 'rapport' })}>Rapport</button>
+        <button onClick={exporter}>Export CSV</button>
       </div>
       <table className="table boite-table">
         {mode === 'positions' && (

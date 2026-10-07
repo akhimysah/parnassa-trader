@@ -2,6 +2,7 @@ import type { Compte } from './compte/moteur';
 import { nouveauCompte } from './compte/moteur';
 import type { Periode } from './marche/bougies';
 import type { Indicateur } from './graphique/indicateurs';
+import type { Expert } from './algo/experts';
 import { OBSERVATION_DEFAUT, symbole } from './marche/symboles';
 
 export type TypeGraphique = 'barres' | 'bougies' | 'ligne';
@@ -30,6 +31,8 @@ export interface Graphique {
   decalage: boolean;
   unClic: boolean;
   schema: Schema;
+  /** Expert Advisor attaché au graphique. */
+  expert: Expert | null;
 }
 
 export interface Alerte {
@@ -58,6 +61,8 @@ export interface EtatTerminal {
   son: boolean;
   theme: 'clair' | 'sombre';
   alertes: Alerte[];
+  /** Algo Trading : autorise les Expert Advisors à trader. */
+  algo: boolean;
   /** Messages de la boîte aux lettres déjà lus. */
   lus: string[];
 }
@@ -82,6 +87,7 @@ export function nouveauGraphique(sym: string, periode: Periode = 'H1', modele?: 
     decalage: true,
     unClic: true,
     schema: 'couleurs',
+    expert: null,
     ...modele,
   };
 }
@@ -104,6 +110,7 @@ function etatInitial(): EtatTerminal {
     son: true,
     theme: 'clair',
     alertes: [],
+    algo: false,
     lus: [],
   };
 }

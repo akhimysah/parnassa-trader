@@ -51,6 +51,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Barre d\'outils', coche: etat.panneaux.barreOutils, action: () => panneau('barreOutils') },
         { libelle: 'Barre d\'état', coche: etat.panneaux.barreEtat, action: () => panneau('barreEtat') },
         { separateur: true },
+        { libelle: 'Rapport de trading', action: () => ouvrir({ type: 'rapport' }) },
         { libelle: 'Symboles', raccourci: 'Ctrl+U', action: () => ouvrir({ type: 'symboles' }) },
         { libelle: 'Profondeur du marché', raccourci: 'Alt+B', desactive: !g, action: () => g && ouvrir({ type: 'profondeur', symbole: g.symbole }) },
         { separateur: true },
@@ -103,6 +104,8 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
       [
         { libelle: 'Nouvel ordre', raccourci: 'F9', action: () => ouvrir({ type: 'ordre' }) },
         { libelle: 'Nouvelle alerte…', action: () => ouvrir({ type: 'alerte', symbole: g?.symbole }) },
+        { libelle: 'Algo Trading', raccourci: 'Ctrl+E', coche: etat.algo, action: () => maj((e) => ({ ...e, algo: !e.algo })) },
+        { libelle: 'Expert Advisor sur le graphique…', desactive: !g, action: () => g && ouvrir({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
         { separateur: true },
         { libelle: 'Options', raccourci: 'Ctrl+O', action: () => ouvrir({ type: 'options' }) },
       ],
@@ -181,6 +184,10 @@ export function BarreOutils() {
       <button className={`bouton-texte${etat.unClicAccepte ? ' actif' : ''}`} title="Trading en un clic" onClick={() => (etat.unClicAccepte ? a.maj((e) => ({ ...e, unClicAccepte: false })) : ouvrir({ type: 'unclic' }))}>
         <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7" fill={etat.unClicAccepte ? '#00a050' : '#c0392b'} /><path d="M7 10l2 2 4-4" stroke="#fff" strokeWidth="2" fill="none" /></svg>
         Un clic
+      </button>
+      <button className={`bouton-texte algo${etat.algo ? ' actif' : ''}`} title="Algo Trading : autorise les Expert Advisors à trader" onClick={() => a.maj((e) => ({ ...e, algo: !e.algo }))}>
+        <svg viewBox="0 0 20 20">{etat.algo ? <path d="M6 4l10 6-10 6z" fill="#1e9e3a" /> : <rect x="5" y="5" width="10" height="10" fill="#c0392b" />}</svg>
+        Algo Trading
       </button>
       <span className="sep" />
       <button title="Barres (Alt+1)" className={g?.type === 'barres' ? 'actif' : ''} onClick={() => majActif({ type: 'barres' })}>

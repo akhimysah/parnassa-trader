@@ -8,3 +8,8 @@ createRoot(document.getElementById('racine')!).render(
     <App />
   </StrictMode>,
 );
+
+// Application installable (ordinateur et téléphone) : le service worker n'est actif qu'en production.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => void navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined));
+}

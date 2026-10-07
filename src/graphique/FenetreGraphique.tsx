@@ -7,6 +7,7 @@ import {
   HistogramSeries,
   LineSeries,
   LineStyle,
+  TickMarkType,
   createChart,
   createSeriesMarkers,
   type IChartApi,
@@ -27,7 +28,8 @@ import { formaterPrix, point, symbole } from '../marche/symboles';
 import { calculer, definition, nomCourt } from './indicateurs';
 import { couleursSchema } from './couleurs';
 import { registreGraphiques } from './registre';
-import { LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
+import { decider, definitionExpert } from '../algo/experts';
+import { journaliser, LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
 import { PrixGros, Spin, useMenuContextuel, type ElementMenu } from '../composants/ui';
 
 interface Props {
@@ -43,6 +45,21 @@ interface Deplacable {
   objet?: string;
   prix: number;
   ligne: IPriceLine;
+}
+
+/** Les temps sont en UTC : l'axe et la croix affichent l'heure locale, comme le reste du terminal. */
+const z2 = (n: number) => String(n).padStart(2, '0');
+const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+function heureLocale(t: Time): string {
+  const d = new Date(Number(t) * 1000);
+  return `${z2(d.getDate())} ${MOIS[d.getMonth()]} ${d.getFullYear()} ${z2(d.getHours())}:${z2(d.getMinutes())}`;
+}
+function graduation(t: Time, type: TickMarkType): string {
+  const d = new Date(Number(t) * 1000);
+  if (type === TickMarkType.Year) return String(d.getFullYear());
+  if (type === TickMarkType.Month) return MOIS[d.getMonth()];
+  if (type === TickMarkType.DayOfMonth) return String(d.getDate());
+  return `${z2(d.getHours())}:${z2(d.getMinutes())}`;
 }
 
 const FIBO = [0, 0.236, 0.382, 0.5, 0.618, 1, 1.618];
@@ -78,8 +95,10 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
   const [volume, setVolume] = useState(etat.volumeDefaut);
   const [hauteursPanneaux, setHauteursPanneaux] = useState<number[]>([]);
   const { ouvrirMenu, element: menu } = useMenuContextuel();
-  const refEtat = useRef({ g, compte, cotations, outil });
-  refEtat.current = { g, compte, cotations, outil };
+  const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo });
+  refEtat.current = { g, compte, cotations, outil, algo: etat.algo };
+  /** Dernière barre clôturée déjà soumise à l'Expert Advisor (il ne trade jamais sur l'historique). */
+  const derniereTraitee = useRef(0);
 
   const versBougie = (b: Bougie) => {
     if (g.type === 'ligne') return { time: b.time as UTCTimestamp, value: b.close };
@@ -95,8 +114,8 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
       grid: { vertLines: { color: coul.grille, style: LineStyle.Dotted, visible: g.grille }, horzLines: { color: coul.grille, style: LineStyle.Dotted, visible: g.grille } },
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor: coul.texte, scaleMargins: { top: 0.08, bottom: 0.08 } },
-      timeScale: { borderColor: coul.texte, timeVisible: true, secondsVisible: false, rightOffset: g.decalage ? 12 : 2, shiftVisibleRangeOnNewBar: g.defilement },
-      localization: { locale: 'fr-FR' },
+      timeScale: { borderColor: coul.texte, timeVisible: true, secondsVisible: false, rightOffset: g.decalage ? 12 : 2, shiftVisibleRangeOnNewBar: g.defilement, tickMarkFormatter: graduation },
+      localization: { locale: 'fr-FR', timeFormatter: heureLocale },
     });
     chartRef.current = chart;
     const surCroix = (p: MouseEventParams<Time>) => {
@@ -211,6 +230,7 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
       .then((b) => {
         if (annule) return;
         bougiesRef.current = b;
+        derniereTraitee.current = b[b.length - 2]?.time ?? 0;
         serieRef.current?.setData(b.map(versBougie));
         chartRef.current?.timeScale().applyOptions({ barSpacing: 7 });
         chartRef.current?.timeScale().scrollToRealTime();
@@ -237,6 +257,57 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aCotation]);
 
+  // ---------- Expert Advisor : décision à la clôture de chaque barre ----------
+  useEffect(() => {
+    // Attacher un expert ou activer l'Algo Trading ne déclenche pas de trade sur la barre déjà fermée.
+    const b = bougiesRef.current;
+    derniereTraitee.current = b[b.length - 2]?.time ?? 0;
+  }, [g.expert, etat.algo]);
+  const executerExpert = () => {
+    const { g: gr, cotations: cot, algo } = refEtat.current;
+    const e = gr.expert;
+    if (!e || !algo) return;
+    const fermees = bougiesRef.current.slice(0, -1);
+    const derniere = fermees[fermees.length - 1];
+    if (!derniere || derniere.time <= derniereTraitee.current) return;
+    derniereTraitee.current = derniere.time;
+    const sy = symbole(gr.symbole)!;
+    const q = cot[gr.symbole];
+    const nom = definitionExpert(e.type).nom;
+    const miennes = (c: typeof compte) => c.positions.filter((p) => p.magic === e.magic && p.symbole === gr.symbole);
+    const d = decider(e, fermees, miennes(refEtat.current.compte)[0]?.type ?? null);
+    if (!q || (d.fermer.length === 0 && !d.ouvrir)) return;
+    operer(
+      (c) => {
+        let cc = journaliser(c, 'Experts', `${nom} (${gr.symbole},${gr.periode}) : signal — ${d.raison}`);
+        for (const p of miennes(cc).filter((x) => d.fermer.includes(x.type))) {
+          const r = fermerPosition(cc, p.ticket, cot);
+          if (!r.erreur) cc = r.compte;
+        }
+        if (!d.ouvrir || miennes(cc).some((x) => x.type === d.ouvrir)) return { compte: cc, erreur: null, message: `${nom} : ${d.raison}` };
+        const sens = d.ouvrir === 'buy' ? 1 : -1;
+        const prix = d.ouvrir === 'buy' ? q.ask : q.bid;
+        const arrondi = (v: number) => Number(v.toFixed(sy.chiffres));
+        const volume = Math.min(sy.volumeMax, Math.max(sy.volumeMin, Math.round(e.p.volume / sy.pasVolume) * sy.pasVolume));
+        const r = ouvrirMarche(
+          cc,
+          {
+            symbole: gr.symbole,
+            type: d.ouvrir,
+            volume: Number(volume.toFixed(2)),
+            sl: e.p.sl ? arrondi(prix - sens * e.p.sl * point(sy)) : 0,
+            tp: e.p.tp ? arrondi(prix + sens * e.p.tp * point(sy)) : 0,
+            commentaire: nom,
+            magic: e.magic,
+          },
+          cot,
+        );
+        return { ...r, message: r.message ? `${nom} : ${r.message}` : undefined };
+      },
+      { confirmation: false },
+    );
+  };
+
   // ---------- Mise à jour en direct (sur le Bid, comme MT5) ----------
   useEffect(() => {
     const serie = serieRef.current;
@@ -256,6 +327,7 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
     } else if (!der || debut > der.time) {
       b.push({ time: debut, open: der?.close ?? prix, high: Math.max(prix, der?.close ?? prix), low: Math.min(prix, der?.close ?? prix), close: prix, volume: tickVolume });
       if (chargement === 'vide' && b.length === 1) setChargement('ok');
+      executerExpert();
     } else return;
     serie.update(versBougie(b[b.length - 1]));
     // Les indicateurs sont recalculés au plus une fois par seconde.
@@ -578,6 +650,13 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
           { libelle: 'Ligne', raccourci: 'Alt+3', coche: g.type === 'ligne', action: () => majGraphique(g.id, { type: 'ligne' }) },
         ],
       },
+      {
+        libelle: 'Expert Advisors',
+        sousMenu: [
+          { libelle: g.expert ? 'Propriétés…' : 'Attacher un expert…', action: () => ouvrir({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
+          { libelle: 'Retirer', desactive: !g.expert, action: () => majGraphique(g.id, { expert: null }) },
+        ],
+      },
       { libelle: 'Liste des indicateurs', raccourci: 'Ctrl+I', action: () => ouvrir({ type: 'liste-indicateurs', graphique: g.id }) },
       { libelle: 'Liste des objets', raccourci: 'Ctrl+B', action: () => ouvrir({ type: 'objets', graphique: g.id }) },
       { libelle: 'Supprimer tous les objets', desactive: g.objets.length === 0, action: () => majGraphique(g.id, { objets: [] }) },
@@ -638,6 +717,20 @@ export function FenetreGraphique({ g, actif, activer }: Props) {
           </div>
         ))}
       </div>
+      {g.expert && (
+        <button
+          className={`graphique-expert${etat.algo ? ' actif' : ''}`}
+          title={etat.algo ? 'Expert actif — cliquez pour ses propriétés' : "Algo Trading désactivé : l'expert ne trade pas"}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => ouvrir({ type: 'expert', graphique: g.id, expert: g.expert!.type })}
+        >
+          <svg viewBox="0 0 20 20" width="14" height="14">
+            <path d="M10 3l8 4-8 4-8-4z" fill="currentColor" />
+            <path d="M5 9v4c0 1.5 2.5 3 5 3s5-1.5 5-3V9" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          </svg>
+          {definitionExpert(g.expert.type).nom}
+        </button>
+      )}
       {sousFenetres.map((i, k) => {
         const haut = hauteursPanneaux.slice(0, k + 1).reduce((a, b) => a + b + 1, 0);
         return (

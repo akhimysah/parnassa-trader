@@ -6,6 +6,7 @@ import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA } from '../graphique/indicateurs';
 import { SCHEMAS } from '../graphique/couleurs';
 import { definirSuiveur, fermerPosition, levierEffectif, nouveauCompte, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
+import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
 import { Fenetre, Spin, argent } from './ui';
 
@@ -59,6 +60,10 @@ function Contenu({ d }: { d: Dialogue }) {
       return <DialogueAPropos />;
     case 'raccourcis':
       return <DialogueRaccourcis />;
+    case 'expert':
+      return <DialogueExpert graphique={d.graphique} expert={d.expert} />;
+    case 'rapport':
+      return <DialogueRapport />;
   }
 }
 
@@ -764,6 +769,7 @@ const RACCOURCIS: [string, string][] = [
   ['Ctrl+B', 'Liste des objets'],
   ['Alt+1 / Alt+2 / Alt+3', 'Barres / bougies / ligne'],
   ['Alt+T', 'Trading en un clic sur le graphique'],
+  ['Ctrl+E', 'Activer / désactiver l\'Algo Trading'],
   ['Alt+B', 'Profondeur du marché'],
   ['+ / −', 'Zoom avant / arrière'],
   ['Fin', 'Aller à la dernière barre'],

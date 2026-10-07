@@ -26,7 +26,9 @@ export type Dialogue =
   | { type: 'profondeur'; symbole: string }
   | { type: 'resultat'; titre: string; message: string; erreur: boolean }
   | { type: 'apropos' }
-  | { type: 'raccourcis' };
+  | { type: 'raccourcis' }
+  | { type: 'expert'; graphique: string; expert?: import('./algo/experts').TypeExpert }
+  | { type: 'rapport' };
 
 /** Ce qu'affiche la barre d'état au survol d'un graphique. */
 export interface Survol {

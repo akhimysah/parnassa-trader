@@ -25,6 +25,8 @@ export interface Position {
   commentaire: string;
   /** Stop suiveur, en points (0 = désactivé). */
   suiveur: number;
+  /** Identifiant de l'Expert Advisor qui a ouvert la position (0 = manuelle). */
+  magic?: number;
 }
 
 export interface Ordre {
@@ -84,7 +86,7 @@ export interface OrdreHistorique {
 
 export interface EntreeJournal {
   heure: number;
-  source: 'Réseau' | 'Trades' | 'Terminal' | 'Alertes';
+  source: 'Réseau' | 'Trades' | 'Terminal' | 'Alertes' | 'Experts';
   message: string;
 }
 
@@ -231,7 +233,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number): Compt
   };
 }
 
-function journaliser(c: Compte, source: EntreeJournal['source'], message: string): Compte {
+export function journaliser(c: Compte, source: EntreeJournal['source'], message: string): Compte {
   return { ...c, journal: [...c.journal, { heure: Date.now(), source, message }].slice(-1000) };
 }
 
@@ -287,6 +289,7 @@ export interface DemandeMarche {
   sl: number;
   tp: number;
   commentaire: string;
+  magic?: number;
 }
 
 function decrireDemande(d: { type: string; volume: number; symbole: string; sl: number; tp: number }, s: SymboleMT | undefined, prix?: number): string {
@@ -328,6 +331,7 @@ export function ouvrirMarche(c: Compte, d: DemandeMarche, cot: Cotations, origin
     swap: 0,
     commentaire: d.commentaire,
     suiveur: 0,
+    magic: d.magic,
   };
   const deal: Transaction = {
     ticket: ticketDeal,

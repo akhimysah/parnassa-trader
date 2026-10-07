@@ -201,6 +201,7 @@ export function App() {
         if (touche === 't') return faire(() => panneau('boite'));
         if (touche === 'u') return faire(() => setDialogue({ type: 'symboles' }));
         if (touche === 'o') return faire(() => setDialogue({ type: 'options' }));
+        if (touche === 'e') return faire(() => maj((x) => ({ ...x, algo: !x.algo })));
         if (g && touche === 'g') return faire(() => majGraphique(g.id, { grille: !g.grille }));
         if (g && touche === 'i') return faire(() => setDialogue({ type: 'liste-indicateurs', graphique: g.id }));
         if (g && touche === 'b') return faire(() => setDialogue({ type: 'objets', graphique: g.id }));

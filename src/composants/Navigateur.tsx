@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTerminal } from '../contexte';
 import { DEFINITIONS } from '../graphique/indicateurs';
+import { EXPERTS } from '../algo/experts';
 import { fermerPosition, profitPosition, supprimerOrdre, type Compte } from '../compte/moteur';
 import { useMenuContextuel } from './ui';
 
@@ -85,8 +86,10 @@ export function Navigateur() {
                 </Noeud>
               ))}
             </Noeud>
-            <Noeud libelle="Expert Advisors" icone="🎓">
-              <li className="noeud vide">Aucun conseiller expert installé</li>
+            <Noeud libelle="Expert Advisors" icone="🎓" ouvertParDefaut>
+              {EXPERTS.map((x) => (
+                <Noeud key={x.type} libelle={x.nom} icone="🎓" onDoubleClick={() => ouvrir({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })} />
+              ))}
             </Noeud>
             <Noeud libelle="Scripts" icone="📜" ouvertParDefaut>
               {SCRIPTS.map((sc) => (
