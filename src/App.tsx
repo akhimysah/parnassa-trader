@@ -16,18 +16,7 @@ import { Testeur } from './composants/Testeur';
 import { Dialogues } from './composants/Dialogues';
 import { Mobile } from './mobile/Mobile';
 import { useSynchro } from './synchro';
-
-function useMobile(): boolean {
-  const requete = '(max-width: 820px)';
-  const [mobile, setMobile] = useState(() => window.matchMedia(requete).matches);
-  useEffect(() => {
-    const m = window.matchMedia(requete);
-    const h = () => setMobile(m.matches);
-    m.addEventListener('change', h);
-    return () => m.removeEventListener('change', h);
-  }, []);
-  return mobile;
-}
+import { useInterface } from './interface';
 
 export function App() {
   const [etat, setEtat] = useState<EtatTerminal>(chargerEtat);
@@ -48,7 +37,7 @@ export function App() {
   const [survol, setSurvol] = useState<Survol | null>(null);
   const [outil, setOutil] = useState<OutilDessin>(null);
   const [onglet, setOnglet] = useState<OngletBoite>('trading');
-  const mobile = useMobile();
+  const { mobile, force } = useInterface();
 
   // ---------- Abonnements aux cotations ----------
   const cleAbonnements = useMemo(() => {
@@ -244,7 +233,9 @@ export function App() {
   return (
     <ContexteTerminal.Provider value={terminal}>
       {mobile ? (
-        <Mobile />
+        <div className={force ? 'fond-cadre' : 'plein'}>
+          <Mobile cadre={force} />
+        </div>
       ) : (
         <div className="terminal">
           <BarreMenus />

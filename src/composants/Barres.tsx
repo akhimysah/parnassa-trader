@@ -8,6 +8,7 @@ import { registreGraphiques } from '../graphique/registre';
 import { REST_BINANCE } from '../marche/binance';
 import { ListeMenu, type ElementMenu } from './ui';
 import { IndicateurSynchro } from './Synchro';
+import { choisirInterface } from '../interface';
 
 export function useActions() {
   const t = useTerminal();
@@ -65,6 +66,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { separateur: true },
         { libelle: 'Thème sombre', coche: etat.theme === 'sombre', action: () => maj((e) => ({ ...e, theme: e.theme === 'sombre' ? 'clair' : 'sombre' })) },
         { libelle: 'Plein écran', raccourci: 'F11', action: pleinEcran },
+        { libelle: 'Interface mobile (façon MT5 mobile)', action: () => choisirInterface('mobile') },
       ],
     ],
     [
