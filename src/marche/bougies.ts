@@ -94,3 +94,47 @@ export async function chargerBougies(s: SymboleMT, p: Periode, reference?: numbe
   const facteur = s.histo.recaler && reference && der ? reference / der.close : 1;
   return bougies.map((b) => ({ ...b, open: arrondi(b.open * facteur), high: arrondi(b.high * facteur), low: arrondi(b.low * facteur), close: arrondi(b.close * facteur) }));
 }
+
+/** Profondeur d'historique demandée à Yahoo pour le testeur (les limites de Yahoo par intervalle sont respectées). */
+const YAHOO_LONG: Record<Periode, { i: string; r: string }> = {
+  M1: { i: '1m', r: '5d' },
+  M5: { i: '5m', r: '1mo' },
+  M15: { i: '15m', r: '1mo' },
+  M30: { i: '30m', r: '1mo' },
+  H1: { i: '60m', r: '2y' },
+  H4: { i: '60m', r: '2y' },
+  D1: { i: '1d', r: '10y' },
+  W1: { i: '1wk', r: 'max' },
+  MN: { i: '1mo', r: 'max' },
+};
+
+/**
+ * Historique profond pour le testeur de stratégie : jusqu'à `max` bougies (Binance par pages de 1 000,
+ * Yahoo sur la plus longue période autorisée pour l'intervalle).
+ */
+export async function chargerHistoriqueLong(s: SymboleMT, p: Periode, max: number, reference?: number): Promise<Bougie[]> {
+  let bougies: Bougie[] = [];
+  if (s.histo.binance) {
+    let fin: number | undefined;
+    while (bougies.length < max) {
+      const page = await klines(s.histo.binance, BINANCE[p], 1000, fin);
+      if (page.length === 0) break;
+      bougies = [...page, ...bougies];
+      if (page.length < 1000) break;
+      fin = page[0].time * 1000 - 1;
+    }
+    bougies = regrouper(bougies, p);
+  } else if (s.histo.yahoo) {
+    const { i, r } = YAHOO_LONG[p];
+    const rep = await fetch(`${RELAIS}/bougies?s=${encodeURIComponent(s.histo.yahoo)}&i=${i}&r=${r}`, { signal: AbortSignal.timeout(20000) });
+    if (!rep.ok) throw new Error(`Relais ${rep.status}`);
+    const d = (await rep.json()) as { bougies?: number[][] };
+    const decalage = p === 'D1' || p === 'W1' || p === 'MN' ? 7200 : 0;
+    bougies = regrouper((d.bougies ?? []).map(([time, open, high, low, close, volume]) => ({ time: time + decalage, open, high, low, close, volume })), p);
+  }
+  bougies = bougies.slice(-max);
+  const der = bougies[bougies.length - 1];
+  const facteur = s.histo.recaler && reference && der ? reference / der.close : 1;
+  const arrondi = (v: number) => Number(v.toFixed(s.chiffres));
+  return bougies.map((b) => ({ ...b, open: arrondi(b.open * facteur), high: arrondi(b.high * facteur), low: arrondi(b.low * facteur), close: arrondi(b.close * facteur) }));
+}

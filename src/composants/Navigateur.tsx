@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useTerminal } from '../contexte';
 import { DEFINITIONS } from '../graphique/indicateurs';
 import { EXPERTS } from '../algo/experts';
+import { preparerTest } from './Testeur';
 import { fermerPosition, profitPosition, supprimerOrdre, type Compte } from '../compte/moteur';
 import { useMenuContextuel } from './ui';
 
@@ -88,7 +89,27 @@ export function Navigateur() {
             </Noeud>
             <Noeud libelle="Expert Advisors" icone="🎓" ouvertParDefaut>
               {EXPERTS.map((x) => (
-                <Noeud key={x.type} libelle={x.nom} icone="🎓" onDoubleClick={() => ouvrir({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })} />
+                <Noeud
+                  key={x.type}
+                  libelle={x.nom}
+                  icone="🎓"
+                  onDoubleClick={() => ouvrir({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    const g = etat.graphiques.find((k) => k.id === etat.graphiqueActif);
+                    ouvrirMenu(e.clientX, e.clientY, [
+                      { libelle: 'Attacher au graphique', action: () => ouvrir({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type }) },
+                      {
+                        libelle: 'Tester',
+                        raccourci: 'Ctrl+R',
+                        action: () => {
+                          maj((k) => ({ ...k, panneaux: { ...k.panneaux, testeur: true } }));
+                          setTimeout(() => preparerTest({ expert: x.type, symbole: g?.symbole ?? 'EURUSD', periode: g?.periode ?? 'H1' }), 0);
+                        },
+                      },
+                    ]);
+                  }}
+                />
               ))}
             </Noeud>
             <Noeud libelle="Scripts" icone="📜" ouvertParDefaut>

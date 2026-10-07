@@ -58,6 +58,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Observation du marché', raccourci: 'Ctrl+M', coche: etat.panneaux.observation, action: () => panneau('observation') },
         { libelle: 'Navigateur', raccourci: 'Ctrl+N', coche: etat.panneaux.navigateur, action: () => panneau('navigateur') },
         { libelle: 'Boîte à outils', raccourci: 'Ctrl+T', coche: etat.panneaux.boite, action: () => panneau('boite') },
+        { libelle: 'Testeur de stratégie', raccourci: 'Ctrl+R', coche: etat.panneaux.testeur, action: () => panneau('testeur') },
         { separateur: true },
         { libelle: 'Thème sombre', coche: etat.theme === 'sombre', action: () => maj((e) => ({ ...e, theme: e.theme === 'sombre' ? 'clair' : 'sombre' })) },
         { libelle: 'Plein écran', raccourci: 'F11', action: pleinEcran },
@@ -188,6 +189,10 @@ export function BarreOutils() {
       <button className={`bouton-texte algo${etat.algo ? ' actif' : ''}`} title="Algo Trading : autorise les Expert Advisors à trader" onClick={() => a.maj((e) => ({ ...e, algo: !e.algo }))}>
         <svg viewBox="0 0 20 20">{etat.algo ? <path d="M6 4l10 6-10 6z" fill="#1e9e3a" /> : <rect x="5" y="5" width="10" height="10" fill="#c0392b" />}</svg>
         Algo Trading
+      </button>
+      <button className={`bouton-texte${etat.panneaux.testeur ? ' actif' : ''}`} title="Testeur de stratégie (Ctrl+R)" onClick={() => a.panneau('testeur')}>
+        <svg viewBox="0 0 20 20"><path d="M3 16l4-5 3 2 6-8" fill="none" stroke="#1e6fd9" strokeWidth="1.6" /><circle cx="15" cy="14" r="3" fill="none" stroke="currentColor" strokeWidth="1.4" /><path d="M17 16l2 2" stroke="currentColor" strokeWidth="1.6" /></svg>
+        Testeur
       </button>
       <span className="sep" />
       <button title="Barres (Alt+1)" className={g?.type === 'barres' ? 'actif' : ''} onClick={() => majActif({ type: 'barres' })}>

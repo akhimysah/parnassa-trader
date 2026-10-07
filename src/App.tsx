@@ -12,6 +12,7 @@ import { ObservationMarche } from './composants/ObservationMarche';
 import { Navigateur } from './composants/Navigateur';
 import { BoiteOutils, type OngletBoite } from './composants/BoiteOutils';
 import { ZoneGraphiques } from './composants/ZoneGraphiques';
+import { Testeur } from './composants/Testeur';
 import { Dialogues } from './composants/Dialogues';
 import { Mobile } from './mobile/Mobile';
 
@@ -202,6 +203,7 @@ export function App() {
         if (touche === 'u') return faire(() => setDialogue({ type: 'symboles' }));
         if (touche === 'o') return faire(() => setDialogue({ type: 'options' }));
         if (touche === 'e') return faire(() => maj((x) => ({ ...x, algo: !x.algo })));
+        if (touche === 'r') return faire(() => panneau('testeur'));
         if (g && touche === 'g') return faire(() => majGraphique(g.id, { grille: !g.grille }));
         if (g && touche === 'i') return faire(() => setDialogue({ type: 'liste-indicateurs', graphique: g.id }));
         if (g && touche === 'b') return faire(() => setDialogue({ type: 'objets', graphique: g.id }));
@@ -251,10 +253,11 @@ export function App() {
             )}
             <div className="centre">
               <ZoneGraphiques />
-              {p.boite && (
+              {(p.boite || p.testeur) && (
                 <div className="boite-cadre" style={{ height: etat.hauteurBoite }}>
                   <Poignee />
-                  <BoiteOutils onglet={onglet} changer={setOnglet} />
+                  {/* Comme dans MT5, le testeur de stratégie occupe le bas de la fenêtre à la place de la boîte à outils. */}
+                  {p.testeur ? <Testeur /> : <BoiteOutils onglet={onglet} changer={setOnglet} />}
                 </div>
               )}
             </div>

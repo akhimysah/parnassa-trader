@@ -770,6 +770,7 @@ const RACCOURCIS: [string, string][] = [
   ['Alt+1 / Alt+2 / Alt+3', 'Barres / bougies / ligne'],
   ['Alt+T', 'Trading en un clic sur le graphique'],
   ['Ctrl+E', 'Activer / désactiver l\'Algo Trading'],
+  ['Ctrl+R', 'Testeur de stratégie'],
   ['Alt+B', 'Profondeur du marché'],
   ['+ / −', 'Zoom avant / arrière'],
   ['Fin', 'Aller à la dernière barre'],

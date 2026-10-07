@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTerminal } from '../contexte';
 import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
-import { profitPosition, type Compte } from '../compte/moteur';
-import { Fenetre, Spin, argent, dateMT } from './ui';
+import { profitPosition } from '../compte/moteur';
+import { calculerStats } from '../algo/statistiques';
+import { CourbeSolde } from './Courbe';
+import { preparerTest } from './Testeur';
+import { Fenetre, Spin, argent } from './ui';
 
 /** Attacher un Expert Advisor au graphique et régler ses paramètres (onglet « Entrées » de MT5). */
 export function DialogueExpert({ graphique, expert }: { graphique: string; expert?: TypeExpert }) {
@@ -79,6 +82,15 @@ export function DialogueExpert({ graphique, expert }: { graphique: string; exper
             Retirer
           </button>
         )}
+        <button
+          onClick={() => {
+            maj((e) => ({ ...e, panneaux: { ...e.panneaux, testeur: true } }));
+            setTimeout(() => preparerTest({ expert: type, symbole: g.symbole, periode: g.periode, p }), 0);
+            fermer();
+          }}
+        >
+          Tester…
+        </button>
         <button onClick={fermer}>Annuler</button>
         <button
           className="principal"
@@ -97,188 +109,9 @@ export function DialogueExpert({ graphique, expert }: { graphique: string; exper
 
 // ---------- Rapport de trading ----------
 
-interface Stats {
-  depots: number;
-  retraits: number;
-  net: number;
-  brutGain: number;
-  brutPerte: number;
-  facteur: number | null;
-  esperance: number;
-  sharpe: number | null;
-  recouvrement: number | null;
-  ddAbsolu: number;
-  ddMax: number;
-  ddMaxPct: number;
-  trades: number;
-  gagnants: number;
-  longs: number;
-  longsGagnants: number;
-  courts: number;
-  courtsGagnants: number;
-  plusGrosGain: number;
-  plusGrossePerte: number;
-  gainMoyen: number;
-  perteMoyenne: number;
-  seriesGains: { n: number; montant: number };
-  seriesPertes: { n: number; montant: number };
-  parSymbole: { symbole: string; trades: number; net: number; gagnants: number }[];
-  courbe: { t: number; v: number }[];
-}
-
-function calculerStats(c: Compte): Stats {
-  const deals = [...c.transactions].sort((a, b) => a.heure - b.heure || a.ticket - b.ticket);
-  const sorties = deals.filter((d) => d.entree === 'out');
-  const resultat = (d: (typeof deals)[number]) => d.profit + d.swap + d.commission;
-  const gains = sorties.filter((d) => resultat(d) > 0);
-  const pertes = sorties.filter((d) => resultat(d) <= 0);
-  const brutGain = gains.reduce((s, d) => s + resultat(d), 0);
-  const brutPerte = pertes.reduce((s, d) => s + resultat(d), 0);
-  const net = brutGain + brutPerte;
-  const depots = deals.filter((d) => d.type === 'balance' && d.profit > 0).reduce((s, d) => s + d.profit, 0);
-  const retraits = deals.filter((d) => d.type === 'balance' && d.profit < 0).reduce((s, d) => s + d.profit, 0);
-  // Courbe de solde et drawdowns (sur le solde, les dépôts et retraits ne comptent pas comme pertes).
-  const courbe: { t: number; v: number }[] = [];
-  let sommet = 0;
-  let ddMax = 0;
-  let ddMaxPct = 0;
-  let plusBas = Infinity;
-  const premierDepot = deals.find((d) => d.type === 'balance')?.profit ?? 0;
-  for (const d of deals) {
-    if (d.type === 'balance') {
-      sommet += d.profit;
-      courbe.push({ t: d.heure, v: d.solde });
-      continue;
-    }
-    if (d.entree !== 'out') continue;
-    courbe.push({ t: d.heure, v: d.solde });
-    sommet = Math.max(sommet, d.solde);
-    const dd = sommet - d.solde;
-    if (dd > ddMax) ddMax = dd;
-    if (sommet > 0) ddMaxPct = Math.max(ddMaxPct, (dd / sommet) * 100);
-    plusBas = Math.min(plusBas, d.solde);
-  }
-  const series = (signe: 1 | -1) => {
-    let meilleure = { n: 0, montant: 0 };
-    let cours = { n: 0, montant: 0 };
-    for (const d of sorties) {
-      const r = resultat(d);
-      if ((signe > 0 && r > 0) || (signe < 0 && r <= 0)) {
-        cours = { n: cours.n + 1, montant: cours.montant + r };
-        if (cours.n > meilleure.n) meilleure = cours;
-      } else cours = { n: 0, montant: 0 };
-    }
-    return meilleure;
-  };
-  const rendements = sorties.map(resultat);
-  const moyenne = rendements.length ? net / rendements.length : 0;
-  const ecart = rendements.length > 1 ? Math.sqrt(rendements.reduce((s, r) => s + (r - moyenne) ** 2, 0) / (rendements.length - 1)) : 0;
-  const parSymboleMap = new Map<string, { trades: number; net: number; gagnants: number }>();
-  for (const d of sorties) {
-    const x = parSymboleMap.get(d.symbole) ?? { trades: 0, net: 0, gagnants: 0 };
-    x.trades++;
-    x.net += resultat(d);
-    if (resultat(d) > 0) x.gagnants++;
-    parSymboleMap.set(d.symbole, x);
-  }
-  // Le deal de sortie est en sens inverse de la position : une sortie « sell » ferme un achat (long).
-  const longs = sorties.filter((d) => d.type === 'sell');
-  const courts = sorties.filter((d) => d.type === 'buy');
-  return {
-    depots,
-    retraits,
-    net,
-    brutGain,
-    brutPerte,
-    facteur: brutPerte < 0 ? brutGain / -brutPerte : null,
-    esperance: moyenne,
-    sharpe: ecart > 0 ? moyenne / ecart : null,
-    recouvrement: ddMax > 0 ? net / ddMax : null,
-    ddAbsolu: plusBas < premierDepot ? premierDepot - plusBas : 0,
-    ddMax,
-    ddMaxPct,
-    trades: sorties.length,
-    gagnants: gains.length,
-    longs: longs.length,
-    longsGagnants: longs.filter((d) => resultat(d) > 0).length,
-    courts: courts.length,
-    courtsGagnants: courts.filter((d) => resultat(d) > 0).length,
-    plusGrosGain: gains.reduce((m, d) => Math.max(m, resultat(d)), 0),
-    plusGrossePerte: pertes.reduce((m, d) => Math.min(m, resultat(d)), 0),
-    gainMoyen: gains.length ? brutGain / gains.length : 0,
-    perteMoyenne: pertes.length ? brutPerte / pertes.length : 0,
-    seriesGains: series(1),
-    seriesPertes: series(-1),
-    parSymbole: [...parSymboleMap.entries()].map(([symbole, x]) => ({ symbole, ...x })).sort((a, b) => b.net - a.net),
-    courbe,
-  };
-}
-
-function CourbeSolde({ points }: { points: { t: number; v: number }[] }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const { etat } = useTerminal();
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const l = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    canvas.width = l * dpr;
-    canvas.height = h * dpr;
-    const g = canvas.getContext('2d')!;
-    g.scale(dpr, dpr);
-    const sombre = etat.theme === 'sombre';
-    g.fillStyle = sombre ? '#151924' : '#fff';
-    g.fillRect(0, 0, l, h);
-    if (points.length < 2) {
-      g.fillStyle = '#888';
-      g.font = '12px Tahoma, sans-serif';
-      g.fillText('La courbe apparaîtra après vos premières positions fermées.', 12, h / 2);
-      return;
-    }
-    const min = Math.min(...points.map((p) => p.v));
-    const max = Math.max(...points.map((p) => p.v));
-    const marge = (max - min) * 0.1 || 1;
-    const bas = min - marge;
-    const haut = max + marge;
-    const gauche = 70;
-    const x = (i: number) => gauche + (i / (points.length - 1)) * (l - gauche - 10);
-    const y = (v: number) => 8 + (1 - (v - bas) / (haut - bas)) * (h - 24);
-    g.font = '10px Tahoma, sans-serif';
-    for (let k = 0; k <= 4; k++) {
-      const v = bas + ((haut - bas) * k) / 4;
-      g.strokeStyle = sombre ? '#232836' : '#eee';
-      g.beginPath();
-      g.moveTo(gauche, y(v));
-      g.lineTo(l - 10, y(v));
-      g.stroke();
-      g.fillStyle = sombre ? '#8a93a6' : '#666';
-      g.fillText(argent(v), 4, y(v) + 3);
-    }
-    // Aire sous la courbe puis la courbe de solde.
-    g.beginPath();
-    points.forEach((p, i) => (i === 0 ? g.moveTo(x(i), y(p.v)) : g.lineTo(x(i), y(p.v))));
-    g.lineTo(x(points.length - 1), h - 16);
-    g.lineTo(x(0), h - 16);
-    g.closePath();
-    g.fillStyle = 'rgba(30, 111, 217, 0.12)';
-    g.fill();
-    g.beginPath();
-    points.forEach((p, i) => (i === 0 ? g.moveTo(x(i), y(p.v)) : g.lineTo(x(i), y(p.v))));
-    g.strokeStyle = '#1e6fd9';
-    g.lineWidth = 1.6;
-    g.stroke();
-    g.fillStyle = sombre ? '#8a93a6' : '#666';
-    g.fillText(dateMT(points[0].t, false), gauche, h - 3);
-    const fin = dateMT(points[points.length - 1].t, false);
-    g.fillText(fin, l - 10 - g.measureText(fin).width, h - 3);
-  });
-  return <canvas ref={ref} className="courbe-solde" />;
-}
-
 export function DialogueRapport() {
   const { compte, fermer, cotations } = useTerminal();
-  const s = useMemo(() => calculerStats(compte), [compte]);
+  const s = useMemo(() => calculerStats(compte.transactions), [compte.transactions]);
   const flottant = compte.positions.reduce((t, p) => t + profitPosition(p, cotations), 0);
   const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(2)} %` : '—');
   const L = ({ l, v, c }: { l: string; v: string; c?: string }) => (
