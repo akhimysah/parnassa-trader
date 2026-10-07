@@ -116,10 +116,10 @@ export const SYMBOLES: SymboleMT[] = [
   fx('EURAUD', 'Euro vs Dollar australien', 'Croisées', 5, 25),
   fx('GBPCHF', 'Livre sterling vs Franc suisse', 'Croisées', 5, 30),
   // Métaux
-  cfd('XAUUSD', 'Or vs Dollar US', 'Métaux', 'metaux', 2, 25, { tradingview: 'OANDA:XAUUSD', pilote: 'PAXGUSDT', swissquote: 'XAU/USD' }, { yahoo: 'GC=F', recaler: true }, { contrat: 100, levierMax: 500, base: 'XAU' }),
-  cfd('XAGUSD', 'Argent vs Dollar US', 'Métaux', 'metaux', 3, 30, { tradingview: 'TVC:SILVER', swissquote: 'XAG/USD' }, { yahoo: 'SI=F', recaler: true }, { contrat: 5000, levierMax: 200, base: 'XAG' }),
-  cfd('XPTUSD', 'Platine vs Dollar US', 'Métaux', 'metaux', 2, 300, { tradingview: 'TVC:PLATINUM', swissquote: 'XPT/USD' }, { yahoo: 'PL=F', recaler: true }, { contrat: 100, levierMax: 100, base: 'XPT' }),
-  cfd('XPDUSD', 'Palladium vs Dollar US', 'Métaux', 'metaux', 2, 300, { tradingview: 'TVC:PALLADIUM', swissquote: 'XPD/USD' }, { yahoo: 'PA=F', recaler: true }, { contrat: 100, levierMax: 100, base: 'XPD' }),
+  cfd('XAUUSD', 'Or vs Dollar US', 'Métaux', 'metaux', 3, 300, { tradingview: 'OANDA:XAUUSD', pilote: 'PAXGUSDT', swissquote: 'XAU/USD' }, { yahoo: 'GC=F', recaler: true }, { contrat: 100, levierMax: 500, base: 'XAU' }),
+  cfd('XAGUSD', 'Argent vs Dollar US', 'Métaux', 'metaux', 4, 300, { tradingview: 'TVC:SILVER', swissquote: 'XAG/USD' }, { yahoo: 'SI=F', recaler: true }, { contrat: 5000, levierMax: 200, base: 'XAG' }),
+  cfd('XPTUSD', 'Platine vs Dollar US', 'Métaux', 'metaux', 3, 3000, { tradingview: 'TVC:PLATINUM', swissquote: 'XPT/USD' }, { yahoo: 'PL=F', recaler: true }, { contrat: 100, levierMax: 100, base: 'XPT' }),
+  cfd('XPDUSD', 'Palladium vs Dollar US', 'Métaux', 'metaux', 3, 5000, { tradingview: 'TVC:PALLADIUM', swissquote: 'XPD/USD' }, { yahoo: 'PA=F', recaler: true }, { contrat: 100, levierMax: 100, base: 'XPD' }),
   cfd('COPPER', 'Cuivre (contrat à terme)', 'Métaux', 'metaux', 4, 30, { tradingview: 'COMEX:HG1!' }, { yahoo: 'HG=F' }, { contrat: 25000, levierMax: 100 }),
   // Indices
   cfd('US500', 'S&P 500', 'Indices\\États-Unis', 'indices', 2, 50, { tradingview: 'SP:SPX', yahoo: '^GSPC' }, { yahoo: '^GSPC' }, { levierMax: 200 }),
@@ -234,12 +234,12 @@ export const TYPES_COMPTE: Record<TypeCompte, { nom: string; description: string
 
 /**
  * Spread moyen en points [Standard, Raw], aux ordres de grandeur des courtiers MT5 (heures normales).
- * Ex. XAUUSD (2 décimales) : 30 points = 0,30 $ ; EURUSD (5 décimales) : 12 points = 1,2 pip.
+ * Ex. XAUUSD (3 décimales) : 300 points = 0,30 $ ; EURUSD (5 décimales) : 12 points = 1,2 pip.
  */
 const SPREADS: Record<string, [number, number]> = {
   EURUSD: [12, 2], GBPUSD: [15, 4], USDJPY: [13, 2], USDCHF: [15, 4], AUDUSD: [13, 3], USDCAD: [16, 4], NZDUSD: [18, 5],
   EURGBP: [15, 5], EURJPY: [18, 5], GBPJPY: [25, 9], EURCHF: [18, 6], AUDJPY: [18, 6], EURAUD: [22, 8], GBPCHF: [25, 10],
-  XAUUSD: [30, 10], XAGUSD: [30, 15], XPTUSD: [300, 150], XPDUSD: [500, 300], COPPER: [30, 20],
+  XAUUSD: [300, 100], XAGUSD: [300, 150], XPTUSD: [3000, 1500], XPDUSD: [5000, 3000], COPPER: [30, 20],
   US500: [50, 40], NAS100: [150, 100], US30: [250, 180], GER40: [150, 100], FRA40: [150, 100], UK100: [150, 100], JPN225: [1000, 700],
   USOIL: [4, 3], UKOIL: [5, 3], NATGAS: [8, 5],
   BTCUSD: [2500, 1000], ETHUSD: [250, 100], SOLUSD: [20, 10], BNBUSD: [50, 20], XRPUSD: [30, 15], DOGUSD: [50, 25],
