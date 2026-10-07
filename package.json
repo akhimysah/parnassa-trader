@@ -1,0 +1,29 @@
+{
+  "name": "parnassa-trader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Parnassa Trader — terminal de trading façon MetaTrader 5 : observation du marché, graphiques, ordres au marché et en attente, boîte à outils, compte de démonstration.",
+  "scripts": {
+    "dev": "vite --port 5210",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 5210",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "lightweight-charts": "^5.2.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.0"
+  },
+  "packageManager": "pnpm@10.12.4"
+}

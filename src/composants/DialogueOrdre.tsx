@@ -1,0 +1,410 @@
+import { useEffect, useState } from 'react';
+import { useTerminal } from '../contexte';
+import { SYMBOLES, formaterPrix, marcheOuvert, point, symbole } from '../marche/symboles';
+import {
+  NOMS_TYPE_ATTENTE,
+  conversion,
+  etatCompte,
+  fermerPosition,
+  margeRequise,
+  modifierOrdre,
+  modifierPosition,
+  ouvrirMarche,
+  placerOrdre,
+  prixFermeture,
+  sensDe,
+  supprimerOrdre,
+  type Expiration,
+  type Sens,
+  type TypeEnAttente,
+} from '../compte/moteur';
+import { Fenetre, PrixGros, Spin, argent, dateMT } from './ui';
+import { GraphiqueTicks } from './ObservationMarche';
+
+function versDateLocale(ms: number): string {
+  const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60000);
+  return d.toISOString().slice(0, 16);
+}
+
+/** Gain ou perte (USD) si le prix passe de `de` à `a` pour `volume` lots dans le sens `sens`. */
+function resultatA(sym: string, sens: Sens, volume: number, de: number, a: number, cot: ReturnType<typeof useTerminal>['cotations']): number {
+  const s = symbole(sym)!;
+  return (sens === 'buy' ? a - de : de - a) * volume * s.contrat * conversion(s, cot);
+}
+
+function Estimation({ valeur }: { valeur: number | null }) {
+  if (valeur === null) return null;
+  return <span className={`estimation ${valeur >= 0 ? 'positif' : 'negatif'}`}>{valeur >= 0 ? '+' : ''}{argent(valeur)} USD</span>;
+}
+
+/** Fenêtre « Ordre » (F9) : exécution au marché ou ordre en attente, avec graphique des ticks. */
+export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volumeInitial }: { symboleInitial?: string; sens?: Sens; attente?: TypeEnAttente; prixInitial?: number; volumeInitial?: number }) {
+  const { etat, compte, cotations, operer, fermer, ouvrir } = useTerminal();
+  const [sym, setSym] = useState(symboleInitial ?? etat.graphiques.find((g) => g.id === etat.graphiqueActif)?.symbole ?? 'EURUSD');
+  const s = symbole(sym)!;
+  const q = cotations[sym];
+  const [mode, setMode] = useState<'marche' | 'attente'>(attente ? 'attente' : 'marche');
+  const [typeAttente, setTypeAttente] = useState<TypeEnAttente>(attente ?? (sens === 'sell' ? 'sell_limit' : 'buy_limit'));
+  const [volume, setVolume] = useState(volumeInitial ?? Math.max(s.volumeMin, etat.volumeDefaut));
+  const [sl, setSl] = useState(0);
+  const [tp, setTp] = useState(0);
+  const [prix, setPrix] = useState(prixInitial ?? 0);
+  const [prixLimite, setPrixLimite] = useState(0);
+  const [expiration, setExpiration] = useState<Expiration>('gtc');
+  const [echeance, setEcheance] = useState(Date.now() + 86400000);
+  const [commentaire, setCommentaire] = useState('');
+  const [resultat, setResultat] = useState<{ ok: boolean; texte: string } | null>(null);
+
+  // Prix d'un ordre en attente : amorcé sur le marché à l'ouverture et au changement de symbole.
+  useEffect(() => {
+    if (prixInitial && sym === symboleInitial) return;
+    setPrix(0);
+    setSl(0);
+    setTp(0);
+    setVolume((v) => Math.min(s.volumeMax, Math.max(s.volumeMin, v)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sym]);
+  useEffect(() => {
+    if (mode === 'attente' && prix === 0 && q) setPrix(typeAttente.startsWith('buy') ? q.ask : q.bid);
+  }, [mode, q, prix, typeAttente]);
+
+  const pas = point(s);
+  const marge = q ? margeRequise(s, volume, mode === 'marche' ? q.ask : prix || q.ask, compte.levier, cotations) : 0;
+  const libre = etatCompte(compte, cotations).margeLibre;
+  const ouvert = marcheOuvert(s);
+
+  const passerMarche = (type: Sens) => {
+    const r = operer((c) => ouvrirMarche(c, { symbole: sym, type, volume, sl, tp, commentaire }, cotations), { confirmation: false });
+    setResultat(r.erreur ? { ok: false, texte: `Erreur : ${r.erreur}` } : { ok: true, texte: `Exécuté : #${r.ticket} ${r.message}` });
+  };
+  const placer = () => {
+    const r = operer((c) => placerOrdre(c, { symbole: sym, type: typeAttente, volume, prix, prixLimite, sl, tp, expiration, echeance, commentaire }, cotations), { confirmation: false });
+    setResultat(r.erreur ? { ok: false, texte: `Erreur : ${r.erreur}` } : { ok: true, texte: `Placé : #${r.ticket} ${r.message}` });
+  };
+
+  const entreeSens: Sens = mode === 'marche' ? 'buy' : sensDe(typeAttente);
+  const prixEntree = mode === 'marche' ? q?.ask : typeAttente.endsWith('stop_limit') ? prixLimite : prix;
+
+  if (resultat) {
+    return (
+      <Fenetre titre={`Ordre`} fermer={fermer} largeur={420}>
+        <div className={`resultat-ordre ${resultat.ok ? 'ok' : 'ko'}`}>
+          <div className="resultat-icone">{resultat.ok ? '✔' : '✖'}</div>
+          <div>{resultat.texte}</div>
+        </div>
+        <div className="boutons">
+          {!resultat.ok && <button onClick={() => setResultat(null)}>Retour</button>}
+          <button className="principal" onClick={fermer} autoFocus>
+            OK
+          </button>
+        </div>
+      </Fenetre>
+    );
+  }
+
+  return (
+    <Fenetre titre={`Ordre`} fermer={fermer} largeur={720} className="fenetre-ordre">
+      <div className="ordre-grille">
+        <div className="ordre-ticks">
+          <div className="ordre-ticks-titre">
+            {sym}, {s.description}
+          </div>
+          <GraphiqueTicks nom={sym} hauteur={300} />
+        </div>
+        <div className="ordre-form">
+          <label>
+            <span>Symbole :</span>
+            <select value={sym} onChange={(e) => setSym(e.target.value)}>
+              {SYMBOLES.map((x) => (
+                <option key={x.nom} value={x.nom}>
+                  {x.nom}, {x.description}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Type :</span>
+            <select value={mode} onChange={(e) => setMode(e.target.value as 'marche' | 'attente')}>
+              <option value="marche">Exécution au marché</option>
+              <option value="attente">Ordre en attente</option>
+            </select>
+          </label>
+          <label>
+            <span>Volume :</span>
+            <Spin valeur={volume} changer={setVolume} pas={s.pasVolume} min={s.volumeMin} max={s.volumeMax} decimales={2} />
+            <small className="aide">
+              {argent(volume * s.contrat, 0)} {s.base} · marge {argent(marge)} USD
+            </small>
+          </label>
+          <div className="ordre-stops">
+            <label>
+              <span>Stop Loss :</span>
+              <Spin valeur={sl} changer={setSl} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} />
+              <Estimation valeur={sl && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, sl, cotations) : null} />
+            </label>
+            <label>
+              <span>Take Profit :</span>
+              <Spin valeur={tp} changer={setTp} pas={pas} decimales={s.chiffres} vide amorce={prixEntree} />
+              <Estimation valeur={tp && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, tp, cotations) : null} />
+            </label>
+          </div>
+          {mode === 'attente' && (
+            <>
+              <label>
+                <span>Type :</span>
+                <select value={typeAttente} onChange={(e) => { setTypeAttente(e.target.value as TypeEnAttente); setPrix(0); }}>
+                  {(Object.keys(NOMS_TYPE_ATTENTE) as TypeEnAttente[]).map((t) => (
+                    <option key={t} value={t}>
+                      {NOMS_TYPE_ATTENTE[t]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Au prix :</span>
+                <Spin valeur={prix} changer={setPrix} pas={pas} decimales={s.chiffres} />
+              </label>
+              {typeAttente.endsWith('stop_limit') && (
+                <label>
+                  <span>Prix Stop Limit :</span>
+                  <Spin valeur={prixLimite} changer={setPrixLimite} pas={pas} decimales={s.chiffres} vide amorce={prix} />
+                </label>
+              )}
+              <label>
+                <span>Expiration :</span>
+                <select value={expiration} onChange={(e) => setExpiration(e.target.value as Expiration)}>
+                  <option value="gtc">GTC (jusqu'à annulation)</option>
+                  <option value="jour">Aujourd'hui</option>
+                  <option value="date">Spécifiée</option>
+                </select>
+              </label>
+              {expiration === 'date' && (
+                <label>
+                  <span>Date :</span>
+                  <input type="datetime-local" value={versDateLocale(echeance)} onChange={(e) => setEcheance(new Date(e.target.value).getTime())} />
+                </label>
+              )}
+            </>
+          )}
+          <label>
+            <span>Commentaire :</span>
+            <input value={commentaire} maxLength={31} onChange={(e) => setCommentaire(e.target.value)} />
+          </label>
+          {mode === 'marche' ? (
+            <>
+              <div className="ordre-prix">
+                <span className="baisse">
+                  <PrixGros s={s} prix={q?.bid} />
+                </span>
+                <span className="slash">/</span>
+                <span className="hausse">
+                  <PrixGros s={s} prix={q?.ask} />
+                </span>
+              </div>
+              {!ouvert && <div className="avertissement">Marché fermé</div>}
+              {marge > libre && <div className="avertissement">Marge libre insuffisante ({argent(libre)} USD)</div>}
+              <div className="ordre-boutons">
+                <button className="vente" disabled={!q || !ouvert} onClick={() => passerMarche('sell')}>
+                  Vente au marché
+                </button>
+                <button className="achat" disabled={!q || !ouvert} onClick={() => passerMarche('buy')}>
+                  Achat au marché
+                </button>
+              </div>
+              <p className="aide">L'exécution se fait au prix du marché, sans requote. Achat à l'Ask, vente au Bid.</p>
+            </>
+          ) : (
+            <>
+              {!ouvert && <div className="avertissement">Marché fermé</div>}
+              <div className="ordre-boutons">
+                <button className="principal large" disabled={!q || !ouvert} onClick={placer}>
+                  Placer
+                </button>
+              </div>
+            </>
+          )}
+          <button className="lien" onClick={() => ouvrir({ type: 'specification', symbole: sym })}>
+            Spécification du symbole
+          </button>
+        </div>
+      </div>
+    </Fenetre>
+  );
+}
+
+/** Modifier une position : stop-loss, take-profit, fermeture totale ou partielle. */
+export function DialogueModifierPosition({ ticket }: { ticket: number }) {
+  const { compte, cotations, operer, fermer } = useTerminal();
+  const p = compte.positions.find((x) => x.ticket === ticket);
+  const [sl, setSl] = useState(p?.sl ?? 0);
+  const [tp, setTp] = useState(p?.tp ?? 0);
+  const [volume, setVolume] = useState(p?.volume ?? 0);
+  const [points, setPoints] = useState(0);
+  if (!p) {
+    return (
+      <Fenetre titre="Position" fermer={fermer}>
+        <p>Cette position est déjà fermée.</p>
+        <div className="boutons">
+          <button onClick={fermer}>OK</button>
+        </div>
+      </Fenetre>
+    );
+  }
+  const s = symbole(p.symbole)!;
+  const q = cotations[p.symbole];
+  const actuel = q ? prixFermeture(p.type, q) : p.prixOuverture;
+  const copier = () => {
+    if (!points) return;
+    const d = points * point(s);
+    setSl(Number((p.type === 'buy' ? actuel - d : actuel + d).toFixed(s.chiffres)));
+    setTp(Number((p.type === 'buy' ? actuel + d : actuel - d).toFixed(s.chiffres)));
+  };
+  return (
+    <Fenetre titre={`Position #${p.ticket} ${p.type} ${p.volume.toFixed(2)} ${p.symbole}`} fermer={fermer} largeur={720} className="fenetre-ordre">
+      <div className="ordre-grille">
+        <div className="ordre-ticks">
+          <div className="ordre-ticks-titre">
+            {p.symbole}, {s.description}
+          </div>
+          <GraphiqueTicks nom={p.symbole} hauteur={280} />
+        </div>
+        <div className="ordre-form">
+          <div className="recap">
+            Ouverte le {dateMT(p.heure)} à <b>{formaterPrix(s, p.prixOuverture)}</b>, prix actuel <b>{formaterPrix(s, actuel)}</b>
+          </div>
+          <label>
+            <span>Stop Loss :</span>
+            <Spin valeur={sl} changer={setSl} pas={point(s)} decimales={s.chiffres} vide amorce={actuel} />
+            <Estimation valeur={sl ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, sl, cotations) : null} />
+          </label>
+          <label>
+            <span>Take Profit :</span>
+            <Spin valeur={tp} changer={setTp} pas={point(s)} decimales={s.chiffres} vide amorce={actuel} />
+            <Estimation valeur={tp ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, tp, cotations) : null} />
+          </label>
+          <label>
+            <span>Copier à :</span>
+            <Spin valeur={points} changer={setPoints} pas={10} decimales={0} />
+            <button onClick={copier}>points</button>
+          </label>
+          <div className="ordre-boutons">
+            <button
+              className="principal large"
+              onClick={() => {
+                const r = operer((c) => modifierPosition(c, p.ticket, sl, tp, cotations), { confirmation: false });
+                if (!r.erreur) fermer();
+              }}
+            >
+              Modifier
+            </button>
+          </div>
+          <hr />
+          <label>
+            <span>Volume à fermer :</span>
+            <Spin valeur={volume} changer={setVolume} pas={s.pasVolume} min={s.volumeMin} max={p.volume} decimales={2} />
+          </label>
+          <div className="ordre-boutons">
+            <button
+              className="fermer-pos large"
+              onClick={() => {
+                const r = operer((c) => fermerPosition(c, p.ticket, cotations, volume), { confirmation: false });
+                if (!r.erreur) fermer();
+              }}
+            >
+              Fermer #{p.ticket} {p.type} {volume.toFixed(2)} {p.symbole} à {q ? formaterPrix(s, actuel) : '—'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Fenetre>
+  );
+}
+
+/** Modifier ou supprimer un ordre en attente. */
+export function DialogueModifierOrdre({ ticket }: { ticket: number }) {
+  const { compte, cotations, operer, fermer } = useTerminal();
+  const o = compte.ordres.find((x) => x.ticket === ticket);
+  const [prix, setPrix] = useState(o?.prix ?? 0);
+  const [prixLimite, setPrixLimite] = useState(o?.prixLimite ?? 0);
+  const [sl, setSl] = useState(o?.sl ?? 0);
+  const [tp, setTp] = useState(o?.tp ?? 0);
+  const [expiration, setExpiration] = useState<Expiration>(o?.expiration ?? 'gtc');
+  const [echeance, setEcheance] = useState(o?.echeance || Date.now() + 86400000);
+  if (!o) {
+    return (
+      <Fenetre titre="Ordre" fermer={fermer}>
+        <p>Cet ordre n'existe plus (exécuté ou supprimé).</p>
+        <div className="boutons">
+          <button onClick={fermer}>OK</button>
+        </div>
+      </Fenetre>
+    );
+  }
+  const s = symbole(o.symbole)!;
+  return (
+    <Fenetre titre={`Ordre #${o.ticket} ${NOMS_TYPE_ATTENTE[o.type]} ${o.volume.toFixed(2)} ${o.symbole}`} fermer={fermer} largeur={720} className="fenetre-ordre">
+      <div className="ordre-grille">
+        <div className="ordre-ticks">
+          <div className="ordre-ticks-titre">
+            {o.symbole}, {s.description}
+          </div>
+          <GraphiqueTicks nom={o.symbole} hauteur={280} />
+        </div>
+        <div className="ordre-form">
+          <label>
+            <span>Au prix :</span>
+            <Spin valeur={prix} changer={setPrix} pas={point(s)} decimales={s.chiffres} />
+          </label>
+          {o.type.endsWith('stop_limit') && (
+            <label>
+              <span>Prix Stop Limit :</span>
+              <Spin valeur={prixLimite} changer={setPrixLimite} pas={point(s)} decimales={s.chiffres} />
+            </label>
+          )}
+          <label>
+            <span>Stop Loss :</span>
+            <Spin valeur={sl} changer={setSl} pas={point(s)} decimales={s.chiffres} vide amorce={prix} />
+          </label>
+          <label>
+            <span>Take Profit :</span>
+            <Spin valeur={tp} changer={setTp} pas={point(s)} decimales={s.chiffres} vide amorce={prix} />
+          </label>
+          <label>
+            <span>Expiration :</span>
+            <select value={expiration} onChange={(e) => setExpiration(e.target.value as Expiration)}>
+              <option value="gtc">GTC (jusqu'à annulation)</option>
+              <option value="jour">Aujourd'hui</option>
+              <option value="date">Spécifiée</option>
+            </select>
+          </label>
+          {expiration === 'date' && (
+            <label>
+              <span>Date :</span>
+              <input type="datetime-local" value={versDateLocale(echeance)} onChange={(e) => setEcheance(new Date(e.target.value).getTime())} />
+            </label>
+          )}
+          <div className="ordre-boutons">
+            <button
+              className="principal"
+              onClick={() => {
+                const r = operer((c) => modifierOrdre(c, o.ticket, { prix, prixLimite, sl, tp, expiration, echeance }, cotations), { confirmation: false });
+                if (!r.erreur) fermer();
+              }}
+            >
+              Modifier
+            </button>
+            <button
+              className="vente"
+              onClick={() => {
+                operer((c) => supprimerOrdre(c, o.ticket), { confirmation: false });
+                fermer();
+              }}
+            >
+              Supprimer
+            </button>
+          </div>
+        </div>
+      </div>
+    </Fenetre>
+  );
+}
