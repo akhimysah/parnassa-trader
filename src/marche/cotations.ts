@@ -1,7 +1,7 @@
 /**
  * Cotations Bid/Ask de tous les symboles du terminal. Chaque source donne un prix « milieu » :
  *  - crypto : milieu du carnet Binance (bookTicker) + statistiques 24 h (miniTicker) ;
- *  - métaux : milieu des Bid/Ask réels de Swissquote (relais, chaque seconde) ;
+ *  - métaux et forex : milieu des Bid/Ask réels de Swissquote (relais, chaque seconde) ;
  *  - autres : hub src/marche/flux.ts (Yahoo en continu, or animé par PAXG, scanner).
  * Le Bid/Ask affiché = milieu ± le spread du type de compte actif (Standard ou Raw), élargi au rollover
  * et, pour les métaux, au rythme des variations du spread réel de Swissquote.
@@ -190,7 +190,7 @@ function synchroniserFlux(syms: SymboleMT[]) {
   if (sourcesFlux.length) desabonnerFlux = abonnerFlux(sourcesFlux.map((x) => x.source), lireFlux);
 }
 
-// ---------- Métaux : Bid/Ask réels Swissquote (relais, chaque seconde) ----------
+// ---------- Métaux et forex : Bid/Ask réels Swissquote (relais, chaque seconde) ----------
 
 const swissquote: Record<string, { recuLe: number }> = {};
 /** Spread Swissquote habituel (moyenne mobile) : son écart à la moyenne élargit ou resserre le spread affiché. */

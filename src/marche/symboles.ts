@@ -50,7 +50,8 @@ const fx = (nom: string, description: string, chemin: string, chiffres: number, 
   volumeMax: 100,
   pasVolume: 0.01,
   levierMax: 1000,
-  direct: { tradingview: `FX:${nom}`, yahoo: nom.startsWith('USD') ? `${nom.slice(3)}=X` : `${nom}=X` },
+  // Swissquote (Bid/Ask réels chaque seconde) en priorité ; Yahoo et le scanner restent en secours et pour les statistiques du jour.
+  direct: { tradingview: `FX:${nom}`, yahoo: nom.startsWith('USD') ? `${nom.slice(3)}=X` : `${nom}=X`, swissquote: `${nom.slice(0, 3)}/${nom.slice(3)}` },
   histo: { yahoo: nom.startsWith('USD') ? `${nom.slice(3)}=X` : `${nom}=X` },
 });
 
