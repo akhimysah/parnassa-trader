@@ -573,6 +573,68 @@ export function fermerPosition(c: Compte, ticket: number, cot: Cotations, volume
   return { compte: journaliser(suite, 'Trades', `'${c.login}' : ${demande} — exécuté, deal #${deal.ticket} ${message}`), erreur: null, message };
 }
 
+/**
+ * « Fermer par » (Close By) de MT5 : deux positions opposées sur le même symbole se ferment l'une contre l'autre
+ * sur le volume commun. Pas de spread de sortie : le résultat est l'écart entre leurs prix d'ouverture.
+ * La position `ticket` est fermée au prix d'ouverture de `contre`, qui est fermée à son propre prix (profit nul).
+ */
+export function fermerPar(c: Compte, ticket: number, contre: number, cot: Cotations): Resultat {
+  const a = c.positions.find((x) => x.ticket === ticket);
+  const b = c.positions.find((x) => x.ticket === contre);
+  if (!a || !b) return { compte: c, erreur: 'Position introuvable' };
+  const s = symbole(a.symbole);
+  const demande = `fermeture de #${a.ticket} par #${b.ticket} ${a.symbole}`;
+  if (!s || a.symbole !== b.symbole || a.type === b.type) return echec(c, 'Positions incompatibles', demande);
+  if (!marcheOuvert(s)) return echec(c, 'Marché fermé', demande);
+  const v = Math.min(a.volume, b.volume);
+  const conv = conversion(s, cot);
+  const maintenant = Date.now();
+  let suite: Compte = c;
+  let total = 0;
+  const deals: Transaction[] = [];
+  for (const [p, prix] of [
+    [a, b.prixOuverture],
+    [b, b.prixOuverture],
+  ] as [Position, number][]) {
+    const part = v / p.volume;
+    const profit = arrondir((p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix) * v * s.contrat * conv);
+    const swap = arrondir(p.swap * part);
+    total += profit + swap;
+    suite = { ...suite, solde: arrondir(suite.solde + profit + swap) };
+    deals.push({
+      ticket: suite.ticketSuivant + deals.length,
+      ordre: suite.ticketSuivant + 2,
+      position: p.ticket,
+      heure: maintenant,
+      symbole: p.symbole,
+      type: p.type === 'buy' ? 'sell' : 'buy',
+      entree: 'out',
+      volume: v,
+      prix,
+      commission: 0,
+      swap,
+      profit,
+      solde: suite.solde,
+      commentaire: `[close by #${p === a ? b.ticket : a.ticket}]`,
+      prixOuverture: p.prixOuverture,
+      heureOuverture: p.heure,
+      sl: p.sl,
+      tp: p.tp,
+    });
+    const reste = arrondir(p.volume - v, 4);
+    suite = {
+      ...suite,
+      positions:
+        reste <= 1e-9
+          ? suite.positions.filter((x) => x.ticket !== p.ticket)
+          : suite.positions.map((x) => (x.ticket === p.ticket ? { ...x, volume: reste, swap: x.swap - swap, commission: x.commission - arrondir(x.commission * part) } : x)),
+    };
+  }
+  suite = { ...suite, transactions: [...suite.transactions, ...deals], ticketSuivant: suite.ticketSuivant + 3 };
+  const message = `#${a.ticket} fermée par #${b.ticket} : ${fmtVolume(v)} ${a.symbole}, résultat ${total.toFixed(2)} USD sans spread de sortie`;
+  return { compte: journaliser(suite, 'Trades', `'${c.login}' : ${demande} — exécuté, ${message}`), erreur: null, message };
+}
+
 /** Dépôt ou retrait de démonstration (opération de balance). */
 export function operationBalance(c: Compte, montant: number, commentaire: string): Resultat {
   if (!Number.isFinite(montant) || montant === 0) return { compte: c, erreur: 'Montant invalide' };

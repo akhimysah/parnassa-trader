@@ -5,6 +5,7 @@ import { formaterPrix, symbole } from '../marche/symboles';
 import type { TypeEnAttente } from '../compte/moteur';
 import { FenetreGraphique } from '../graphique/FenetreGraphique';
 import { registreGraphiques } from '../graphique/registre';
+import { useRef } from 'react';
 import { BoutonIcone, EnTete, IconePlus, useNav, vibrer } from './commun';
 
 /** Graphique plein écran avec les barres de commandes de MT5 mobile. */
@@ -31,6 +32,15 @@ export function GraphiqueMobile() {
   }
   const s = symbole(g.symbole)!;
   const q = cotations[g.symbole];
+  // Glisser l'en-tête à gauche / à droite : symbole suivant / précédent de la liste des cotations.
+  const suivant = (sens: 1 | -1) => {
+    const liste = etat.observation;
+    const i = liste.indexOf(g.symbole);
+    const n = liste[(i + sens + liste.length) % liste.length];
+    if (!n || n === g.symbole) return;
+    vibrer(10);
+    majGraphique(g.id, { symbole: n });
+  };
   // Appui long sur le graphique : ordres en attente, alerte ou ligne au prix pointé (comme le réticule de MT5 mobile).
   const auPrix = (brut: number) => {
     vibrer(15);
@@ -73,6 +83,7 @@ export function GraphiqueMobile() {
     ]);
   return (
     <div className="mm-ecran mm-ecran-graphique">
+      <GlisserEntete suivant={suivant}>
       <EnTete
         titre={
           <button className="mm-titre-bouton" onClick={changerSymbole}>
@@ -96,6 +107,7 @@ export function GraphiqueMobile() {
           </BoutonIcone>
         }
       />
+      </GlisserEntete>
       <div className="mm-barre-graphique">
         <div className="mm-periodes">
           {PERIODES.map((p) => (
@@ -124,6 +136,27 @@ export function GraphiqueMobile() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function GlisserEntete({ suivant, children }: { suivant: (sens: 1 | -1) => void; children: React.ReactNode }) {
+  const depart = useRef<{ x: number; y: number } | null>(null);
+  return (
+    <div
+      className="mm-glisser-entete"
+      onPointerDown={(e) => {
+        depart.current = { x: e.clientX, y: e.clientY };
+      }}
+      onPointerUp={(e) => {
+        const d = depart.current;
+        depart.current = null;
+        if (!d) return;
+        const dx = e.clientX - d.x;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(e.clientY - d.y) * 2) suivant(dx < 0 ? 1 : -1);
+      }}
+    >
+      {children}
     </div>
   );
 }

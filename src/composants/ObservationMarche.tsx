@@ -235,7 +235,13 @@ export function ObservationMarche() {
 }
 
 /** Graphique des ticks Bid (bleu) et Ask (rouge), dessiné sur un canevas. */
-export function GraphiqueTicks({ nom, changer, hauteur }: { nom: string; changer?: (n: string) => void; hauteur?: number }) {
+export interface NiveauTicks {
+  prix: number;
+  couleur: string;
+  libelle: string;
+}
+
+export function GraphiqueTicks({ nom, changer, hauteur, niveaux = [] }: { nom: string; changer?: (n: string) => void; hauteur?: number; niveaux?: NiveauTicks[] }) {
   const { etat, cotations } = useTerminal();
   const ref = useRef<HTMLCanvasElement>(null);
   const s = symbole(nom);
@@ -260,8 +266,13 @@ export function GraphiqueTicks({ nom, changer, hauteur }: { nom: string; changer
       g.fillText('En attente de ticks…', 8, 18);
       return;
     }
-    const min = Math.min(...ticks.map((t) => t.bid));
-    const max = Math.max(...ticks.map((t) => t.ask));
+    // Les niveaux (entrée, S/L, T/P) proches restent visibles : l'échelle s'élargit jusqu'à eux (dans une limite raisonnable).
+    const minTicks = Math.min(...ticks.map((t) => t.bid));
+    const maxTicks = Math.max(...ticks.map((t) => t.ask));
+    const portee = Math.max(maxTicks - minTicks, point(s) * 20) * 15;
+    const visibles = niveaux.filter((n) => n.prix > 0 && n.prix > minTicks - portee && n.prix < maxTicks + portee);
+    const min = Math.min(minTicks, ...visibles.map((n) => n.prix));
+    const max = Math.max(maxTicks, ...visibles.map((n) => n.prix));
     const marge = (max - min) * 0.1 || point(s) * 5;
     const bas = min - marge;
     const haut = max + marge;
@@ -288,6 +299,18 @@ export function GraphiqueTicks({ nom, changer, hauteur }: { nom: string; changer
     };
     trace('ask', '#ff3b30');
     trace('bid', '#1e90ff');
+    for (const n of visibles) {
+      g.strokeStyle = n.couleur;
+      g.setLineDash([5, 4]);
+      g.beginPath();
+      g.moveTo(0, y(n.prix));
+      g.lineTo(l - droite, y(n.prix));
+      g.stroke();
+      g.setLineDash([]);
+      g.fillStyle = n.couleur;
+      g.font = 'bold 10px -apple-system, Tahoma, sans-serif';
+      g.fillText(n.libelle, 4, y(n.prix) - 3);
+    }
   });
   return (
     <div className="ticks">

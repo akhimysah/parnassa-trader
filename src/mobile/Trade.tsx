@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../contexte';
-import { formaterPrix, symbole } from '../marche/symboles';
-import { LIBELLES_TYPE, definirSuiveur, etatCompte, fermerPosition, prixFermeture, profitPosition, supprimerOrdre, type Position } from '../compte/moteur';
+import { formaterPrix, point, symbole } from '../marche/symboles';
+import { LIBELLES_TYPE, definirSuiveur, etatCompte, fermerPar, fermerPosition, prixFermeture, profitPosition, supprimerOrdre, type Position } from '../compte/moteur';
 import { argent, dateMT } from '../composants/ui';
 import { CourbeSolde } from '../composants/Courbe';
 import { calculerStats } from '../algo/statistiques';
@@ -11,7 +11,7 @@ type Tri = 'heure' | 'symbole' | 'profit' | 'ticket';
 
 /** Onglet Trade : profit flottant, état du compte, positions et ordres en attente. */
 export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void }) {
-  const { compte, cotations, etat, operer } = useTerminal();
+  const { compte, cotations, etat, operer, maj } = useTerminal();
   const { pousser, feuille } = useNav();
   const [tri, setTri] = useState<Tri>('heure');
   const fermerTout = (filtre: (p: Position) => boolean, libelle: string) => {
@@ -44,6 +44,7 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
                 { libelle: `Symbole${tri === 'symbole' ? ' ✓' : ''}`, action: () => setTri('symbole') },
                 { libelle: `Profit${tri === 'profit' ? ' ✓' : ''}`, action: () => setTri('profit') },
                 { libelle: `Ticket${tri === 'ticket' ? ' ✓' : ''}`, action: () => setTri('ticket') },
+                { libelle: etat.profitEnPoints ? 'Profit en devise du dépôt' : 'Profit en points', action: () => maj((x) => ({ ...x, profitEnPoints: !x.profitEnPoints })) },
                 ...(compte.positions.length
                   ? [
                       { libelle: 'Fermer toutes les positions', danger: true, action: () => fermerTout(() => true, 'Fermer toutes les positions') },
@@ -148,7 +149,7 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
 }
 
 function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: string) => void }) {
-  const { cotations, operer } = useTerminal();
+  const { cotations, operer, compte, etat } = useTerminal();
   const { pousser, feuille } = useNav();
   const [ouvert, setOuvert] = useState(false);
   const [decalage, setDecalage] = useState(0);
@@ -158,9 +159,22 @@ function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: s
   const profit = profitPosition(p, cotations);
   const LARGEUR = 168;
   const suiveur = (n: number) => () => operer((c) => ({ compte: definirSuiveur(c, p.ticket, n), erreur: null }), { silencieux: true });
+  const opposees = compte.positions.filter((x) => x.symbole === p.symbole && x.type !== p.type);
+  const fermerContre = () =>
+    feuille(
+      'Fermer par une position opposée',
+      opposees.map((o) => ({
+        libelle: `#${o.ticket} ${o.type} ${o.volume.toFixed(2)} à ${formaterPrix(s, o.prixOuverture)}`,
+        action: () => {
+          const r = operer((c) => fermerPar(c, p.ticket, o.ticket, cotations), { confirmation: false });
+          vibrer(r.erreur ? 40 : 25);
+        },
+      })),
+    );
   const menu = () =>
     feuille(`#${p.ticket} ${p.symbole}, ${p.type} ${p.volume.toFixed(2)}`, [
       { libelle: 'Fermer la position', danger: true, action: () => pousser({ type: 'fermer', ticket: p.ticket }) },
+      ...(opposees.length ? [{ libelle: 'Fermer par… (sans spread)', danger: true, action: fermerContre }] : []),
       { libelle: 'Modifier la position', action: () => pousser({ type: 'position', ticket: p.ticket }) },
       {
         libelle: `Stop suiveur${p.suiveur ? ` (${p.suiveur} pts)` : ''}`,
@@ -255,7 +269,9 @@ function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: s
             {p.suiveur ? ' · ↻' : ''}
           </small>
         </div>
-        <b className={`mm-profit ${profit >= 0 ? 'positif' : 'negatif'}`}>{argent(profit)}</b>
+        <b className={`mm-profit ${profit >= 0 ? 'positif' : 'negatif'}`}>
+          {etat.profitEnPoints && q ? `${Math.round((p.type === 'buy' ? q.bid - p.prixOuverture : p.prixOuverture - q.ask) / point(s))} pts` : argent(profit)}
+        </b>
       </div>
       {ouvert && (
         <div className="mm-pos-detail" onClick={(e) => e.stopPropagation()}>

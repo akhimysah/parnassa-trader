@@ -9,6 +9,7 @@ import { EcranFermer, EcranOrdre, EcranOrdreAttente, EcranPosition, EcranResulta
 import { Historique, Trade } from './Trade';
 import { Comptes, EcranListe, OuvrirCompte, Reglages } from './Reglages';
 import { EcranAlerte, EcranDepot, EcranExpert, EcranExperts, EcranIndicateur, EcranIndicateurs, EcranProfondeur, EcranRapport, EcranSuiveur, EcranUnClic } from './Outils';
+import { Bienvenue, bienvenueVue } from './Bienvenue';
 import './mobile.css';
 
 const ONGLETS: [Onglet, string][] = [
@@ -26,6 +27,7 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
   const [onglet, setOnglet] = useState<Onglet>('cotations');
   const [pile, setPile] = useState<Ecran[]>([]);
   const [feuille, setFeuille] = useState<{ titre: string | null; actions: Action[] } | null>(null);
+  const [accueil, setAccueil] = useState(() => !bienvenueVue());
 
   const pousser = useCallback((e: Ecran) => setPile((p) => [...p, e]), []);
   const retour = useCallback(() => setPile((p) => p.slice(0, -1)), []);
@@ -97,6 +99,7 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
           </nav>
         )}
         {feuille && <FeuilleActions titre={feuille.titre} actions={feuille.actions} fermer={() => setFeuille(null)} />}
+        {accueil && <Bienvenue fermer={() => setAccueil(false)} />}
       </div>
     </ContexteNav.Provider>
   );

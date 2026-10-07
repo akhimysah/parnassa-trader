@@ -1488,3 +1488,70 @@
 .mm-aide-ligne .mm-lien {
   font-size: 12px;
 }
+
+/* Glisser l'en-tête du graphique ; accueil du premier lancement */
+.mm-glisser-entete {
+  touch-action: pan-y;
+  flex: none;
+}
+.mm-bienvenue {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: calc(env(safe-area-inset-top) + 16px) 28px calc(env(safe-area-inset-bottom) + 20px);
+  background: linear-gradient(160deg, #1d3557, #0b1a2e 70%);
+  color: #fff;
+  touch-action: pan-y;
+  user-select: none;
+}
+.mm-bienvenue-passer {
+  align-self: flex-end;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 15px;
+  padding: 6px;
+}
+.mm-bienvenue-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  animation: mm-fondu 0.3s ease-out;
+}
+.mm-bienvenue-icone {
+  font-size: 72px;
+  margin-bottom: 18px;
+}
+.mm-bienvenue h1 {
+  font-size: 26px;
+  margin: 0 0 12px;
+}
+.mm-bienvenue p {
+  font-size: 16px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 0;
+}
+.mm-bienvenue-points {
+  display: flex;
+  gap: 8px;
+  margin: 18px 0;
+}
+.mm-bienvenue-points i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+}
+.mm-bienvenue-points i.actif {
+  background: #fff;
+}
+.mm-bienvenue-bouton {
+  width: 100%;
+  flex: none;
+}

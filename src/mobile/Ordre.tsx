@@ -218,7 +218,15 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
           </label>
         </div>
         <div className="mm-ticks">
-          <GraphiqueTicks nom={sym} hauteur={170} />
+          <GraphiqueTicks
+            nom={sym}
+            hauteur={170}
+            niveaux={[
+              ...(type !== 'marche' && prix ? [{ prix, couleur: '#8e8e93', libelle: 'Prix' }] : []),
+              ...(sl ? [{ prix: sl, couleur: '#ff3b30', libelle: 'S/L' }] : []),
+              ...(tp ? [{ prix: tp, couleur: '#34c759', libelle: 'T/P' }] : []),
+            ]}
+          />
         </div>
         <DeuxPrix nom={sym} />
         {!ouvert && <div className="mm-alerte">Marché fermé — {sym} ne se négocie pas en ce moment.</div>}
@@ -312,7 +320,15 @@ export function EcranPosition({ ticket }: { ticket: number }) {
           )}
         </div>
         <div className="mm-ticks">
-          <GraphiqueTicks nom={p.symbole} hauteur={170} />
+          <GraphiqueTicks
+            nom={p.symbole}
+            hauteur={170}
+            niveaux={[
+              { prix: p.prixOuverture, couleur: p.type === 'buy' ? '#007aff' : '#ff3b30', libelle: `Entrée ${p.type}` },
+              ...(sl ? [{ prix: sl, couleur: '#ff3b30', libelle: 'S/L' }] : []),
+              ...(tp ? [{ prix: tp, couleur: '#34c759', libelle: 'T/P' }] : []),
+            ]}
+          />
         </div>
         <DeuxPrix nom={p.symbole} />
       </div>
