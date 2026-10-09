@@ -10,6 +10,7 @@ import { definirSuiveur, operationBalance, ouvrirMarche, profitPosition } from '
 import { CourbeSolde } from '../composants/Courbe';
 import { PrixGros, argent } from '../composants/ui';
 import { BoutonIcone, BoutonRetour, ChampPas, ChampVolume, EnTete, Interrupteur, Segments, useNav, vibrer } from './commun';
+import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
 
 // ---------- Rapport de trading ----------
 
@@ -51,11 +52,18 @@ export function EcranRapport() {
         sousTitre={`${compte.login} · ${compte.nom}`}
         gauche={<BoutonRetour />}
         droite={
+          <>
+          <BoutonIcone titre="Rapport complet (HTML)" onClick={() => void enregistrerRapport(`Rapport-${compte.login}.html`, rapportHtml(enteteCompte(compte), compte.transactions))}>
+            <svg viewBox="0 0 20 20" width="20" height="20">
+              <path d="M5 2h7l4 4v12H5zM12 2v4h4M8 11h6M8 14h6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+            </svg>
+          </BoutonIcone>
           <BoutonIcone titre="Partager" onClick={() => void partager()}>
             <svg viewBox="0 0 20 20" width="20" height="20">
               <path d="M10 13V3M6.5 6.5L10 3l3.5 3.5M5 9H4v8h12V9h-1" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </BoutonIcone>
+          </>
         }
       />
       <div className="mm-defile">

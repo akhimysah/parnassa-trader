@@ -2088,3 +2088,12 @@ kbd {
 .resume-expert {
   font-style: italic;
 }
+.testeur-backtest {
+  position: relative;
+}
+.testeur-rapport {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  z-index: 1;
+}

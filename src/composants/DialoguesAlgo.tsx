@@ -3,6 +3,7 @@ import { useTerminal } from '../contexte';
 import { tousExperts, definitionExpert, type TypeExpert } from '../algo/experts';
 import { profitPosition } from '../compte/moteur';
 import { calculerStats } from '../algo/statistiques';
+import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
 import { CourbeSolde } from './Courbe';
 import { preparerTest } from './Testeur';
 import { Fenetre, Spin, argent } from './ui';
@@ -210,6 +211,7 @@ export function DialogueRapport() {
         </table>
       )}
       <div className="boutons">
+        <button onClick={() => void enregistrerRapport(`ReportHistory-${compte.login}.html`, rapportHtml(enteteCompte(compte), compte.transactions))}>Enregistrer comme rapport (HTML)</button>
         <button className="principal" onClick={fermer}>
           Fermer
         </button>

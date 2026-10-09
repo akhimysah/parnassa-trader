@@ -7,6 +7,7 @@ import { chargerHistoriqueLong, PERIODES, type Bougie, type Periode } from '../m
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { conversion } from '../compte/moteur';
 import { CourbeSolde } from './Courbe';
+import { enregistrerRapport, rapportHtml } from '../algo/rapportHtml';
 import { Spin, argent, dateMT } from './ui';
 
 type Onglet = 'parametres' | 'entrees' | 'backtest' | 'graphique' | 'visualisation' | 'trades' | 'optimisation' | 'journal';
@@ -482,8 +483,16 @@ function Backtest({ res }: { res: ResultatTest & { reglages: Reglages; bougies: 
       ['Plus gros gain / plus grosse perte', `${argent(s.plusGrosGain)} / ${argent(s.plusGrossePerte)}`],
     ],
   ];
+  const enregistrer = () =>
+    void enregistrerRapport(
+      `StrategyTester-${definitionExpert(r.expert).nom.replace(/\W+/g, '_')}-${r.symbole}-${r.periode}.html`,
+      rapportHtml({ titre: `Testeur de stratégie — ${definitionExpert(r.expert).nom}`, lignes: lignes[0].map(([l, v]) => [l, v] as [string, string]) }, res.transactions),
+    );
   return (
     <div className="testeur-backtest">
+      <button className="testeur-rapport" onClick={enregistrer} title="Enregistrer le rapport du test en HTML">
+        Enregistrer le rapport
+      </button>
       {lignes.map((col, i) => (
         <table key={i} className="table specification">
           <tbody>

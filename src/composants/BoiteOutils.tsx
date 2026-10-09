@@ -4,6 +4,7 @@ import { etatCompte, fermerPosition, LIBELLES_TYPE, profitPosition, prixFermetur
 import { formaterPrix, point, symbole } from '../marche/symboles';
 import { RELAIS } from '../marche/bougies';
 import { argent, dateMT, useMenuContextuel, type ElementMenu } from './ui';
+import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
 
 export type OngletBoite = 'trading' | 'exposition' | 'historique' | 'actualites' | 'courrier' | 'calendrier' | 'alertes' | 'journal';
 
@@ -321,6 +322,7 @@ export function OngletHistorique() {
       { libelle: 'Tout l\'historique', coche: periode === 'tout', action: () => setPeriode('tout') },
       { separateur: true },
       { libelle: 'Rapport…', action: () => ouvrir({ type: 'rapport' }) },
+      { libelle: 'Enregistrer comme rapport (HTML)', action: () => void enregistrerRapport(`ReportHistory-${compte.login}.html`, rapportHtml(enteteCompte(compte), compte.transactions)) },
       { libelle: 'Exporter (CSV)', action: exporter },
     ]);
   };
