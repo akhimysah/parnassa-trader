@@ -57,7 +57,7 @@ export interface EtatTerminal {
   graphiques: Graphique[];
   graphiqueActif: string;
   disposition: 'onglets' | 'mosaique';
-  panneaux: { observation: boolean; navigateur: boolean; boite: boolean; barreOutils: boolean; barreEtat: boolean; testeur: boolean };
+  panneaux: { observation: boolean; navigateur: boolean; boite: boolean; barreOutils: boolean; barreEtat: boolean; testeur: boolean; donnees: boolean };
   hauteurBoite: number;
   /** Trading en un clic : accepté une fois (avertissement MT5). */
   unClicAccepte: boolean;
@@ -123,7 +123,7 @@ function etatInitial(): EtatTerminal {
     graphiques,
     graphiqueActif: graphiques[0].id,
     disposition: 'onglets',
-    panneaux: { observation: true, navigateur: true, boite: true, barreOutils: true, barreEtat: true, testeur: false },
+    panneaux: { observation: true, navigateur: true, boite: true, barreOutils: true, barreEtat: true, testeur: false, donnees: false },
     hauteurBoite: 230,
     unClicAccepte: false,
     volumeDefaut: 0.1,

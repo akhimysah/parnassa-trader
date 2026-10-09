@@ -147,7 +147,19 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       if (!d) return survol(null);
       const b = bougiesRef.current.find((x) => x.time === p.time);
       const c = d.close ?? d.value ?? 0;
-      survol({ temps: Number(p.time) * 1000, o: d.open ?? c, h: d.high ?? c, l: d.low ?? c, c, v: b?.volume ?? 0, chiffres: symbole(refEtat.current.g.symbole)?.chiffres ?? 5 });
+      const valeur = (se: ISeriesApi<SeriesType>) => (p.seriesData.get(se) as { value?: number } | undefined)?.value ?? null;
+      survol({
+        temps: Number(p.time) * 1000,
+        o: d.open ?? c,
+        h: d.high ?? c,
+        l: d.low ?? c,
+        c,
+        v: b?.volume ?? 0,
+        chiffres: symbole(refEtat.current.g.symbole)?.chiffres ?? 5,
+        symbole: refEtat.current.g.symbole,
+        periode: refEtat.current.g.periode,
+        indicateurs: seriesIndicateurs.current.map((x) => ({ nom: x.nom, lignes: x.traces.map((t, j) => ({ nom: t.nom, couleur: t.couleur, valeur: x.series[j] ? valeur(x.series[j]) : null })) })),
+      });
     };
     chart.subscribeCrosshairMove(surCroix);
     const surClic = (p: MouseEventParams<Time>) => {
@@ -390,7 +402,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   useEffect(() => () => window.clearTimeout(majIndicateurs.current), []);
 
   // ---------- Indicateurs ----------
-  const seriesIndicateurs = useRef<{ id: string; series: ISeriesApi<SeriesType>[] }[]>([]);
+  const seriesIndicateurs = useRef<{ id: string; nom: string; traces: { nom: string; couleur: string }[]; series: ISeriesApi<SeriesType>[] }[]>([]);
   const cleIndicateurs = JSON.stringify(g.indicateurs);
   useEffect(() => {
     const chart = chartRef.current!;
@@ -412,7 +424,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         return se;
       });
       for (const n of r.niveaux ?? []) series[0]?.createPriceLine({ price: n, color: '#a0a0a0', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: false, title: '' });
-      seriesIndicateurs.current.push({ id: ind.id, series });
+      seriesIndicateurs.current.push({ id: ind.id, nom: nomCourt(ind), traces: r.traces.map((tr) => ({ nom: tr.nom, couleur: tr.couleur })), series });
     }
     chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));
     setVersion((v) => v + 1);

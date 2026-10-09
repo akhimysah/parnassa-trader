@@ -66,6 +66,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { separateur: true },
         { libelle: 'Observation du marché', raccourci: 'Ctrl+M', coche: etat.panneaux.observation, action: () => panneau('observation') },
         { libelle: 'Navigateur', raccourci: 'Ctrl+N', coche: etat.panneaux.navigateur, action: () => panneau('navigateur') },
+        { libelle: 'Fenêtre de données', raccourci: 'Ctrl+D', coche: etat.panneaux.donnees, action: () => panneau('donnees') },
         { libelle: 'Boîte à outils', raccourci: 'Ctrl+T', coche: etat.panneaux.boite, action: () => panneau('boite') },
         { libelle: 'Testeur de stratégie', raccourci: 'Ctrl+R', coche: etat.panneaux.testeur, action: () => panneau('testeur') },
         { separateur: true },

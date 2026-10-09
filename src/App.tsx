@@ -11,6 +11,7 @@ import { identifiant } from './etat';
 import { BarreEtat, BarreMenus, BarreOutils } from './composants/Barres';
 import { ObservationMarche } from './composants/ObservationMarche';
 import { Navigateur } from './composants/Navigateur';
+import { FenetreDonnees } from './composants/FenetreDonnees';
 import { BoiteOutils, type OngletBoite } from './composants/BoiteOutils';
 import { ZoneGraphiques } from './composants/ZoneGraphiques';
 import { Testeur } from './composants/Testeur';
@@ -250,6 +251,7 @@ export function App() {
         if (touche === 'o') return faire(() => setDialogue({ type: 'options' }));
         if (touche === 'e') return faire(() => maj((x) => ({ ...x, algo: !x.algo })));
         if (touche === 'r') return faire(() => panneau('testeur'));
+        if (touche === 'd') return faire(() => panneau('donnees'));
         if (g && touche === 'g') return faire(() => majGraphique(g.id, { grille: !g.grille }));
         if (g && touche === 'i') return faire(() => setDialogue({ type: 'liste-indicateurs', graphique: g.id }));
         if (g && touche === 'b') return faire(() => setDialogue({ type: 'objets', graphique: g.id }));
@@ -293,9 +295,10 @@ export function App() {
           <BarreMenus />
           {p.barreOutils && <BarreOutils />}
           <div className="corps">
-            {(p.observation || p.navigateur) && (
+            {(p.observation || p.navigateur || p.donnees) && (
               <aside className="colonne-gauche">
                 {p.observation && <ObservationMarche />}
+                {p.donnees && <FenetreDonnees />}
                 {p.navigateur && <Navigateur />}
               </aside>
             )}

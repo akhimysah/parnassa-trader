@@ -2004,3 +2004,33 @@ kbd {
   border: none;
   background: none;
 }
+/* Fenêtre de données */
+.colonne-gauche .donnees {
+  flex: 2;
+}
+.table-donnees {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.table-donnees td {
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.table-donnees td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.table-donnees .entete-donnees td {
+  font-weight: 600;
+  background: var(--entete);
+  text-align: left;
+}
+.pastille-couleur {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 2px;
+  vertical-align: middle;
+}

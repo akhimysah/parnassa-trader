@@ -44,6 +44,10 @@ export interface Survol {
   c: number;
   v: number;
   chiffres: number;
+  /** Graphique survolé et valeurs de ses indicateurs à cette barre (fenêtre de données). */
+  symbole?: string;
+  periode?: string;
+  indicateurs?: { nom: string; lignes: { nom: string; valeur: number | null; couleur: string }[] }[];
 }
 
 /** Outil de dessin en attente de clics sur un graphique. */

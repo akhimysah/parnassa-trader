@@ -767,6 +767,7 @@ const RACCOURCIS: [string, string][] = [
   ['Ctrl+L', 'Volumes'],
   ['Ctrl+I', 'Liste des indicateurs'],
   ['Ctrl+B', 'Liste des objets'],
+  ['Ctrl+D', 'Fenêtre de données'],
   ['Alt+1 / Alt+2 / Alt+3', 'Barres / bougies / ligne'],
   ['Alt+T', 'Trading en un clic sur le graphique'],
   ['Ctrl+E', 'Activer / désactiver l\'Algo Trading'],
