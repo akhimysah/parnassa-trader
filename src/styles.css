@@ -2117,3 +2117,9 @@ kbd {
 .bulle-annonce small {
   color: var(--muet);
 }
+.avant {
+  background: rgba(30, 111, 217, 0.06);
+}
+.comparaison-avant {
+  grid-column: 1 / -1;
+}

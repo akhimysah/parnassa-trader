@@ -27,6 +27,8 @@ export interface ParametresTest {
   typeCompte?: TypeCompte;
   /** Swaps débités / crédités à chaque rollover (sauf compte sans swap). */
   swaps?: boolean;
+  /** Indice de la première barre tradée : les barres d'avant ne servent qu'à amorcer les indicateurs (avant-test). */
+  debut?: number;
 }
 
 export interface Marqueur {
@@ -78,7 +80,8 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
   const fonds: { t: number; v: number }[] = [];
   const journal: { t: number; message: string }[] = [];
   const marqueurs: Marqueur[] = [];
-  const t0 = (b[0]?.time ?? 0) * 1000;
+  const premiere = Math.max(1, pt.debut ?? 1);
+  const t0 = (b[premiere - 1]?.time ?? 0) * 1000;
   transactions.push({ ticket: ticket++, ordre: 0, position: 0, heure: t0, symbole: '', type: 'balance', entree: '', volume: 0, prix: 0, commission: 0, swap: 0, profit: depot, solde: depot, commentaire: 'Dépôt initial' });
 
   const valeur = (p: PositionTest, bid: number) => (p.type === 'buy' ? bid - p.prix : p.prix - (bid + ecart)) * p.volume * s.contrat * conversion + p.swap;
@@ -114,7 +117,7 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
   };
   const volume = Number(Math.min(s.volumeMax, Math.max(s.volumeMin, Math.round(expert.p.volume / s.pasVolume) * s.pasVolume)).toFixed(2));
 
-  for (let i = 1; i < b.length; i++) {
+  for (let i = premiere; i < b.length; i++) {
     const barre = b[i];
     const heure = barre.time * 1000;
     // 1. Décision de l'expert à l'ouverture de la barre, sur les barres clôturées.
@@ -186,7 +189,7 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
   }
   const der = b[b.length - 1];
   for (const p of [...positions]) fermer(p, p.type === 'buy' ? der.close : arrondi(der.close + ecart), der.time * 1000, 'fin du test');
-  return { transactions, fonds, journal, marqueurs, stats: calculerStats(transactions), barres: b.length, dureeMs: performance.now() - debut };
+  return { transactions, fonds, journal, marqueurs, stats: calculerStats(transactions), barres: b.length - premiere + 1, dureeMs: performance.now() - debut };
 }
 
 // ---------- Optimisation ----------
@@ -207,6 +210,8 @@ export interface Passe {
   ddPct: number;
   recouvrement: number | null;
   sharpe: number | null;
+  /** Résultat de la même passe sur la période d'avant-test (si demandée). */
+  avant?: { profit: number; facteur: number | null; ddPct: number; trades: number };
 }
 
 /** Toutes les combinaisons des paramètres optimisés (au plus `max`). */
@@ -228,6 +233,7 @@ export async function optimiser(
   jeux: Record<string, number>[],
   progression: (fait: number, passes: Passe[]) => void,
   annule: () => boolean,
+  avant?: Omit<ParametresTest, 'expert'> & { expert: Expert },
 ): Promise<Passe[]> {
   const passes: Passe[] = [];
   for (let i = 0; i < jeux.length; i++) {
@@ -243,6 +249,12 @@ export async function optimiser(
       ddPct: r.stats.ddMaxPct,
       recouvrement: r.stats.recouvrement,
       sharpe: r.stats.sharpe,
+      ...(avant
+        ? (() => {
+            const f = lancerTest({ ...avant, expert: { ...avant.expert, p: jeux[i] } }).stats;
+            return { avant: { profit: f.net, facteur: f.facteur, ddPct: f.ddMaxPct, trades: f.trades } };
+          })()
+        : {}),
     });
     if (i % 4 === 3 || i === jeux.length - 1) {
       progression(i + 1, passes);

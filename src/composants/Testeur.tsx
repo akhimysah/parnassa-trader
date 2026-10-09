@@ -25,6 +25,8 @@ interface Reglages {
   p: Record<string, number>;
   optimiser: Record<string, PlageOptimisation & { actif: boolean }>;
   critere: 'profit' | 'facteur' | 'recouvrement' | 'sharpe' | 'dd';
+  /** Avant-test (forward) : dernière fraction de l'historique gardée hors du test (0 = aucun, 2 = 1/2, 3 = 1/3, 4 = 1/4). */
+  avant?: 0 | 2 | 3 | 4;
 }
 
 const CLE = 'parnassa-trader:testeur';
@@ -64,7 +66,7 @@ export function Testeur() {
   const [r, setR] = useState<Reglages>(charger);
   const [onglet, setOnglet] = useState<Onglet>('parametres');
   const [enCours, setEnCours] = useState<null | { texte: string; fait: number; total: number }>(null);
-  const [resultat, setResultat] = useState<(ResultatTest & { reglages: Reglages; bougies: Bougie[] }) | null>(null);
+  const [resultat, setResultat] = useState<(ResultatTest & { reglages: Reglages; bougies: Bougie[]; avant?: ResultatTest & { bougies: Bougie[] } }) | null>(null);
   const [passes, setPasses] = useState<Passe[]>([]);
   const [journal, setJournal] = useState<string[]>([]);
   const annuler = useRef(false);
@@ -134,12 +136,22 @@ export function Testeur() {
         return;
       }
       const reglages = { ...r };
+      // Avant-test : la dernière fraction de l'historique n'est pas vue par le test (ni par l'optimisation),
+      // puis l'expert y est rejoué ; les barres juste avant la coupure amorcent ses indicateurs.
+      const coupe = r.avant ? b.length - Math.floor(b.length / r.avant) : b.length;
+      const passe = b.slice(0, coupe);
+      const amorce = Math.max(0, coupe - 400);
+      const futur = r.avant ? b.slice(amorce) : [];
+      const baseAvant = r.avant ? { ...base(futur), debut: coupe - amorce } : undefined;
+      if (r.avant) noter(`avant-test : ${passe.length} barres de test, ${b.length - coupe} barres d'avant-test à partir du ${dateMT(b[coupe].time * 1000, false)}`);
       if (!optimisation) {
         setEnCours({ texte: 'Test en cours…', fait: 0, total: 1 });
         await new Promise((ok) => setTimeout(ok, 20));
-        const res = lancerTest(base(b));
-        setResultat({ ...res, reglages, bougies: b });
+        const res = lancerTest(base(passe));
+        const resAvant = baseAvant ? lancerTest(baseAvant) : undefined;
+        setResultat({ ...res, reglages, bougies: passe, avant: resAvant ? { ...resAvant, bougies: b.slice(coupe) } : undefined });
         noter(`${def.nom} sur ${r.symbole},${r.periode} : ${res.stats.trades} trades, bénéfice net ${argent(res.stats.net)} USD, drawdown max ${res.stats.ddMaxPct.toFixed(2)} % (${res.barres} barres en ${Math.round(res.dureeMs)} ms)`);
+        if (resAvant) noter(`avant-test : ${resAvant.stats.trades} trades, bénéfice net ${argent(resAvant.stats.net)} USD, drawdown max ${resAvant.stats.ddMaxPct.toFixed(2)} %`);
         for (const j of res.journal.slice(0, 50)) noter(`${dateMT(j.t)} ${j.message}`);
         setOnglet('backtest');
       } else {
@@ -147,10 +159,16 @@ export function Testeur() {
         setPasses([]);
         setOnglet('optimisation');
         const debut = performance.now();
-        const res = await optimiser(base(b), jeux, (fait, ps) => {
-          setEnCours({ texte: `Optimisation : passe ${fait} / ${jeux.length}`, fait, total: jeux.length });
-          setPasses([...ps]);
-        }, () => annuler.current);
+        const res = await optimiser(
+          base(passe),
+          jeux,
+          (fait, ps) => {
+            setEnCours({ texte: `Optimisation : passe ${fait} / ${jeux.length}`, fait, total: jeux.length });
+            setPasses([...ps]);
+          },
+          () => annuler.current,
+          baseAvant,
+        );
         setPasses(res);
         noter(`optimisation terminée : ${res.length} passes en ${((performance.now() - debut) / 1000).toFixed(1)} s${annuler.current ? ' (interrompue)' : ''}`);
       }
@@ -278,6 +296,15 @@ export function Testeur() {
                   <span>Optimisation :</span>
                   <span className="testeur-info">{optimisation ? `${jeux.length} passes (onglet Entrées)` : 'désactivée — cochez des entrées à optimiser'}</span>
                 </label>
+                <label>
+                  <span>Avant-test :</span>
+                  <select value={r.avant ?? 0} onChange={(e) => changer({ avant: Number(e.target.value) as Reglages['avant'] })} title="Garde la fin de l'historique hors du test pour vérifier l'expert sur des données qu'il n'a pas vues">
+                    <option value={0}>Non</option>
+                    <option value={2}>1/2 de l'historique</option>
+                    <option value={3}>1/3 de l'historique</option>
+                    <option value={4}>1/4 de l'historique</option>
+                  </select>
+                </label>
                 {optimisation && (
                   <label>
                     <span>Critère :</span>
@@ -387,6 +414,13 @@ export function Testeur() {
                   <th className="d">Facteur de récup.</th>
                   <th className="d">Sharpe</th>
                   <th className="d">Drawdown %</th>
+                  {passes.some((p) => p.avant) && (
+                    <>
+                      <th className="d avant">Avant-test bénéfice</th>
+                      <th className="d avant">Avant-test PF</th>
+                      <th className="d avant">Avant-test DD %</th>
+                    </>
+                  )}
                   {Object.keys(plagesActives).map((k) => (
                     <th key={k} className="d">
                       {k}
@@ -413,6 +447,13 @@ export function Testeur() {
                     <td className="d">{p.recouvrement === null ? '—' : p.recouvrement.toFixed(2)}</td>
                     <td className="d">{p.sharpe === null ? '—' : p.sharpe.toFixed(2)}</td>
                     <td className="d">{p.ddPct.toFixed(2)}</td>
+                    {p.avant && (
+                      <>
+                        <td className={`d gras avant ${p.avant.profit >= 0 ? 'positif' : 'negatif'}`}>{argent(p.avant.profit)}</td>
+                        <td className="d avant">{p.avant.facteur === null ? '—' : p.avant.facteur.toFixed(2)}</td>
+                        <td className="d avant">{p.avant.ddPct.toFixed(2)}</td>
+                      </>
+                    )}
                     {Object.keys(plagesActives).map((k) => (
                       <td key={k} className="d">
                         {p.p[k]}
@@ -449,7 +490,7 @@ export function Testeur() {
   );
 }
 
-function Backtest({ res }: { res: ResultatTest & { reglages: Reglages; bougies: Bougie[] } }) {
+function Backtest({ res }: { res: ResultatTest & { reglages: Reglages; bougies: Bougie[]; avant?: ResultatTest & { bougies: Bougie[] } } }) {
   const s = res.stats;
   const r = res.reglages;
   const pct = (a: number, b: number) => (b ? `${((a / b) * 100).toFixed(2)} %` : '—');
@@ -493,6 +534,7 @@ function Backtest({ res }: { res: ResultatTest & { reglages: Reglages; bougies: 
       <button className="testeur-rapport" onClick={enregistrer} title="Enregistrer le rapport du test en HTML">
         Enregistrer le rapport
       </button>
+      {res.avant && <ComparaisonAvant test={res} avant={res.avant} />}
       {lignes.map((col, i) => (
         <table key={i} className="table specification">
           <tbody>
@@ -681,5 +723,43 @@ function Visualisation({ res }: { res: ResultatTest & { reglages: Reglages; boug
       </div>
       <div ref={ref} className="testeur-visualisation" />
     </div>
+  );
+}
+
+/** Test et avant-test côte à côte : une stratégie robuste garde des résultats proches sur les données non vues. */
+function ComparaisonAvant({ test, avant }: { test: ResultatTest & { bougies: Bougie[] }; avant: ResultatTest & { bougies: Bougie[] } }) {
+  const lignes: [string, (s: ResultatTest['stats']) => string][] = [
+    ['Bénéfice net', (s) => argent(s.net)],
+    ['Trades', (s) => String(s.trades)],
+    ['Gagnants', (s) => (s.trades ? `${((s.gagnants / s.trades) * 100).toFixed(1)} %` : '—')],
+    ['Facteur de profit', (s) => (s.facteur === null ? '—' : s.facteur.toFixed(2))],
+    ['Gain espéré', (s) => argent(s.esperance)],
+    ['Drawdown max', (s) => `${s.ddMaxPct.toFixed(2)} %`],
+  ];
+  const periode = (b: Bougie[]) => (b.length ? `${dateMT(b[0].time * 1000, false)} – ${dateMT(b[b.length - 1].time * 1000, false)}` : '—');
+  return (
+    <table className="table specification comparaison-avant">
+      <thead>
+        <tr>
+          <th />
+          <th className="d">Test</th>
+          <th className="d avant">Avant-test</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Période</td>
+          <td className="d">{periode(test.bougies)}</td>
+          <td className="d avant">{periode(avant.bougies)}</td>
+        </tr>
+        {lignes.map(([l, f]) => (
+          <tr key={l}>
+            <td>{l}</td>
+            <td className="d">{f(test.stats)}</td>
+            <td className={`d avant ${l === 'Bénéfice net' ? (avant.stats.net >= 0 ? 'positif' : 'negatif') : ''}`}>{f(avant.stats)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
