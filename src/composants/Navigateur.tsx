@@ -31,7 +31,7 @@ const SCRIPTS: { nom: string; executer: (c: Compte, cot: Parameters<typeof ferme
 ];
 
 export function Navigateur() {
-  const { etat, maj, ouvrir, operer, cotations } = useTerminal();
+  const { etat, maj, ouvrir, operer, cotations, enLigne } = useTerminal();
   const { ouvrirMenu, element: menu } = useMenuContextuel();
   const groupes = ['Tendance', 'Oscillateurs', 'Volumes'] as const;
   return (
@@ -46,37 +46,50 @@ export function Navigateur() {
         <ul className="arbre">
           <Noeud libelle="Parnassa Trader" icone="▣" ouvertParDefaut>
             <Noeud libelle="Comptes" icone="👤" ouvertParDefaut onContextMenu={(e) => { e.preventDefault(); ouvrirMenu(e.clientX, e.clientY, [{ libelle: 'Ouvrir un compte…', action: () => ouvrir({ type: 'compte' }) }]); }}>
-              <Noeud libelle={etat.comptes[0]?.serveur ?? 'Parnassa-Demo'} icone="🖥" ouvertParDefaut>
-                {etat.comptes.map((c) => (
-                  <Noeud
-                    key={c.login}
-                    libelle={`${c.login} : ${c.nom}${c.type === 'raw' ? ' (Raw)' : ''}`}
-                    icone={c.login === etat.actif ? '🟢' : '⚪'}
-                    actif={c.login === etat.actif}
-                    onDoubleClick={() => maj((e) => ({ ...e, actif: c.login }))}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      ouvrirMenu(e.clientX, e.clientY, [
-                        { libelle: 'Se connecter', action: () => maj((x) => ({ ...x, actif: c.login })) },
-                        { libelle: 'Dépôt / retrait…', desactive: c.login !== etat.actif, action: () => ouvrir({ type: 'depot' }) },
-                        { separateur: true },
-                        { libelle: 'Ouvrir un compte…', action: () => ouvrir({ type: 'compte' }) },
-                        {
-                          libelle: 'Supprimer',
-                          desactive: etat.comptes.length <= 1,
-                          action: () => {
-                            if (!window.confirm(`Supprimer le compte de démonstration ${c.login} et tout son historique ?`)) return;
-                            maj((x) => {
-                              const comptes = x.comptes.filter((k) => k.login !== c.login);
-                              return { ...x, comptes, actif: x.actif === c.login ? comptes[0].login : x.actif };
-                            });
-                          },
-                        },
-                      ]);
-                    }}
-                  />
-                ))}
-              </Noeud>
+              {[...new Set(etat.comptes.map((c) => c.serveur))].map((serveur) => (
+                <Noeud key={serveur} libelle={serveur} icone="🖥" ouvertParDefaut>
+                  {etat.comptes
+                    .filter((c) => c.serveur === serveur)
+                    .map((c) => {
+                      const statut = c.enLigne ? enLigne.statut(c.login) : null;
+                      const connecter = () => (statut === 'deconnecte' ? ouvrir({ type: 'connexion', login: c.login }) : maj((x) => ({ ...x, actif: c.login })));
+                      return (
+                        <Noeud
+                          key={c.login}
+                          libelle={`${c.login} : ${c.nom}${c.type === 'raw' ? ' (Raw)' : ''}${statut === 'deconnecte' ? ' — non connecté' : c.lecture ? ' — lecture seule' : ''}`}
+                          icone={statut === 'deconnecte' ? '🔴' : c.login === etat.actif ? '🟢' : '⚪'}
+                          actif={c.login === etat.actif}
+                          onDoubleClick={connecter}
+                          onContextMenu={(e) => {
+                            e.preventDefault();
+                            ouvrirMenu(e.clientX, e.clientY, [
+                              { libelle: 'Se connecter', action: connecter },
+                              ...(c.enLigne && statut !== 'deconnecte' ? [{ libelle: 'Se déconnecter', action: () => void enLigne.deconnecter(c.login) }] : []),
+                              { libelle: 'Dépôt / retrait…', desactive: c.login !== etat.actif, action: () => ouvrir({ type: 'depot' }) },
+                              { separateur: true },
+                              { libelle: 'Ouvrir un compte…', action: () => ouvrir({ type: 'compte' }) },
+                              {
+                                libelle: c.enLigne ? 'Retirer de cet appareil' : 'Supprimer',
+                                desactive: etat.comptes.length <= 1,
+                                action: () => {
+                                  const question = c.enLigne
+                                    ? `Retirer le compte ${c.login} de cet appareil ? Il reste sur le serveur ${c.serveur} : reconnectez-vous avec son mot de passe pour le retrouver.`
+                                    : `Supprimer le compte de démonstration ${c.login} et tout son historique ?`;
+                                  if (!window.confirm(question)) return;
+                                  if (c.enLigne) void enLigne.deconnecter(c.login);
+                                  maj((x) => {
+                                    const comptes = x.comptes.filter((k) => k.login !== c.login);
+                                    return { ...x, comptes, actif: x.actif === c.login ? comptes[0].login : x.actif };
+                                  });
+                                },
+                              },
+                            ]);
+                          }}
+                        />
+                      );
+                    })}
+                </Noeud>
+              ))}
             </Noeud>
             <Noeud libelle="Indicateurs" icone="ƒ" ouvertParDefaut>
               {groupes.map((gr) => (

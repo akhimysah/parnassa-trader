@@ -36,6 +36,11 @@ export function capturerJetonDepuisAdresse(): boolean {
   return true;
 }
 
+/** Jeton de liaison au compte Parnassa, s'il y en a un (les comptes en ligne ouverts relié lui sont rattachés). */
+export function jetonLiaison(): string | null {
+  return lire(CLE_JETON);
+}
+
 export function lienLiaison(): string {
   const retour = `${window.location.origin}${window.location.pathname}`;
   return `${URL_NEOBANQUE}/api/parnassa/trader/autoriser?retour=${encodeURIComponent(retour)}`;
@@ -119,7 +124,11 @@ export function useSynchro(etat: EtatTerminal, remplacer: (e: EtatTerminal) => v
   const adopter = useCallback(
     (distant: unknown, majLe: number, message?: string) => {
       const local = refEtat.current;
-      const nouvel = fusionnerEtat({ ...(distant as Partial<EtatTerminal>), ...Object.fromEntries(LOCAUX.map((k) => [k, local[k]])) });
+      const d = distant as Partial<EtatTerminal>;
+      // Les comptes en ligne ont leur propre serveur : la copie de cet appareil, tenue à jour par lui, l'emporte.
+      const comptes = Array.isArray(d.comptes) ? d.comptes.map((c) => (c.enLigne ? (local.comptes.find((k) => k.login === c.login) ?? { ...c, lecture: undefined }) : c)) : d.comptes;
+      if (comptes) for (const c of local.comptes) if (c.enLigne && !comptes.some((k) => k.login === c.login)) comptes.push(c);
+      const nouvel = fusionnerEtat({ ...d, comptes, ...Object.fromEntries(LOCAUX.map((k) => [k, local[k]])) });
       envoyee.current = empreinte(nouvel);
       fixerBase(majLe);
       remplacer(nouvel);

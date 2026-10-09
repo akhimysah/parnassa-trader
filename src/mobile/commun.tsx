@@ -15,6 +15,8 @@ export type Ecran =
   | { type: 'editer' }
   | { type: 'comptes' }
   | { type: 'ouvrir-compte' }
+  | { type: 'connexion'; login?: number }
+  | { type: 'acces'; acces: import('../compte/enLigne').Acces }
   | { type: 'liste'; quoi: 'courrier' | 'actualites' | 'calendrier' | 'journal' | 'alertes' }
   | { type: 'rapport' }
   | { type: 'indicateurs' }

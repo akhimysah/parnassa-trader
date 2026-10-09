@@ -16,6 +16,7 @@ import { Testeur } from './composants/Testeur';
 import { Dialogues } from './composants/Dialogues';
 import { Mobile } from './mobile/Mobile';
 import { useSynchro } from './synchro';
+import { refusTrading, useComptesEnLigne } from './compte/enLigne';
 import { useInterface } from './interface';
 import { notifier } from './notifications';
 
@@ -60,6 +61,10 @@ export function App() {
   // Compte Parnassa : copie en ligne et synchronisation entre appareils.
   const remplacer = useCallback((e: EtatTerminal) => maj(() => e), [maj]);
   const synchro = useSynchro(etat, remplacer, signaler);
+  // Comptes en ligne (serveur Parnassa-Trader) : connexion par numéro et mot de passe, état tenu sur le serveur.
+  const enLigne = useComptesEnLigne(etat, maj, signaler);
+  const refEnLigne = useRef(enLigne);
+  refEnLigne.current = enLigne;
   useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), 4000);
@@ -75,6 +80,8 @@ export function App() {
       let change = false;
       const comptes = e.comptes.map((c) => {
         if (c.positions.length === 0 && c.ordres.length === 0) return c;
+        // Compte en ligne consulté en lecture seule ou sans session : c'est l'appareil connecté qui l'exécute.
+        if (c.enLigne && (c.lecture || refEnLigne.current.statut(c.login) === 'deconnecte')) return c;
         const r = appliquerCotations(c, cotations);
         if (r.compte !== c) change = true;
         for (const ev of r.evenements) {
@@ -163,7 +170,8 @@ export function App() {
     (f: (c: Compte) => Resultat, options: { confirmation?: boolean; silencieux?: boolean } = {}): Resultat => {
       const e = refEtat.current;
       const c = e.comptes.find((x) => x.login === e.actif) ?? e.comptes[0];
-      const r = f(c);
+      const refus = refusTrading(c, refEnLigne.current.statut(c.login));
+      const r = refus ? { compte: c, erreur: refus } : f(c);
       if (r.compte !== c) maj((x) => ({ ...x, comptes: x.comptes.map((k) => (k.login === c.login ? r.compte : k)) }));
       if (r.erreur) {
         if (e.son) jouer('erreur');
@@ -211,6 +219,7 @@ export function App() {
     choisirOutil: setOutil,
     mobile,
     synchro,
+    enLigne,
   };
 
   // ---------- Raccourcis clavier façon MT5 ----------

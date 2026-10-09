@@ -5,6 +5,7 @@ import type { EtatTerminal, Graphique } from './etat';
 import type { Periode } from './marche/bougies';
 import type { TypeIndicateur } from './graphique/indicateurs';
 import type { Synchro } from './synchro';
+import type { Acces, ComptesEnLigne } from './compte/enLigne';
 
 export type Dialogue =
   | { type: 'ordre'; symbole?: string; sens?: Sens; attente?: TypeEnAttente; prix?: number; volume?: number }
@@ -15,7 +16,7 @@ export type Dialogue =
   | { type: 'specification'; symbole: string }
   | { type: 'symboles' }
   | { type: 'compte' }
-  | { type: 'connexion' }
+  | { type: 'connexion'; login?: number }
   | { type: 'depot' }
   | { type: 'indicateur'; indicateur: TypeIndicateur; graphique: string; existant?: string }
   | { type: 'liste-indicateurs'; graphique: string }
@@ -30,7 +31,8 @@ export type Dialogue =
   | { type: 'raccourcis' }
   | { type: 'expert'; graphique: string; expert?: import('./algo/experts').TypeExpert }
   | { type: 'rapport' }
-  | { type: 'synchro' };
+  | { type: 'synchro' }
+  | { type: 'acces'; acces: Acces };
 
 /** Ce qu'affiche la barre d'état au survol d'un graphique. */
 export interface Survol {
@@ -67,6 +69,8 @@ export interface Terminal {
   mobile: boolean;
   /** Compte Parnassa : synchronisation entre appareils. */
   synchro: Synchro;
+  /** Comptes en ligne : connexion par numéro, mot de passe et serveur. */
+  enLigne: ComptesEnLigne;
 }
 
 export const ContexteTerminal = createContext<Terminal | null>(null);

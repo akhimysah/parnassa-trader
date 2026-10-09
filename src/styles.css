@@ -1852,3 +1852,110 @@ kbd {
 .uc-volume .volume-rapide + .uc-spread {
   margin-top: 1px;
 }
+
+/* Comptes en ligne : barre d'état, choix du serveur, accès */
+.be-compte {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 19px;
+  border: none;
+  border-left: 1px solid var(--bord);
+  background: none;
+  padding: 0 8px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--muet);
+  white-space: nowrap;
+}
+.be-compte:hover {
+  background: var(--survol);
+}
+.be-compte i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9a9a9a;
+}
+.be-compte.connecte i {
+  background: #1e9e3a;
+}
+.be-compte.connexion i {
+  background: #e0a000;
+}
+.be-compte.deconnecte,
+.be-compte.erreur {
+  color: var(--negatif);
+}
+.be-compte.deconnecte i,
+.be-compte.erreur i {
+  background: var(--negatif);
+}
+.choix-serveur {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.choix-serveur label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 7px 9px;
+  border: 1px solid var(--bord);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.choix-serveur label.actif {
+  border-color: #0078d7;
+  background: var(--selection);
+}
+.choix-serveur small {
+  display: block;
+  color: var(--muet);
+}
+.acces-compte {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 14px;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--bord);
+  border-radius: 3px;
+  background: var(--fond-champ, transparent);
+}
+.acces-compte dt {
+  color: var(--muet);
+}
+.acces-compte dd {
+  margin: 0;
+  font-weight: 600;
+  user-select: all;
+}
+.acces-compte code {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+.titre-section {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  color: var(--muet);
+  font-weight: 600;
+}
+.pastille-statut {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #9a9a9a33;
+  color: var(--muet);
+}
+.pastille-statut.connecte {
+  background: #1e9e3a22;
+  color: #1e9e3a;
+}
+.pastille-statut.deconnecte,
+.pastille-statut.erreur {
+  background: #d3222222;
+  color: var(--negatif);
+}

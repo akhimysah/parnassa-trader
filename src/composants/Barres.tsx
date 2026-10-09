@@ -8,6 +8,7 @@ import { registreGraphiques } from '../graphique/registre';
 import { REST_BINANCE } from '../marche/binance';
 import { ListeMenu, type ElementMenu } from './ui';
 import { IndicateurSynchro } from './Synchro';
+import { LIBELLE_STATUT } from './DialoguesComptes';
 import { choisirInterface } from '../interface';
 
 export function useActions() {
@@ -288,6 +289,7 @@ export function BarreEtat({ texteSurvol }: { texteSurvol: string }) {
       <span className="be-aide">Pour obtenir de l'aide, appuyez sur F1</span>
       <span className="be-defaut">Défaut</span>
       <span className="be-survol">{texteSurvol}</span>
+      <IndicateurCompte />
       <span className="be-synchro-case">
         <IndicateurSynchro />
       </span>
@@ -300,5 +302,23 @@ export function BarreEtat({ texteSurvol }: { texteSurvol: string }) {
         {enLigne ? `${ping ?? '…'} ms` : 'Pas de connexion'}
       </span>
     </div>
+  );
+}
+
+/** Compte actif dans la barre d'état : numéro, serveur et état de sa connexion (comptes en ligne). */
+function IndicateurCompte() {
+  const { compte, enLigne, ouvrir } = useTerminal();
+  const statut = compte.enLigne ? enLigne.statut(compte.login) : null;
+  const texte = !statut ? 'local' : compte.lecture && statut === 'connecte' ? 'lecture seule' : LIBELLE_STATUT[statut];
+  const erreur = compte.enLigne ? enLigne.erreur(compte.login) : null;
+  return (
+    <button
+      className={`be-compte ${statut ?? 'local'}`}
+      title={`${compte.login} sur ${compte.serveur}${erreur ? ` — ${erreur}` : ''} : cliquez pour vous connecter à un compte`}
+      onClick={() => ouvrir({ type: 'connexion', login: statut === 'deconnecte' ? compte.login : undefined })}
+    >
+      <i />
+      {compte.login} · {compte.serveur} · {texte}
+    </button>
   );
 }

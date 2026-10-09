@@ -1640,3 +1640,35 @@
   height: 34px;
   font-size: 14px;
 }
+
+/* Connexion à un compte en ligne */
+.mm-serveur-carte {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 16px 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--mm-carte, var(--fond-panneau));
+}
+.mm-serveur-carte small {
+  display: block;
+  color: var(--muet);
+}
+.mm-note.fort {
+  color: var(--texte);
+  font-weight: 500;
+}
+.mm-ecran .acces-compte {
+  margin: 0;
+  font-size: 15px;
+  gap: 10px 16px;
+  border: none;
+  padding: 4px 0;
+}
+.mm-ecran .acces-compte code {
+  font-size: 16px;
+}
+.mm-liste .pastille-statut {
+  vertical-align: middle;
+}

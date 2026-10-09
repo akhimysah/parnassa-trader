@@ -114,6 +114,10 @@ export interface Compte {
   creeLe: number;
   /** Vrai tant que le niveau de marge est sous le seuil d'appel de marge (évite de répéter l'avertissement). */
   appelMarge: boolean;
+  /** Compte en ligne (serveur Parnassa-Trader) : on s'y connecte avec son numéro et son mot de passe. */
+  enLigne?: boolean;
+  /** Connecté avec le mot de passe investisseur : consultation seulement. */
+  lecture?: boolean;
 }
 
 export const NIVEAU_APPEL_MARGE = 100;
@@ -216,7 +220,8 @@ export function etatCompte(c: Compte, cot: Cotations): EtatCompte {
 // ---------- Création ----------
 
 export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard', sansSwap = false): Compte {
-  const login = 50000000 + Math.floor(Math.random() * 49999999);
+  // Comptes locaux de 50000000 à 89999999 : les numéros en 9 sont ceux des comptes en ligne.
+  const login = 50000000 + Math.floor(Math.random() * 39999999);
   const maintenant = Date.now();
   const ticket = 100000000 + Math.floor(Math.random() * 9000000);
   return {

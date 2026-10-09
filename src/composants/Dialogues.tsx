@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useTerminal, type Dialogue } from '../contexte';
 import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
-import { HEURE_ROLLOVER_UTC, SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, point, spreadPoints, swapPoints, symbole, type Categorie, type TypeCompte } from '../marche/symboles';
+import { HEURE_ROLLOVER_UTC, SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, point, spreadPoints, swapPoints, symbole, type Categorie } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { sourceDirecte } from '../marche/cotations';
 import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA } from '../graphique/indicateurs';
 import { SCHEMAS } from '../graphique/couleurs';
-import { definirSuiveur, fermerPosition, levierEffectif, nouveauCompte, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
+import { definirSuiveur, fermerPosition, levierEffectif, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
 import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
 import { BlocSynchro, DialogueSynchro } from './Synchro';
+import { DialogueAcces, DialogueCompte, DialogueConnexion } from './DialoguesComptes';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
 import { Fenetre, Spin, argent } from './ui';
 
@@ -37,7 +38,7 @@ function Contenu({ d }: { d: Dialogue }) {
     case 'compte':
       return <DialogueCompte />;
     case 'connexion':
-      return <DialogueConnexion />;
+      return <DialogueConnexion login={d.login} />;
     case 'depot':
       return <DialogueDepot />;
     case 'indicateur':
@@ -68,6 +69,8 @@ function Contenu({ d }: { d: Dialogue }) {
       return <DialogueRapport />;
     case 'synchro':
       return <DialogueSynchro />;
+    case 'acces':
+      return <DialogueAcces acces={d.acces} />;
   }
 }
 
@@ -237,105 +240,6 @@ function DialogueSymboles() {
         <button onClick={() => maj((e) => ({ ...e, observation: SYMBOLES.map((s) => s.nom) }))}>Tout afficher</button>
         <button className="principal" onClick={fermer}>
           OK
-        </button>
-      </div>
-    </Fenetre>
-  );
-}
-
-function DialogueCompte() {
-  const { maj, fermer, signaler } = useTerminal();
-  const [nom, setNom] = useState('Compte démo');
-  const [depot, setDepot] = useState(10000);
-  const [levier, setLevier] = useState(100);
-  const [type, setType] = useState<TypeCompte>('standard');
-  const [sansSwap, setSansSwap] = useState(false);
-  return (
-    <Fenetre titre="Ouvrir un compte de démonstration" fermer={fermer} largeur={440}>
-      <p className="aide">Serveur : {SERVEUR} — compte de couverture en USD. Aucune donnée personnelle n'est demandée : le compte est conservé dans ce navigateur.</p>
-      <div className="formulaire">
-        <label>
-          <span>Nom du compte :</span>
-          <input value={nom} onChange={(e) => setNom(e.target.value)} maxLength={40} />
-        </label>
-        <label>
-          <span>Type de compte :</span>
-          <select value={type} onChange={(e) => setType(e.target.value as TypeCompte)}>
-            {(Object.keys(TYPES_COMPTE) as TypeCompte[]).map((t) => (
-              <option key={t} value={t}>
-                {TYPES_COMPTE[t].nom} — {TYPES_COMPTE[t].description}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="case">
-          <input type="checkbox" checked={sansSwap} onChange={() => setSansSwap(!sansSwap)} />
-          Compte sans swap (islamique)
-        </label>
-        <label>
-          <span>Dépôt :</span>
-          <select value={depot} onChange={(e) => setDepot(Number(e.target.value))}>
-            {[500, 1000, 3000, 5000, 10000, 25000, 50000, 100000, 500000, 1000000].map((v) => (
-              <option key={v} value={v}>
-                {argent(v, 0)} USD
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span>Levier :</span>
-          <select value={levier} onChange={(e) => setLevier(Number(e.target.value))}>
-            {[1, 2, 5, 10, 20, 30, 50, 100, 200, 300, 400, 500, 1000].map((v) => (
-              <option key={v} value={v}>
-                1:{v}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="boutons">
-        <button onClick={fermer}>Annuler</button>
-        <button
-          className="principal"
-          onClick={() => {
-            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type, sansSwap);
-            maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
-            signaler(`Compte ${TYPES_COMPTE[type].nom} ${c.login} ouvert sur ${SERVEUR}`);
-            fermer();
-          }}
-        >
-          Ouvrir
-        </button>
-      </div>
-    </Fenetre>
-  );
-}
-
-function DialogueConnexion() {
-  const { etat, maj, fermer, ouvrir } = useTerminal();
-  return (
-    <Fenetre titre="Se connecter à un compte de trading" fermer={fermer} largeur={420}>
-      <div className="liste-comptes">
-        {etat.comptes.map((c) => (
-          <button
-            key={c.login}
-            className={c.login === etat.actif ? 'actif' : ''}
-            onClick={() => {
-              maj((e) => ({ ...e, actif: c.login }));
-              fermer();
-            }}
-          >
-            <b>{c.login}</b> — {c.nom}
-            <small>
-              {c.serveur} · {TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:{c.levier} · solde {argent(c.solde)} USD
-            </small>
-          </button>
-        ))}
-      </div>
-      <div className="boutons">
-        <button onClick={() => ouvrir({ type: 'compte' })}>Ouvrir un compte…</button>
-        <button className="principal" onClick={fermer}>
-          Fermer
         </button>
       </div>
     </Fenetre>

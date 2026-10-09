@@ -7,7 +7,7 @@ import { AjouterSymbole, Cotations, EditerCotations, ProprietesSymbole } from '.
 import { GraphiqueMobile } from './GraphiqueMobile';
 import { EcranFermer, EcranOrdre, EcranOrdreAttente, EcranPosition, EcranResultat } from './Ordre';
 import { Historique, Trade } from './Trade';
-import { Comptes, EcranListe, OuvrirCompte, Reglages } from './Reglages';
+import { Comptes, EcranListe, OuvrirCompte, ConnexionCompte, AccesCompte, Reglages } from './Reglages';
 import { EcranAlerte, EcranDepot, EcranExpert, EcranExperts, EcranIndicateur, EcranIndicateurs, EcranProfondeur, EcranRapport, EcranSuiveur, EcranUnClic } from './Outils';
 import { Bienvenue, bienvenueVue } from './Bienvenue';
 import './mobile.css';
@@ -147,6 +147,10 @@ function EcranPile({ e }: { e: Ecran }) {
       return <Comptes />;
     case 'ouvrir-compte':
       return <OuvrirCompte />;
+    case 'connexion':
+      return <ConnexionCompte login={e.login} />;
+    case 'acces':
+      return <AccesCompte acces={e.acces} />;
     case 'liste':
       return <EcranListe quoi={e.quoi} />;
     case 'rapport':

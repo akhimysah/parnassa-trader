@@ -5,6 +5,8 @@ import { RELAIS } from '../marche/bougies';
 import { TYPES_COMPTE, formaterPrix, symbole, type TypeCompte } from '../marche/symboles';
 import { MESSAGES } from '../composants/BoiteOutils';
 import { BlocSynchro } from '../composants/Synchro';
+import { BlocAcces, DEPOTS, LEVIERS, LIBELLE_STATUT } from '../composants/DialoguesComptes';
+import { SERVEUR_EN_LIGNE, type Acces } from '../compte/enLigne';
 import { argent, dateMT } from '../composants/ui';
 import { choisirInterface } from '../interface';
 import { demanderPermission, notificationsDisponibles } from '../notifications';
@@ -13,7 +15,7 @@ import { BoutonIcone, BoutonRetour, ChampPas, EnTete, IconePlus, Interrupteur, S
 
 /** Onglet Paramètres : compte, messagerie, outils et réglages, comme le menu de MT5 mobile. */
 export function Reglages() {
-  const { etat, maj, compte, ouvrir, synchro, signaler } = useTerminal();
+  const { etat, maj, compte, ouvrir, synchro, signaler, enLigne } = useTerminal();
   const { pousser, feuille } = useNav();
   const installation = useInstallation();
   const notifications = async (v: boolean) => {
@@ -35,6 +37,11 @@ export function Reglages() {
             <b>{compte.nom}</b>
             <small>
               {compte.login} — {compte.serveur}
+              {compte.enLigne && (
+                <span className={`pastille-statut ${enLigne.statut(compte.login)}`}>
+                  {compte.lecture && enLigne.statut(compte.login) === 'connecte' ? 'lecture seule' : LIBELLE_STATUT[enLigne.statut(compte.login)]}
+                </span>
+              )}
             </small>
             <small>
               {argent(compte.solde)} USD · 1:{compte.levier} · démo {TYPES_COMPTE[compte.type ?? 'standard'].nom}
@@ -43,6 +50,12 @@ export function Reglages() {
           </span>
           <span className="mm-chevron">›</span>
         </button>
+
+        <ul className="mm-liste">
+          <li className="fleche" onClick={() => pousser({ type: 'connexion' })}>
+            <span className="mm-ico bleu">⇥</span>Se connecter à un compte
+          </li>
+        </ul>
 
         <div className="mm-section">Messages</div>
         <ul className="mm-liste">
@@ -160,10 +173,11 @@ export function Reglages() {
   );
 }
 
-/** Liste des comptes : changer de compte, en ouvrir un, synchroniser. */
+/** Liste des comptes par serveur : changer de compte, se connecter à un compte en ligne, en ouvrir un. */
 export function Comptes() {
-  const { etat, maj } = useTerminal();
+  const { etat, maj, enLigne } = useTerminal();
   const { pousser, feuille } = useNav();
+  const serveurs = [...new Set(etat.comptes.map((c) => c.serveur))];
   return (
     <div className="mm-ecran">
       <EnTete
@@ -176,41 +190,67 @@ export function Comptes() {
         }
       />
       <div className="mm-defile">
-        <div className="mm-section">{SERVEUR}</div>
+        {serveurs.map((serveur) => (
+          <div key={serveur}>
+            <div className="mm-section">{serveur}</div>
+            <ul className="mm-liste">
+              {etat.comptes
+                .filter((c) => c.serveur === serveur)
+                .map((c) => {
+                  const statut = c.enLigne ? enLigne.statut(c.login) : null;
+                  const connecter = () => {
+                    vibrer();
+                    if (statut === 'deconnecte') pousser({ type: 'connexion', login: c.login });
+                    else maj((e) => ({ ...e, actif: c.login }));
+                  };
+                  return (
+                    <LigneCompte
+                      key={c.login}
+                      actif={c.login === etat.actif}
+                      titre={c.nom}
+                      statut={statut ? (c.lecture && statut === 'connecte' ? 'lecture seule' : LIBELLE_STATUT[statut]) : null}
+                      classeStatut={statut ?? ''}
+                      detail={`${c.login} · ${TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:${c.levier} · ${argent(c.solde)} USD`}
+                      choisir={connecter}
+                      menu={() =>
+                        feuille(`${c.login} — ${c.nom}`, [
+                          { libelle: 'Se connecter', action: connecter },
+                          ...(c.enLigne && statut !== 'deconnecte' ? [{ libelle: 'Se déconnecter', action: () => void enLigne.deconnecter(c.login) }] : []),
+                          ...(c.login === etat.actif ? [{ libelle: 'Dépôt / retrait', action: () => pousser({ type: 'depot' }) }] : []),
+                          ...(etat.comptes.length > 1
+                            ? [
+                                {
+                                  libelle: c.enLigne ? 'Retirer de cet appareil' : 'Supprimer le compte',
+                                  danger: true,
+                                  action: () => {
+                                    const question = c.enLigne
+                                      ? `Retirer le compte ${c.login} de cet appareil ? Il reste sur ${c.serveur} : reconnectez-vous avec son mot de passe pour le retrouver.`
+                                      : `Supprimer le compte de démonstration ${c.login} et tout son historique ?`;
+                                    if (!window.confirm(question)) return;
+                                    if (c.enLigne) void enLigne.deconnecter(c.login);
+                                    maj((e) => {
+                                      const comptes = e.comptes.filter((k) => k.login !== c.login);
+                                      return { ...e, comptes, actif: e.actif === c.login ? comptes[0].login : e.actif };
+                                    });
+                                  },
+                                },
+                              ]
+                            : []),
+                        ])
+                      }
+                    />
+                  );
+                })}
+            </ul>
+          </div>
+        ))}
         <ul className="mm-liste">
-          {etat.comptes.map((c) => (
-            <LigneCompte
-              key={c.login}
-              actif={c.login === etat.actif}
-              titre={c.nom}
-              detail={`${c.login} · ${TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:${c.levier} · ${argent(c.solde)} USD`}
-              choisir={() => {
-                vibrer();
-                maj((e) => ({ ...e, actif: c.login }));
-              }}
-              menu={() =>
-                feuille(`${c.login} — ${c.nom}`, [
-                  { libelle: 'Se connecter', action: () => maj((e) => ({ ...e, actif: c.login })) },
-                  ...(c.login === etat.actif ? [{ libelle: 'Dépôt / retrait', action: () => pousser({ type: 'depot' }) }] : []),
-                  ...(etat.comptes.length > 1
-                    ? [
-                        {
-                          libelle: 'Supprimer le compte',
-                          danger: true,
-                          action: () => {
-                            if (!window.confirm(`Supprimer le compte de démonstration ${c.login} et tout son historique ?`)) return;
-                            maj((e) => {
-                              const comptes = e.comptes.filter((k) => k.login !== c.login);
-                              return { ...e, comptes, actif: e.actif === c.login ? comptes[0].login : e.actif };
-                            });
-                          },
-                        },
-                      ]
-                    : []),
-                ])
-              }
-            />
-          ))}
+          <li className="fleche" onClick={() => pousser({ type: 'connexion' })}>
+            <span className="mm-ico bleu">⇥</span>Se connecter à un compte existant
+          </li>
+          <li className="fleche" onClick={() => pousser({ type: 'ouvrir-compte' })}>
+            <span className="mm-ico vert">＋</span>Ouvrir un compte de démonstration
+          </li>
         </ul>
         <div className="mm-section">Compte Parnassa · synchronisation</div>
         <div className="mm-bloc">
@@ -221,33 +261,176 @@ export function Comptes() {
   );
 }
 
-function LigneCompte({ actif, titre, detail, choisir, menu }: { actif: boolean; titre: string; detail: string; choisir: () => void; menu: () => void }) {
+function LigneCompte({ actif, titre, detail, statut, classeStatut, choisir, menu }: { actif: boolean; titre: string; detail: string; statut: string | null; classeStatut: string; choisir: () => void; menu: () => void }) {
   const appui = useAppuiLong(menu, choisir);
   return (
     <li {...appui}>
       <span className={`mm-coche ${actif ? 'actif' : ''}`}>{actif ? '✓' : ''}</span>
       <div className="mm-liste-texte">
-        <b>{titre}</b>
+        <b>
+          {titre}
+          {statut && <span className={`pastille-statut ${classeStatut}`}>{statut}</span>}
+        </b>
         <small>{detail}</small>
       </div>
     </li>
   );
 }
 
+/** Connexion à un compte comme sur MT5 mobile : numéro, mot de passe, serveur. */
+export function ConnexionCompte({ login: loginInitial }: { login?: number }) {
+  const { etat, maj, enLigne, signaler } = useTerminal();
+  const { racine, pousser } = useNav();
+  const [login, setLogin] = useState(loginInitial ? String(loginInitial) : '');
+  const [motDePasse, setMotDePasse] = useState('');
+  const [voir, setVoir] = useState(false);
+  const [attente, setAttente] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const valider = async () => {
+    if (!/^9\d{7}$/.test(login)) return setErreur('Numéro de compte invalide : 8 chiffres commençant par 9.');
+    if (!motDePasse) return setErreur('Saisissez le mot de passe du compte.');
+    setAttente(true);
+    setErreur(null);
+    try {
+      const c = await enLigne.connecter(Number(login), motDePasse, SERVEUR_EN_LIGNE);
+      maj((e) => ({ ...e, actif: c.login }));
+      signaler(`${c.login} : connecté${c.lecture ? ' en lecture seule' : ''}`);
+      vibrer(20);
+      racine();
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : 'Connexion impossible.');
+      setAttente(false);
+    }
+  };
+  const locaux = etat.comptes.filter((c) => !c.enLigne);
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Connexion" gauche={<BoutonRetour />} />
+      <form
+        className="mm-defile"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void valider();
+        }}
+      >
+        <div className="mm-serveur-carte">
+          <span className="mm-ico violet">P</span>
+          <div>
+            <b>{SERVEUR_EN_LIGNE}</b>
+            <small>Parnassa · comptes de démonstration en ligne</small>
+          </div>
+        </div>
+        <div className="mm-formulaire">
+          <label className="mm-ligne-champ">
+            <span>Compte</span>
+            <input value={login} inputMode="numeric" autoComplete="username" placeholder="9xxxxxxx" autoFocus={!loginInitial} onChange={(e) => setLogin(e.target.value.replace(/\D/g, '').slice(0, 8))} />
+          </label>
+          <label className="mm-ligne-champ">
+            <span>Mot de passe</span>
+            <input type={voir ? 'text' : 'password'} value={motDePasse} autoComplete="current-password" autoFocus={Boolean(loginInitial)} onChange={(e) => setMotDePasse(e.target.value)} />
+          </label>
+          <div className="mm-ligne-champ">
+            <span>Afficher</span>
+            <span style={{ justifySelf: 'end' }}>
+              <Interrupteur actif={voir} libelle="Afficher le mot de passe" changer={setVoir} />
+            </span>
+          </div>
+        </div>
+        {erreur && <p className="mm-erreur-champ">{erreur}</p>}
+        <p className="mm-note">Le mot de passe investisseur ouvre le compte en lecture seule. Pas encore de compte ? Ouvrez-en un : ses accès vous seront donnés une fois.</p>
+        <div className="mm-boutons-bas">
+          <button type="submit" className="mm-bouton principal" disabled={attente}>
+            {attente ? 'CONNEXION…' : 'SE CONNECTER'}
+          </button>
+          <button type="button" className="mm-bouton" onClick={() => pousser({ type: 'ouvrir-compte' })}>
+            Ouvrir un compte démo
+          </button>
+        </div>
+        {locaux.length > 0 && (
+          <>
+            <div className="mm-section">{SERVEUR} · comptes de cet appareil</div>
+            <ul className="mm-liste">
+              {locaux.map((c) => (
+                <li
+                  key={c.login}
+                  className="fleche"
+                  onClick={() => {
+                    maj((e) => ({ ...e, actif: c.login }));
+                    racine();
+                  }}
+                >
+                  <div className="mm-liste-texte">
+                    <b>{c.nom}</b>
+                    <small>
+                      {c.login} · {argent(c.solde)} USD
+                    </small>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </form>
+    </div>
+  );
+}
+
 export function OuvrirCompte() {
-  const { maj, signaler } = useTerminal();
-  const { retour } = useNav();
+  const { maj, signaler, enLigne } = useTerminal();
+  const { retour, pousser } = useNav();
   const [nom, setNom] = useState('Compte démo');
   const [depot, setDepot] = useState(10000);
   const [levier, setLevier] = useState(100);
   const [type, setType] = useState<TypeCompte>('standard');
   const [sansSwap, setSansSwap] = useState(false);
+  const [surServeur, setSurServeur] = useState(true);
+  const [attente, setAttente] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const valider = async () => {
+    const n = nom.trim() || 'Compte démo';
+    if (!surServeur) {
+      const c = nouveauCompte(n, depot, levier, type, sansSwap);
+      maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
+      signaler(`Compte ${c.login} ouvert`);
+      vibrer(20);
+      retour();
+      return;
+    }
+    setAttente(true);
+    setErreur(null);
+    try {
+      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap });
+      maj((e) => ({ ...e, actif: acces.login }));
+      vibrer(20);
+      pousser({ type: 'acces', acces });
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : 'Ouverture impossible.');
+      setAttente(false);
+    }
+  };
   return (
     <div className="mm-ecran">
       <EnTete titre="Compte démo" gauche={<BoutonRetour />} />
       <div className="mm-defile">
-        <p className="mm-note">Ouverture d'un compte de démonstration sur le serveur {SERVEUR}. Aucune donnée personnelle n'est demandée.</p>
         <div className="mm-formulaire">
+          <div className="mm-ligne-champ">
+            <span>Serveur</span>
+            <span style={{ justifySelf: 'end' }}>
+              <Segments
+                valeur={surServeur ? 'ligne' : 'local'}
+                options={[
+                  ['ligne', 'En ligne'],
+                  ['local', 'Cet appareil'],
+                ]}
+                changer={(v) => setSurServeur(v === 'ligne')}
+              />
+            </span>
+          </div>
+          <div className="mm-aide-ligne">
+            {surServeur
+              ? `${SERVEUR_EN_LIGNE} : numéro et mot de passe pour vous connecter depuis n'importe quel appareil.`
+              : `${SERVEUR} : compte gardé sur cet appareil (ou synchronisé par votre compte Parnassa).`}
+          </div>
           <label className="mm-ligne-champ">
             <span>Nom</span>
             <input value={nom} maxLength={40} onChange={(e) => setNom(e.target.value)} />
@@ -272,7 +455,7 @@ export function OuvrirCompte() {
           <label className="mm-ligne-champ">
             <span>Dépôt</span>
             <select value={depot} onChange={(e) => setDepot(Number(e.target.value))}>
-              {[500, 1000, 3000, 5000, 10000, 25000, 50000, 100000, 500000, 1000000].map((v) => (
+              {DEPOTS.map((v) => (
                 <option key={v} value={v}>
                   {argent(v, 0)} USD
                 </option>
@@ -282,7 +465,7 @@ export function OuvrirCompte() {
           <label className="mm-ligne-champ">
             <span>Levier</span>
             <select value={levier} onChange={(e) => setLevier(Number(e.target.value))}>
-              {[1, 2, 5, 10, 20, 30, 50, 100, 200, 300, 400, 500, 1000].map((v) => (
+              {LEVIERS.map((v) => (
                 <option key={v} value={v}>
                   1:{v}
                 </option>
@@ -290,19 +473,44 @@ export function OuvrirCompte() {
             </select>
           </label>
         </div>
+        {erreur && <p className="mm-erreur-champ">{erreur}</p>}
+        <p className="mm-note">Argent fictif, aucune donnée personnelle demandée.</p>
+      </div>
+      <div className="mm-boutons-bas">
+        <button className="mm-bouton principal" disabled={attente} onClick={() => void valider()}>
+          {attente ? 'OUVERTURE…' : 'OUVRIR LE COMPTE'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Accès du compte ouvert, montrés une seule fois. */
+export function AccesCompte({ acces }: { acces: Acces }) {
+  const { racine } = useNav();
+  const [copie, setCopie] = useState(false);
+  const texte = `Compte : ${acces.login}\nServeur : ${acces.serveur}\nMot de passe : ${acces.motDePasse}\nMot de passe investisseur (lecture seule) : ${acces.motDePasseInvestisseur}`;
+  return (
+    <div className="mm-ecran">
+      <EnTete titre="Compte ouvert" />
+      <div className="mm-defile">
+        <div className="mm-bloc">
+          <BlocAcces acces={acces} />
+        </div>
+        <p className="mm-note fort">Notez ces accès maintenant : le mot de passe ne sera plus jamais affiché. Ils servent à vous connecter à ce compte sur un autre appareil.</p>
       </div>
       <div className="mm-boutons-bas">
         <button
-          className="mm-bouton principal"
+          className="mm-bouton"
           onClick={() => {
-            const c = nouveauCompte(nom.trim() || 'Compte démo', depot, levier, type, sansSwap);
-            maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
-            signaler(`Compte ${c.login} ouvert`);
-            vibrer(20);
-            retour();
+            const partage = navigator.share ? navigator.share({ title: `Compte ${acces.login}`, text: texte }) : navigator.clipboard.writeText(texte).then(() => setCopie(true));
+            void partage.catch(() => undefined);
           }}
         >
-          OUVRIR LE COMPTE
+          {copie ? 'Copié ✓' : 'Copier / partager les accès'}
+        </button>
+        <button className="mm-bouton principal" onClick={() => racine()}>
+          J'AI NOTÉ
         </button>
       </div>
     </div>
