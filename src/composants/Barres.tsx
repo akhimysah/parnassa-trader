@@ -4,7 +4,7 @@ import { identifiant, nouveauGraphique, type EtatTerminal, type Graphique } from
 import { chargerProfil, demanderNom, enregistrerModele, enregistrerProfil, reglagesModele } from '../modeles';
 import { PERIODES } from '../marche/bougies';
 import { SYMBOLES } from '../marche/symboles';
-import { DEFINITIONS } from '../graphique/indicateurs';
+import { DEFINITIONS, GROUPES } from '../graphique/indicateurs';
 import { registreGraphiques } from '../graphique/registre';
 import { REST_BINANCE } from '../marche/binance';
 import { ListeMenu, type ElementMenu } from './ui';
@@ -77,7 +77,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
     [
       'Insertion',
       [
-        { libelle: 'Indicateurs', sousMenu: [{ libelle: 'Tendance', sousMenu: indicateurs('Tendance') }, { libelle: 'Oscillateurs', sousMenu: indicateurs('Oscillateurs') }, { libelle: 'Volumes', sousMenu: indicateurs('Volumes') }] },
+        { libelle: 'Indicateurs', sousMenu: GROUPES.map((gr) => ({ libelle: gr, sousMenu: indicateurs(gr) })) },
         {
           libelle: 'Objets',
           sousMenu: [

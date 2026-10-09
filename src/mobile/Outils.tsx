@@ -3,7 +3,7 @@ import { useTerminal } from '../contexte';
 import { identifiant, type Alerte } from '../etat';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
-import { DEFINITIONS, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
+import { DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
 import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
 import { calculerStats } from '../algo/statistiques';
 import { definirSuiveur, operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
@@ -133,7 +133,7 @@ export function EcranIndicateurs() {
   const { pousser } = useNav();
   const g = etat.graphiques.find((x) => x.id === etat.graphiqueActif) ?? etat.graphiques[0];
   if (!g) return null;
-  const groupes = ['Tendance', 'Oscillateurs', 'Volumes'] as const;
+  const groupes = GROUPES;
   return (
     <div className="mm-ecran">
       <EnTete titre="Indicateurs" sousTitre={`${g.symbole}, ${g.periode}`} gauche={<BoutonRetour />} />

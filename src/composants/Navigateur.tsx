@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { actionsProprietaire } from './DialoguesComptes';
 import { useTerminal } from '../contexte';
-import { DEFINITIONS } from '../graphique/indicateurs';
+import { DEFINITIONS, GROUPES } from '../graphique/indicateurs';
 import { EXPERTS } from '../algo/experts';
 import { preparerTest } from './Testeur';
 import { fermerPosition, profitPosition, supprimerOrdre, type Compte } from '../compte/moteur';
@@ -35,7 +35,7 @@ export function Navigateur() {
   const terminal = useTerminal();
   const { etat, maj, ouvrir, operer, cotations, enLigne } = terminal;
   const { ouvrirMenu, element: menu } = useMenuContextuel();
-  const groupes = ['Tendance', 'Oscillateurs', 'Volumes'] as const;
+  const groupes = GROUPES;
   return (
     <div className="panneau navigateur">
       <div className="panneau-titre">

@@ -1,6 +1,10 @@
 import type { Bougie } from '../marche/bougies';
 
-export type TypeIndicateur = 'ma' | 'bb' | 'env' | 'sar' | 'ichimoku' | 'rsi' | 'macd' | 'stoch' | 'atr' | 'cci' | 'mom' | 'wpr' | 'volumes';
+export type TypeIndicateur =
+  | 'ma' | 'bb' | 'env' | 'sar' | 'ichimoku' | 'dema' | 'tema' | 'adx' | 'stddev'
+  | 'rsi' | 'macd' | 'stoch' | 'atr' | 'cci' | 'mom' | 'wpr' | 'demarker' | 'force' | 'osma' | 'bears' | 'bulls' | 'rvi'
+  | 'alligator' | 'fractals' | 'ao' | 'ac'
+  | 'volumes' | 'obv' | 'mfi';
 export type MethodeMA = 'sma' | 'ema' | 'smma' | 'lwma';
 
 export interface Indicateur {
@@ -12,10 +16,13 @@ export interface Indicateur {
   couleur: string;
 }
 
+export const GROUPES = ['Tendance', 'Oscillateurs', 'Volumes', 'Bill Williams'] as const;
+export type GroupeIndicateur = (typeof GROUPES)[number];
+
 export interface DefinitionIndicateur {
   type: TypeIndicateur;
   nom: string;
-  groupe: 'Tendance' | 'Oscillateurs' | 'Volumes';
+  groupe: GroupeIndicateur;
   /** Dessiné sur le graphique principal (sinon dans une sous-fenêtre). */
   superpose: boolean;
   defaut: Record<string, number>;
@@ -36,7 +43,23 @@ export const DEFINITIONS: DefinitionIndicateur[] = [
   { type: 'cci', nom: 'Commodity Channel Index', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#20b2aa' },
   { type: 'mom', nom: 'Momentum', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#1e90ff' },
   { type: 'wpr', nom: "Williams' Percent Range", groupe: 'Oscillateurs', superpose: false, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#1e90ff' },
+  { type: 'dema', nom: 'Double Exponential Moving Average', groupe: 'Tendance', superpose: true, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#ff8c00' },
+  { type: 'tema', nom: 'Triple Exponential Moving Average', groupe: 'Tendance', superpose: true, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#da70d6' },
+  { type: 'adx', nom: 'Average Directional Movement Index', groupe: 'Tendance', superpose: false, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#20b2aa' },
+  { type: 'stddev', nom: 'Standard Deviation', groupe: 'Tendance', superpose: false, defaut: { periode: 20 }, libelles: { periode: 'Période' }, couleur: '#1e90ff' },
+  { type: 'demarker', nom: 'DeMarker', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#1e90ff' },
+  { type: 'force', nom: 'Force Index', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 13 }, libelles: { periode: 'Période' }, couleur: '#1e90ff' },
+  { type: 'osma', nom: 'Moving Average of Oscillator', groupe: 'Oscillateurs', superpose: false, defaut: { rapide: 12, lente: 26, signal: 9 }, libelles: { rapide: 'EMA rapide', lente: 'EMA lente', signal: 'SMA du signal' }, couleur: '#c0c0c0' },
+  { type: 'bears', nom: 'Bears Power', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 13 }, libelles: { periode: 'Période' }, couleur: '#c0c0c0' },
+  { type: 'bulls', nom: 'Bulls Power', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 13 }, libelles: { periode: 'Période' }, couleur: '#c0c0c0' },
+  { type: 'rvi', nom: 'Relative Vigor Index', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 10 }, libelles: { periode: 'Période' }, couleur: '#32cd32' },
   { type: 'volumes', nom: 'Volumes', groupe: 'Volumes', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
+  { type: 'obv', nom: 'On Balance Volume', groupe: 'Volumes', superpose: false, defaut: {}, libelles: {}, couleur: '#1e90ff' },
+  { type: 'mfi', nom: 'Money Flow Index', groupe: 'Volumes', superpose: false, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#1e90ff' },
+  { type: 'alligator', nom: 'Alligator', groupe: 'Bill Williams', superpose: true, defaut: { machoire: 13, dents: 8, levres: 5 }, libelles: { machoire: 'Mâchoire', dents: 'Dents', levres: 'Lèvres' }, couleur: '#1e90ff' },
+  { type: 'fractals', nom: 'Fractals', groupe: 'Bill Williams', superpose: true, defaut: {}, libelles: {}, couleur: '#808080' },
+  { type: 'ao', nom: 'Awesome Oscillator', groupe: 'Bill Williams', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
+  { type: 'ac', nom: 'Accelerator Oscillator', groupe: 'Bill Williams', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
 ];
 
 export function definition(type: TypeIndicateur): DefinitionIndicateur {
@@ -72,6 +95,38 @@ export function nomCourt(i: Indicateur): string {
       return `WPR(${p.periode})`;
     case 'volumes':
       return 'Volumes';
+    case 'dema':
+      return `DEMA(${p.periode})`;
+    case 'tema':
+      return `TEMA(${p.periode})`;
+    case 'adx':
+      return `ADX(${p.periode})`;
+    case 'stddev':
+      return `StdDev(${p.periode})`;
+    case 'demarker':
+      return `DeM(${p.periode})`;
+    case 'force':
+      return `Force(${p.periode})`;
+    case 'osma':
+      return `OsMA(${p.rapide}, ${p.lente}, ${p.signal})`;
+    case 'bears':
+      return `Bears(${p.periode})`;
+    case 'bulls':
+      return `Bulls(${p.periode})`;
+    case 'rvi':
+      return `RVI(${p.periode})`;
+    case 'obv':
+      return 'OBV';
+    case 'mfi':
+      return `MFI(${p.periode})`;
+    case 'alligator':
+      return `Alligator(${p.machoire}, ${p.dents}, ${p.levres})`;
+    case 'fractals':
+      return 'Fractals';
+    case 'ao':
+      return 'AO';
+    case 'ac':
+      return 'AC';
   }
 }
 
@@ -350,6 +405,163 @@ export function calculer(ind: Indicateur, b: Bougie[]): Resultat {
         return h === l ? -50 : ((h - x.close) / (h - l)) * -100;
       });
       return { traces: [{ nom: nomCourt(ind), valeurs: r, couleur: ind.couleur }], niveaux: [-20, -80], bornes: [-100, 0] };
+    }
+    case 'dema': {
+      const e1 = ema(c, p.periode);
+      const e2 = ema(e1, p.periode);
+      return { traces: [{ nom: nomCourt(ind), valeurs: e1.map((x, i) => (x === null || e2[i] === null ? null : 2 * x - e2[i]!)), couleur: ind.couleur }] };
+    }
+    case 'tema': {
+      const e1 = ema(c, p.periode);
+      const e2 = ema(e1, p.periode);
+      const e3 = ema(e2, p.periode);
+      return { traces: [{ nom: nomCourt(ind), valeurs: e1.map((x, i) => (x === null || e2[i] === null || e3[i] === null ? null : 3 * x - 3 * e2[i]! + e3[i]!)), couleur: ind.couleur }] };
+    }
+    case 'adx': {
+      // Wilder : +DM / -DM et vrai range lissés, DX puis sa moyenne lissée.
+      const n = p.periode;
+      const plus: Valeurs = new Array(b.length).fill(null);
+      const moins: Valeurs = new Array(b.length).fill(null);
+      const adx: Valeurs = new Array(b.length).fill(null);
+      let tr = 0;
+      let dmp = 0;
+      let dmm = 0;
+      let moy: number | null = null;
+      const dxs: number[] = [];
+      for (let i = 1; i < b.length; i++) {
+        const haut = b[i].high - b[i - 1].high;
+        const bas = b[i - 1].low - b[i].low;
+        const p1 = haut > bas && haut > 0 ? haut : 0;
+        const m1 = bas > haut && bas > 0 ? bas : 0;
+        const t = Math.max(b[i].high, b[i - 1].close) - Math.min(b[i].low, b[i - 1].close);
+        if (i <= n) {
+          tr += t;
+          dmp += p1;
+          dmm += m1;
+          if (i < n) continue;
+        } else {
+          tr = tr - tr / n + t;
+          dmp = dmp - dmp / n + p1;
+          dmm = dmm - dmm / n + m1;
+        }
+        const pdi = tr ? (100 * dmp) / tr : 0;
+        const mdi = tr ? (100 * dmm) / tr : 0;
+        plus[i] = pdi;
+        moins[i] = mdi;
+        const dx = pdi + mdi ? (100 * Math.abs(pdi - mdi)) / (pdi + mdi) : 0;
+        if (moy === null) {
+          dxs.push(dx);
+          if (dxs.length === n) moy = dxs.reduce((a, x) => a + x, 0) / n;
+        } else moy = (moy * (n - 1) + dx) / n;
+        adx[i] = moy;
+      }
+      return {
+        traces: [
+          { nom: 'ADX', valeurs: adx, couleur: '#20b2aa' },
+          { nom: '+DI', valeurs: plus, couleur: '#32cd32' },
+          { nom: '-DI', valeurs: moins, couleur: '#ff3b30' },
+        ],
+        niveaux: [20],
+      };
+    }
+    case 'stddev':
+      return { traces: [{ nom: nomCourt(ind), valeurs: ecartType(c, sma(c, p.periode), p.periode), couleur: ind.couleur }] };
+    case 'demarker': {
+      const hausse: Valeurs = b.map((x, i) => (i === 0 ? null : Math.max(0, x.high - b[i - 1].high)));
+      const baisse: Valeurs = b.map((x, i) => (i === 0 ? null : Math.max(0, b[i - 1].low - x.low)));
+      const mh = sma(hausse, p.periode);
+      const mb = sma(baisse, p.periode);
+      return { traces: [{ nom: nomCourt(ind), valeurs: mh.map((h, i) => (h === null || mb[i] === null ? null : h + mb[i]! === 0 ? 0.5 : h / (h + mb[i]!))), couleur: ind.couleur }], niveaux: [0.3, 0.7], bornes: [0, 1] };
+    }
+    case 'force': {
+      const brut: Valeurs = b.map((x, i) => (i === 0 ? null : (x.close - b[i - 1].close) * x.volume));
+      return { traces: [{ nom: nomCourt(ind), valeurs: moyenne(brut, p.periode, ind.methode ?? 'sma'), couleur: ind.couleur }], niveaux: [0] };
+    }
+    case 'osma': {
+      const rapide = ema(c, p.rapide);
+      const lente = ema(c, p.lente);
+      const macd = rapide.map((x, i) => (x === null || lente[i] === null ? null : x - lente[i]!));
+      const signal = sma(macd, p.signal);
+      return { traces: [{ nom: 'OsMA', valeurs: macd.map((x, i) => (x === null || signal[i] === null ? null : x - signal[i]!)), couleur: ind.couleur, style: 'histogramme' }], niveaux: [0] };
+    }
+    case 'bears':
+    case 'bulls': {
+      const e = ema(c, p.periode);
+      const v = b.map((x, i) => (e[i] === null ? null : (ind.type === 'bears' ? x.low : x.high) - e[i]!));
+      return { traces: [{ nom: nomCourt(ind), valeurs: v, couleur: ind.couleur, style: 'histogramme' }], niveaux: [0] };
+    }
+    case 'rvi': {
+      const pond = (f: (x: Bougie) => number): Valeurs => b.map((_, i) => (i < 3 ? null : (f(b[i]) + 2 * f(b[i - 1]) + 2 * f(b[i - 2]) + f(b[i - 3])) / 6));
+      const num = sma(pond((x) => x.close - x.open), p.periode);
+      const den = sma(pond((x) => x.high - x.low), p.periode);
+      const rvi = num.map((x, i) => (x === null || !den[i] ? null : x / den[i]!));
+      const signal = rvi.map((_, i) => (i < 3 || rvi[i] === null || rvi[i - 3] === null ? null : (rvi[i]! + 2 * rvi[i - 1]! + 2 * rvi[i - 2]! + rvi[i - 3]!) / 6));
+      return {
+        traces: [
+          { nom: 'RVI', valeurs: rvi, couleur: '#32cd32' },
+          { nom: 'Signal', valeurs: signal, couleur: '#ff3b30' },
+        ],
+        niveaux: [0],
+      };
+    }
+    case 'obv': {
+      let total = 0;
+      return { traces: [{ nom: 'OBV', valeurs: b.map((x, i) => (i === 0 ? (total = 0) : (total += x.close > b[i - 1].close ? x.volume : x.close < b[i - 1].close ? -x.volume : 0))), couleur: ind.couleur }] };
+    }
+    case 'mfi': {
+      const tp = b.map((x) => (x.high + x.low + x.close) / 3);
+      const r = b.map((_, i) => {
+        if (i < p.periode) return null;
+        let pos = 0;
+        let neg = 0;
+        for (let k = i - p.periode + 1; k <= i; k++) {
+          const flux = tp[k] * b[k].volume;
+          if (tp[k] > tp[k - 1]) pos += flux;
+          else if (tp[k] < tp[k - 1]) neg += flux;
+        }
+        return neg === 0 ? 100 : 100 - 100 / (1 + pos / neg);
+      });
+      return { traces: [{ nom: nomCourt(ind), valeurs: r, couleur: ind.couleur }], niveaux: [20, 80], bornes: [0, 100] };
+    }
+    case 'alligator': {
+      // Lissages SMMA du prix médian, décalés vers l'avenir (8, 5, 3 barres).
+      const median: Valeurs = b.map((x) => (x.high + x.low) / 2);
+      return {
+        traces: [
+          { nom: 'Mâchoire', valeurs: decaler(moyenne(median, p.machoire, 'smma'), 8), couleur: '#1e90ff' },
+          { nom: 'Dents', valeurs: decaler(moyenne(median, p.dents, 'smma'), 5), couleur: '#ff3b30' },
+          { nom: 'Lèvres', valeurs: decaler(moyenne(median, p.levres, 'smma'), 3), couleur: '#32cd32' },
+        ],
+      };
+    }
+    case 'fractals': {
+      const haut: Valeurs = new Array(b.length).fill(null);
+      const bas: Valeurs = new Array(b.length).fill(null);
+      for (let i = 2; i < b.length - 2; i++) {
+        const h = b[i].high;
+        const l = b[i].low;
+        if (h > b[i - 1].high && h > b[i - 2].high && h > b[i + 1].high && h > b[i + 2].high) haut[i] = h;
+        if (l < b[i - 1].low && l < b[i - 2].low && l < b[i + 1].low && l < b[i + 2].low) bas[i] = l;
+      }
+      return {
+        traces: [
+          { nom: 'Fractale haute', valeurs: haut, couleur: '#808080', style: 'points' },
+          { nom: 'Fractale basse', valeurs: bas, couleur: '#808080', style: 'points' },
+        ],
+      };
+    }
+    case 'ao':
+    case 'ac': {
+      const median: Valeurs = b.map((x) => (x.high + x.low) / 2);
+      const s5 = sma(median, 5);
+      const s34 = sma(median, 34);
+      const ao = s5.map((x, i) => (x === null || s34[i] === null ? null : x - s34[i]!));
+      const s5ao = sma(ao, 5);
+      const v = ind.type === 'ao' ? ao : ao.map((x, i) => (x === null || s5ao[i] === null ? null : x - s5ao[i]!));
+      return {
+        traces: [{ nom: nomCourt(ind), valeurs: v, couleur: ind.couleur, style: 'histogramme', couleurs: v.map((x, i) => (i > 0 && x !== null && v[i - 1] !== null && x < v[i - 1]! ? '#ff3b30' : '#32cd32')) }],
+        niveaux: [0],
+      };
     }
     case 'volumes':
       return {

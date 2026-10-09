@@ -28,6 +28,9 @@ import { formaterPrix, point, symbole } from '../marche/symboles';
 import { calculer, definition, nomCourt } from './indicateurs';
 import { couleursSchema } from './couleurs';
 import { Dessins, OBJETS } from './dessins';
+
+/** Indicateurs en sous-fenêtre exprimés en prix : même nombre de décimales que le symbole (l'échelle reste aussi large). */
+const EN_PRIX = ['atr', 'stddev', 'bears', 'bulls', 'ao', 'ac'];
 import { menuModeles } from '../composants/Barres';
 import { registreGraphiques } from './registre';
 import { decider, definitionExpert } from '../algo/experts';
@@ -403,8 +406,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         const commun = { lastValueVisible: !def.superpose, priceLineVisible: false, title: '', crosshairMarkerVisible: false };
         const se =
           tr.style === 'histogramme'
-            ? chart.addSeries(HistogramSeries, { ...commun, color: tr.couleur, priceFormat: def.type === 'volumes' ? { type: 'volume' } : { type: 'price', precision: s.chiffres + 1, minMove: point(s) / 10 } }, index)
-            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: 1, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: def.superpose ? { type: 'price', precision: s.chiffres, minMove: point(s) } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
+            ? chart.addSeries(HistogramSeries, { ...commun, color: tr.couleur, priceFormat: def.type === 'volumes' ? { type: 'volume' } : { type: 'price', precision: s.chiffres, minMove: point(s) } }, index)
+            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: 1, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: def.superpose || EN_PRIX.includes(def.type) ? { type: 'price', precision: s.chiffres, minMove: point(s) } : def.type === 'demarker' || def.type === 'rvi' ? { type: 'price', precision: 3, minMove: 0.001 } : def.type === 'obv' || def.type === 'force' ? { type: 'volume' } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
         if (r.bornes) se.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: r.bornes![0], maxValue: r.bornes![1] } }) });
         return se;
       });
