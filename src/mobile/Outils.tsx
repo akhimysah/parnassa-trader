@@ -413,7 +413,7 @@ export function EcranProfondeur({ nom }: { nom: string }) {
 // ---------- Expert Advisors ----------
 
 export function EcranExperts() {
-  const { etat, maj, compte, cotations } = useTerminal();
+  const { etat, maj, compte, cotations, ouvrir } = useTerminal();
   const { pousser } = useNav();
   const attaches = etat.graphiques.filter((g) => g.expert);
   return (
@@ -448,11 +448,26 @@ export function EcranExperts() {
           })}
           {attaches.length === 0 && <li className="mm-vide">Aucun expert attaché</li>}
         </ul>
+        <div className="mm-section">Mes experts (assistant)</div>
+        <ul className="mm-liste">
+          {etat.expertsPerso.map((x) => (
+            <li key={x.id} className="fleche" onClick={() => ouvrir({ type: 'assistant', id: x.id })}>
+              <span className="mm-ico orange">🧩</span>
+              <div className="mm-liste-texte">
+                <b>{x.nom}</b>
+                <small>Modifier les conditions</small>
+              </div>
+            </li>
+          ))}
+          <li className="fleche" onClick={() => ouvrir({ type: 'assistant' })}>
+            <span className="mm-ico vert">＋</span>Créer un expert (sans code)
+          </li>
+        </ul>
         <div className="mm-section">Attacher au graphique actuel</div>
         <ul className="mm-liste">
           {tousExperts().map((x) => (
             <li key={x.type} className="fleche" onClick={() => pousser({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })}>
-              <span className="mm-ico violet">🎓</span>
+              <span className="mm-ico violet">{x.type.startsWith('perso:') ? '🧩' : '🎓'}</span>
               <div className="mm-liste-texte">
                 <b>{x.nom}</b>
                 <small>{x.description}</small>

@@ -8,6 +8,7 @@ import { registreGraphiques } from '../graphique/registre';
 import { useRef } from 'react';
 import { BoutonIcone, EnTete, IconePlus, useNav, vibrer } from './commun';
 import { OBJETS } from '../graphique/dessins';
+import { demanderNom, enregistrerModele, reglagesModele } from '../modeles';
 
 /** Graphique plein écran avec les barres de commandes de MT5 mobile. */
 export function GraphiqueMobile() {
@@ -66,6 +67,7 @@ export function GraphiqueMobile() {
   const objets = () =>
     feuille('Objets', [
       ...(Object.keys(OBJETS) as (keyof typeof OBJETS)[]).map((o) => ({ libelle: OBJETS[o].nom, action: () => choisirOutil(o) })),
+      ...(g.objets.length ? [{ libelle: `Liste des objets (${g.objets.length})…`, action: () => ouvrir({ type: 'objets', graphique: g.id }) }] : []),
       ...(g.objets.length ? [{ libelle: `Supprimer les ${g.objets.length} objets`, danger: true, action: () => majGraphique(g.id, { objets: [] }) }] : []),
     ]);
   const reglages = () =>
@@ -78,6 +80,14 @@ export function GraphiqueMobile() {
       { libelle: `${g.indicateurs.some((i) => i.type === 'volumes') ? 'Masquer' : 'Afficher'} les volumes`, action: () => majGraphique(g.id, (gr) => ({ indicateurs: gr.indicateurs.some((i) => i.type === 'volumes') ? gr.indicateurs.filter((i) => i.type !== 'volumes') : [...gr.indicateurs, { id: identifiant(), type: 'volumes', p: {}, couleur: '#32cd32' }] })) },
       { libelle: 'Couleurs et propriétés…', action: () => ouvrir({ type: 'proprietes', graphique: g.id }) },
       { libelle: 'Expert Advisor…', action: () => pousser({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
+      ...etat.modeles.map((m) => ({ libelle: `Modèle « ${m.nom} »`, action: () => majGraphique(g.id, reglagesModele(m)) })),
+      {
+        libelle: 'Enregistrer comme modèle…',
+        action: () => {
+          const nom = demanderNom('Nom du modèle', 'Mon modèle');
+          if (nom) maj((e) => enregistrerModele(e, g, nom));
+        },
+      },
       { libelle: 'Enregistrer comme image', action: () => registreGraphiques.get(g.id)?.capturer() },
     ]);
   return (
@@ -132,6 +142,20 @@ export function GraphiqueMobile() {
         {d && (
           <div className="mm-donnees">
             {new Date(d.temps).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} O <b>{d.o.toFixed(d.chiffres)}</b> H <b>{d.h.toFixed(d.chiffres)}</b> B <b>{d.l.toFixed(d.chiffres)}</b> C <b>{d.c.toFixed(d.chiffres)}</b>
+            {d.indicateurs
+              ?.filter((i) => i.nom !== 'Volumes')
+              .map((i) => (
+                <span key={i.nom} className="mm-donnees-ind">
+                  {i.nom}{' '}
+                  {i.lignes
+                    .filter((l) => l.valeur !== null)
+                    .map((l) => (
+                      <b key={l.nom} style={{ color: l.couleur }}>
+                        {Math.abs(l.valeur!) >= 10 ? l.valeur!.toFixed(2) : l.valeur!.toFixed(d.chiffres)}{' '}
+                      </b>
+                    ))}
+                </span>
+              ))}
           </div>
         )}
       </div>

@@ -1683,3 +1683,19 @@
   text-decoration: underline;
   cursor: pointer;
 }
+.mm-donnees-ind {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+/* Fenêtres du terminal ouvertes depuis le mobile (assistant, objets) : pleine largeur, contenu défilant */
+@media (max-width: 820px) {
+  .fenetre-assistant .operande select {
+    max-width: 150px;
+  }
+  .fenetre-assistant .assistant-blocs {
+    max-height: 50vh;
+  }
+}
