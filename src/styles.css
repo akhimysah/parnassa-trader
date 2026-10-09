@@ -1959,3 +1959,41 @@ kbd {
   background: #d3222222;
   color: var(--negatif);
 }
+/* Testeur : mode visuel */
+.testeur-visuel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.testeur-visuel .testeur-visualisation {
+  flex: 1;
+  min-height: 0;
+}
+.testeur-lecteur {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--bord);
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.testeur-lecteur button {
+  min-width: 26px;
+  padding: 1px 4px;
+}
+.testeur-lecteur input[type='range'] {
+  flex: 1;
+  min-width: 120px;
+}
+.testeur-lecteur-infos {
+  white-space: nowrap;
+  color: var(--muet);
+}
+.testeur-lecteur-infos b {
+  color: var(--texte);
+}
+.testeur-lecteur-infos b.negatif {
+  color: var(--negatif);
+}

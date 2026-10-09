@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CandlestickSeries, ColorType, createChart, createSeriesMarkers, type Time, type UTCTimestamp } from 'lightweight-charts';
+import { CandlestickSeries, ColorType, createChart, createSeriesMarkers, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type Time, type UTCTimestamp } from 'lightweight-charts';
 import { useTerminal } from '../contexte';
 import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
 import { combinaisons, lancerTest, optimiser, type Modelisation, type Passe, type PlageOptimisation, type ResultatTest } from '../algo/testeur';
@@ -540,10 +540,36 @@ function Trades({ res }: { res: ResultatTest & { reglages: Reglages } }) {
   );
 }
 
-/** Bougies testées avec les entrées (flèches) et sorties (croix) de l'expert. */
+const VITESSES = [1, 5, 20, 100, 500];
+
+/**
+ * Bougies testées avec les entrées (flèches) et sorties (ronds) de l'expert, et mode visuel comme le testeur de
+ * MT5 : le test se rejoue barre après barre, avec lecture, pause, vitesse et curseur ; solde et fonds propres suivent.
+ */
 function Visualisation({ res }: { res: ResultatTest & { reglages: Reglages; bougies: Bougie[] } }) {
   const ref = useRef<HTMLDivElement>(null);
   const { etat } = useTerminal();
+  const n = res.bougies.length;
+  const [pos, setPos] = useState(n);
+  const [lecture, setLecture] = useState(false);
+  const [vitesse, setVitesse] = useState(20);
+  const graphique = useRef<{ serie: ISeriesApi<'Candlestick'>; marqueurs: ISeriesMarkersPluginApi<Time>; affiche: number; chart: IChartApi } | null>(null);
+  const marqueurs = useMemo(
+    () =>
+      [...res.marqueurs]
+        .sort((a, b) => a.time - b.time)
+        .map((m) => ({
+          time: m.time as UTCTimestamp,
+          position: (m.sens === 'buy' ? 'belowBar' : 'aboveBar') as 'belowBar' | 'aboveBar',
+          shape: (m.entree ? (m.sens === 'buy' ? 'arrowUp' : 'arrowDown') : 'circle') as 'arrowUp' | 'arrowDown' | 'circle',
+          color: m.entree ? (m.sens === 'buy' ? '#1e6fd9' : '#e0393e') : '#f0a020',
+          text: m.entree ? '' : m.texte === 'signal' ? '' : m.texte,
+          size: m.entree ? 1 : 0.6,
+        })),
+    [res],
+  );
+  const vers = (b: Bougie) => ({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close });
+
   useEffect(() => {
     const el = ref.current!;
     const sombre = etat.theme === 'sombre';
@@ -555,22 +581,96 @@ function Visualisation({ res }: { res: ResultatTest & { reglages: Reglages; boug
       timeScale: { timeVisible: true },
     });
     const serie = chart.addSeries(CandlestickSeries, { upColor: '#26a69a', downColor: '#ef5350', borderVisible: false, wickUpColor: '#26a69a', wickDownColor: '#ef5350', priceFormat: { type: 'price', precision: s.chiffres, minMove: point(s) } });
-    serie.setData(res.bougies.map((b) => ({ time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close })));
-    createSeriesMarkers<Time>(
-      serie,
-      [...res.marqueurs]
-        .sort((a, b) => a.time - b.time)
-        .map((m) => ({
-          time: m.time as UTCTimestamp,
-          position: m.entree ? (m.sens === 'buy' ? 'belowBar' : 'aboveBar') : m.sens === 'buy' ? 'belowBar' : 'aboveBar',
-          shape: m.entree ? (m.sens === 'buy' ? 'arrowUp' : 'arrowDown') : 'circle',
-          color: m.entree ? (m.sens === 'buy' ? '#1e6fd9' : '#e0393e') : '#f0a020',
-          text: m.entree ? '' : m.texte === 'signal' ? '' : m.texte,
-          size: m.entree ? 1 : 0.6,
-        })),
-    );
-    chart.timeScale().fitContent();
-    return () => chart.remove();
+    graphique.current = { serie, marqueurs: createSeriesMarkers<Time>(serie, []), affiche: 0, chart };
+    return () => {
+      graphique.current = null;
+      chart.remove();
+    };
   }, [res, etat.theme]);
-  return <div ref={ref} className="testeur-visualisation" />;
+
+  // Affichage jusqu'à la barre `pos` : ajout barre par barre pendant la lecture, sinon tout redessiné.
+  useEffect(() => {
+    const g = graphique.current;
+    if (!g) return;
+    const fin = res.bougies[Math.max(0, pos - 1)]?.time ?? 0;
+    if (pos > g.affiche && pos - g.affiche <= 50 && g.affiche > 0) {
+      for (let i = g.affiche; i < pos; i++) g.serie.update(vers(res.bougies[i]));
+    } else {
+      g.serie.setData(res.bougies.slice(0, pos).map(vers));
+      if (pos === n) g.chart.timeScale().fitContent();
+      else {
+        // Rejeu : largeur de barre lisible, les dernières barres collées au bord droit comme en direct.
+        g.chart.timeScale().applyOptions({ barSpacing: 8 });
+        g.chart.timeScale().scrollToRealTime();
+      }
+    }
+    g.affiche = pos;
+    g.marqueurs.setMarkers(marqueurs.filter((m) => m.time <= fin));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos, res, marqueurs, etat.theme]);
+
+  // Lecture : `vitesse` barres par seconde, par pas de 50 ms au plus.
+  useEffect(() => {
+    if (!lecture) return;
+    const pas = Math.max(1, Math.round(vitesse / 20));
+    const t = window.setInterval(
+      () =>
+        setPos((p) => {
+          if (p >= n) {
+            setLecture(false);
+            return n;
+          }
+          return Math.min(n, p + pas);
+        }),
+      Math.max(50, 1000 / vitesse),
+    );
+    return () => window.clearInterval(t);
+  }, [lecture, vitesse, n]);
+
+  // Solde, fonds propres et positions ouvertes à la barre affichée.
+  const t = (res.bougies[Math.max(0, pos - 1)]?.time ?? 0) * 1000;
+  const fonds = pos >= 2 ? res.fonds[Math.min(res.fonds.length - 1, pos - 2)]?.v : res.reglages.depot;
+  const passees = res.transactions.filter((x) => x.heure <= t);
+  const solde = passees.length ? passees[passees.length - 1].solde : res.reglages.depot;
+  const ouvertes = passees.filter((x) => x.entree === 'in').length - passees.filter((x) => x.entree === 'out').length;
+  const debutLecture = () => {
+    if (pos >= n) setPos(Math.min(n, 60));
+    setLecture(true);
+  };
+  return (
+    <div className="testeur-visuel">
+      <div className="testeur-lecteur">
+        <button title="Début" onClick={() => (setLecture(false), setPos(Math.min(n, 60)))}>
+          ⏮
+        </button>
+        {lecture ? (
+          <button title="Pause" onClick={() => setLecture(false)}>
+            ⏸
+          </button>
+        ) : (
+          <button title="Lecture" onClick={debutLecture}>
+            ▶
+          </button>
+        )}
+        <button title="Barre suivante" onClick={() => (setLecture(false), setPos((p) => Math.min(n, p + 1)))}>
+          ⏵|
+        </button>
+        <button title="Fin" onClick={() => (setLecture(false), setPos(n))}>
+          ⏭
+        </button>
+        <input type="range" min={1} max={n} value={pos} onChange={(e) => (setLecture(false), setPos(Number(e.target.value)))} />
+        <select value={vitesse} onChange={(e) => setVitesse(Number(e.target.value))} title="Vitesse (barres par seconde)">
+          {VITESSES.map((v) => (
+            <option key={v} value={v}>
+              ×{v}
+            </option>
+          ))}
+        </select>
+        <span className="testeur-lecteur-infos">
+          {t ? dateMT(t) : ''} · Solde <b>{argent(solde)}</b> · Fonds propres <b className={fonds !== undefined && fonds < solde ? 'negatif' : ''}>{argent(fonds ?? solde)}</b> · {ouvertes} position(s)
+        </span>
+      </div>
+      <div ref={ref} className="testeur-visualisation" />
+    </div>
+  );
 }
