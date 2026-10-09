@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTerminal } from '../contexte';
 import { TYPES_COMPTE, type TypeCompte } from '../marche/symboles';
 import { nouveauCompte, SERVEUR } from '../compte/moteur';
-import { SERVEUR_EN_LIGNE, type Acces, type StatutCompte } from '../compte/enLigne';
+import { SERVEUR_EN_LIGNE, type Acces, type CompteServeur, type StatutCompte } from '../compte/enLigne';
+
 import { Fenetre, argent } from './ui';
 
 export const DEPOTS = [500, 1000, 3000, 5000, 10000, 25000, 50000, 100000, 500000, 1000000];
@@ -237,6 +238,12 @@ export function DialogueConnexion({ login: loginInitial }: { login?: number }) {
           </button>
         </div>
       </form>
+      <MesComptesEnLigne
+        apres={(login) => {
+          maj((e) => ({ ...e, actif: login }));
+          fermer();
+        }}
+      />
       {etat.comptes.length > 0 && (
         <>
           <h4 className="titre-section">Comptes de cet appareil</h4>
@@ -272,5 +279,74 @@ export function DialogueConnexion({ login: loginInitial }: { login?: number }) {
         </>
       )}
     </Fenetre>
+  );
+}
+
+/** Comptes en ligne du compte Parnassa relié : connexion en un geste, sans mot de passe. */
+export function useMesComptes() {
+  const { enLigne, synchro } = useTerminal();
+  const relie = synchro.statut !== 'deconnecte';
+  const [comptes, setComptes] = useState<CompteServeur[] | null>(null);
+  const [erreur, setErreur] = useState<string | null>(null);
+  useEffect(() => {
+    if (!relie) return;
+    let actif = true;
+    enLigne
+      .mesComptes()
+      .then((c) => actif && setComptes(c))
+      .catch((e: unknown) => actif && setErreur(e instanceof Error ? e.message : 'Liste indisponible.'));
+    return () => {
+      actif = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relie]);
+  return { relie, comptes, erreur };
+}
+
+function MesComptesEnLigne({ apres }: { apres: (login: number) => void }) {
+  const { etat, enLigne, signaler } = useTerminal();
+  const { relie, comptes, erreur } = useMesComptes();
+  const [enCours, setEnCours] = useState<number | null>(null);
+  if (!relie) return null;
+  return (
+    <>
+      <h4 className="titre-section">Vos comptes {SERVEUR_EN_LIGNE} (compte Parnassa relié)</h4>
+      {erreur && <p className="erreur-champ">{erreur}</p>}
+      {!comptes && !erreur && <p className="aide">Chargement…</p>}
+      {comptes?.length === 0 && <p className="aide">Aucun compte en ligne pour l'instant : ouvrez-en un, il sera rattaché à votre compte Parnassa.</p>}
+      <div className="liste-comptes">
+        {comptes?.map((c) => {
+          const connecte = etat.comptes.some((k) => k.login === c.login && enLigne.statut(c.login) !== 'deconnecte');
+          return (
+            <button
+              key={c.login}
+              disabled={enCours !== null}
+              onClick={() => {
+                if (connecte) return apres(c.login);
+                setEnCours(c.login);
+                enLigne
+                  .connecterProprietaire(c.login)
+                  .then(() => {
+                    signaler(`${c.login} : connecté à ${SERVEUR_EN_LIGNE}`);
+                    apres(c.login);
+                  })
+                  .catch((e: unknown) => {
+                    signaler(e instanceof Error ? e.message : 'Connexion impossible.');
+                    setEnCours(null);
+                  });
+              }}
+            >
+              <b>
+                {c.login} — {c.nom}
+                <span className={`pastille-statut ${connecte ? 'connecte' : ''}`}>{enCours === c.login ? 'connexion…' : connecte ? 'sur cet appareil' : 'se connecter'}</span>
+              </b>
+              <small>
+                {SERVEUR_EN_LIGNE} · solde {argent(c.resume?.balance ?? c.capital)} USD · {c.resume?.positions ?? 0} position(s)
+              </small>
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }

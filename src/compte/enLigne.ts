@@ -82,6 +82,15 @@ function depuisDistant(distant: unknown, login: number, lecture: boolean): Compt
   return { ...c, login, serveur: SERVEUR_EN_LIGNE, enLigne: true, lecture: lecture || undefined };
 }
 
+export interface CompteServeur {
+  login: number;
+  nom: string;
+  capital: number;
+  creeLe: number;
+  derniereConnexion: number | null;
+  resume?: { balance: number | null; positions: number };
+}
+
 export type StatutCompte = 'connecte' | 'connexion' | 'deconnecte' | 'erreur';
 
 export interface ComptesEnLigne {
@@ -90,6 +99,10 @@ export interface ComptesEnLigne {
   erreur: (login: number) => string | null;
   ouvrir: (o: { nom: string; depot: number; levier: number; type: TypeCompte; sansSwap: boolean }) => Promise<Acces>;
   connecter: (login: number, motDePasse: string, serveur: string) => Promise<Compte>;
+  /** Comptes en ligne rattachés au compte Parnassa relié (null sans liaison). */
+  mesComptes: () => Promise<CompteServeur[] | null>;
+  /** Connexion sans mot de passe pour le propriétaire, par la liaison au compte Parnassa. */
+  connecterProprietaire: (login: number) => Promise<Compte>;
   deconnecter: (login: number) => Promise<void>;
 }
 
@@ -250,23 +263,9 @@ export function useComptesEnLigne(etat: EtatTerminal, maj: (f: (e: EtatTerminal)
     return () => window.clearTimeout(t);
   }, [cles, envoyer]);
 
-  const connecter = useCallback(
-    async (login: number, motDePasse: string, serveur: string): Promise<Compte> => {
-      fixer(login, 'connexion');
-      let r: Awaited<ReturnType<typeof appel>>;
-      try {
-        r = await appel('connexion', { methode: 'POST', corps: { login: String(login), motDePasse, serveur, plateforme: 'trader' } });
-      } catch {
-        fixer(login, sessions.current[login] ? 'erreur' : 'deconnecte', 'serveur injoignable');
-        throw new Error('Serveur injoignable : vérifiez votre connexion Internet.');
-      }
-      if (r.statut !== 200) {
-        fixer(login, sessions.current[login] ? statuts[login] ?? 'deconnecte' : 'deconnecte');
-        throw new Error(messageErreur(r.donnees, 'Connexion impossible.'));
-      }
-      const jeton = String(r.donnees.jeton);
-      const lecture = r.donnees.lecture === true;
-      const infos = r.donnees.compte as { nom?: string; capital?: number };
+  /** Après une connexion acceptée : lecture du compte sur le serveur et mise en place sur cet appareil. */
+  const brancher = useCallback(
+    async (login: number, jeton: string, lecture: boolean, infos: { nom?: string; capital?: number }): Promise<Compte> => {
       garderSession(login, { jeton, lecture, base: null });
       const lu = await appel('compte', { jeton });
       const majLe = typeof lu.donnees.majLe === 'number' ? lu.donnees.majLe : null;
@@ -285,8 +284,36 @@ export function useComptesEnLigne(etat: EtatTerminal, maj: (f: (e: EtatTerminal)
       fixer(login, 'connecte');
       return compte;
     },
-    [envoyer, remplacerCompte, statuts],
+    [envoyer, remplacerCompte],
   );
+
+  const connexion = useCallback(
+    async (login: number, corps: Record<string, unknown>, jeton: string | null): Promise<Compte> => {
+      fixer(login, 'connexion');
+      let r: Awaited<ReturnType<typeof appel>>;
+      try {
+        r = await appel('connexion', { methode: 'POST', jeton, corps: { login: String(login), plateforme: 'trader', ...corps } });
+      } catch {
+        fixer(login, sessions.current[login] ? 'erreur' : 'deconnecte', 'serveur injoignable');
+        throw new Error('Serveur injoignable : vérifiez votre connexion Internet.');
+      }
+      if (r.statut !== 200) {
+        fixer(login, sessions.current[login] ? 'erreur' : 'deconnecte');
+        throw new Error(messageErreur(r.donnees, 'Connexion impossible.'));
+      }
+      return brancher(login, String(r.donnees.jeton), r.donnees.lecture === true, r.donnees.compte as { nom?: string; capital?: number });
+    },
+    [brancher],
+  );
+  const connecter = useCallback((login: number, motDePasse: string, serveur: string) => connexion(login, { motDePasse, serveur }, null), [connexion]);
+  const connecterProprietaire = useCallback((login: number) => connexion(login, { proprietaire: true }, jetonLiaison()), [connexion]);
+  const mesComptes = useCallback(async (): Promise<CompteServeur[] | null> => {
+    const liaison = jetonLiaison();
+    if (!liaison) return null;
+    const r = await appel('comptes?plateforme=trader', { jeton: liaison });
+    if (r.statut !== 200) throw new Error(messageErreur(r.donnees, 'Liste des comptes indisponible.'));
+    return ((r.donnees.comptes as (Omit<CompteServeur, 'login'> & { login: string })[]) ?? []).map((c) => ({ ...c, login: Number(c.login) }));
+  }, []);
 
   const ouvrir = useCallback(
     async (o: { nom: string; depot: number; levier: number; type: TypeCompte; sansSwap: boolean }): Promise<Acces> => {
@@ -329,6 +356,8 @@ export function useComptesEnLigne(etat: EtatTerminal, maj: (f: (e: EtatTerminal)
     erreur: (login) => erreurs[login] ?? null,
     ouvrir,
     connecter,
+    mesComptes,
+    connecterProprietaire,
     deconnecter,
   };
 }
