@@ -103,6 +103,11 @@ export interface ComptesEnLigne {
   mesComptes: () => Promise<CompteServeur[] | null>;
   /** Connexion sans mot de passe pour le propriétaire, par la liaison au compte Parnassa. */
   connecterProprietaire: (login: number) => Promise<Compte>;
+  /** Propriétaire (compte Parnassa relié) : nouveaux mots de passe, les anciens et toutes les sessions tombent. */
+  nouveauxMotsDePasse: (login: number) => Promise<Acces>;
+  /** Propriétaire : fermeture définitive du compte sur le serveur. */
+  fermerCompte: (login: number) => Promise<void>;
+  renommer: (login: number, nom: string) => Promise<void>;
   deconnecter: (login: number) => Promise<void>;
 }
 
@@ -343,6 +348,47 @@ export function useComptesEnLigne(etat: EtatTerminal, maj: (f: (e: EtatTerminal)
     [connecter, remplacerCompte],
   );
 
+  const gerer = useCallback(async (methode: 'PATCH' | 'DELETE', corps: Record<string, unknown>) => {
+    const liaison = jetonLiaison();
+    if (!liaison) throw new Error('Reliez d’abord Parnassa Trader à votre compte Parnassa (Paramètres → Compte Parnassa).');
+    let r: Awaited<ReturnType<typeof appel>>;
+    try {
+      r = await appel('comptes?plateforme=trader', { methode, jeton: liaison, corps });
+    } catch {
+      throw new Error('Serveur injoignable : vérifiez votre connexion Internet.');
+    }
+    if (r.statut === 404) throw new Error('Ce compte n’est pas rattaché à votre compte Parnassa : seul son propriétaire peut le gérer.');
+    if (r.statut !== 200) throw new Error(messageErreur(r.donnees, 'Opération impossible.'));
+    return r.donnees;
+  }, []);
+  const nouveauxMotsDePasse = useCallback(
+    async (login: number): Promise<Acces> => {
+      const d = await gerer('PATCH', { action: 'mots-de-passe', login: String(login) });
+      const a = d.acces as { motDePasse: string; motDePasseInvestisseur: string };
+      // Toutes les sessions du compte sont fermées, celle-ci comprise : on la rouvre en propriétaire.
+      garderSession(login, null);
+      prets.current.delete(login);
+      await connexion(login, { proprietaire: true }, jetonLiaison()).catch(() => fixer(login, 'deconnecte'));
+      return { login, serveur: SERVEUR_EN_LIGNE, motDePasse: a.motDePasse, motDePasseInvestisseur: a.motDePasseInvestisseur };
+    },
+    [gerer, connexion],
+  );
+  const fermerCompte = useCallback(
+    async (login: number) => {
+      await gerer('DELETE', { login: String(login) });
+      garderSession(login, null);
+      prets.current.delete(login);
+      fixer(login, 'deconnecte');
+    },
+    [gerer],
+  );
+  const renommer = useCallback(
+    async (login: number, nom: string) => {
+      await gerer('PATCH', { action: 'renommer', login: String(login), nom });
+    },
+    [gerer],
+  );
+
   const deconnecter = useCallback(async (login: number) => {
     const s = sessions.current[login];
     garderSession(login, null);
@@ -358,6 +404,9 @@ export function useComptesEnLigne(etat: EtatTerminal, maj: (f: (e: EtatTerminal)
     connecter,
     mesComptes,
     connecterProprietaire,
+    nouveauxMotsDePasse,
+    fermerCompte,
+    renommer,
     deconnecter,
   };
 }

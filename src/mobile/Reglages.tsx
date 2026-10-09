@@ -5,7 +5,7 @@ import { RELAIS } from '../marche/bougies';
 import { TYPES_COMPTE, formaterPrix, symbole, type TypeCompte } from '../marche/symboles';
 import { MESSAGES } from '../composants/BoiteOutils';
 import { BlocSynchro } from '../composants/Synchro';
-import { BlocAcces, DEPOTS, LEVIERS, LIBELLE_STATUT } from '../composants/DialoguesComptes';
+import { actionsProprietaire, BlocAcces, DEPOTS, LEVIERS, LIBELLE_STATUT } from '../composants/DialoguesComptes';
 import { SERVEUR_EN_LIGNE, type Acces } from '../compte/enLigne';
 import { argent, dateMT } from '../composants/ui';
 import { choisirInterface } from '../interface';
@@ -175,7 +175,8 @@ export function Reglages() {
 
 /** Liste des comptes par serveur : changer de compte, se connecter à un compte en ligne, en ouvrir un. */
 export function Comptes() {
-  const { etat, maj, enLigne } = useTerminal();
+  const terminal = useTerminal();
+  const { etat, maj, enLigne } = terminal;
   const { pousser, feuille } = useNav();
   const serveurs = [...new Set(etat.comptes.map((c) => c.serveur))];
   return (
@@ -217,6 +218,7 @@ export function Comptes() {
                           { libelle: 'Se connecter', action: connecter },
                           ...(c.enLigne && statut !== 'deconnecte' ? [{ libelle: 'Se déconnecter', action: () => void enLigne.deconnecter(c.login) }] : []),
                           ...(c.login === etat.actif ? [{ libelle: 'Dépôt / retrait', action: () => pousser({ type: 'depot' }) }] : []),
+                          ...actionsProprietaire(c, terminal, (acces) => pousser({ type: 'acces', acces })),
                           ...(etat.comptes.length > 1
                             ? [
                                 {
@@ -492,7 +494,7 @@ export function AccesCompte({ acces }: { acces: Acces }) {
   const texte = `Compte : ${acces.login}\nServeur : ${acces.serveur}\nMot de passe : ${acces.motDePasse}\nMot de passe investisseur (lecture seule) : ${acces.motDePasseInvestisseur}`;
   return (
     <div className="mm-ecran">
-      <EnTete titre="Compte ouvert" />
+      <EnTete titre={`Accès du compte`} />
       <div className="mm-defile">
         <div className="mm-bloc">
           <BlocAcces acces={acces} />

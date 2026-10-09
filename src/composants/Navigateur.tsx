@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { actionsProprietaire } from './DialoguesComptes';
 import { useTerminal } from '../contexte';
 import { DEFINITIONS } from '../graphique/indicateurs';
 import { EXPERTS } from '../algo/experts';
@@ -31,7 +32,8 @@ const SCRIPTS: { nom: string; executer: (c: Compte, cot: Parameters<typeof ferme
 ];
 
 export function Navigateur() {
-  const { etat, maj, ouvrir, operer, cotations, enLigne } = useTerminal();
+  const terminal = useTerminal();
+  const { etat, maj, ouvrir, operer, cotations, enLigne } = terminal;
   const { ouvrirMenu, element: menu } = useMenuContextuel();
   const groupes = ['Tendance', 'Oscillateurs', 'Volumes'] as const;
   return (
@@ -66,6 +68,7 @@ export function Navigateur() {
                               { libelle: 'Se connecter', action: connecter },
                               ...(c.enLigne && statut !== 'deconnecte' ? [{ libelle: 'Se déconnecter', action: () => void enLigne.deconnecter(c.login) }] : []),
                               { libelle: 'Dépôt / retrait…', desactive: c.login !== etat.actif, action: () => ouvrir({ type: 'depot' }) },
+                              ...actionsProprietaire(c, terminal, (acces) => ouvrir({ type: 'acces', acces })).map((x) => ({ libelle: x.libelle, action: x.action })),
                               { separateur: true },
                               { libelle: 'Ouvrir un compte…', action: () => ouvrir({ type: 'compte' }) },
                               {

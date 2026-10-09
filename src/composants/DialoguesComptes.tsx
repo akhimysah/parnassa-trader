@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useTerminal } from '../contexte';
+import { useTerminal, type Terminal } from '../contexte';
 import { TYPES_COMPTE, type TypeCompte } from '../marche/symboles';
-import { nouveauCompte, SERVEUR } from '../compte/moteur';
+import { nouveauCompte, SERVEUR, type Compte } from '../compte/moteur';
 import { SERVEUR_EN_LIGNE, type Acces, type CompteServeur, type StatutCompte } from '../compte/enLigne';
 
 import { Fenetre, argent } from './ui';
@@ -118,7 +118,7 @@ export function DialogueAcces({ acces }: { acces: Acces }) {
   const [copie, setCopie] = useState(false);
   const texte = `Compte : ${acces.login}\nServeur : ${acces.serveur}\nMot de passe : ${acces.motDePasse}\nMot de passe investisseur (lecture seule) : ${acces.motDePasseInvestisseur}`;
   return (
-    <Fenetre titre="Compte ouvert" fermer={fermer} largeur={420}>
+    <Fenetre titre={`Accès du compte ${acces.login}`} fermer={fermer} largeur={420}>
       <BlocAcces acces={acces} />
       <p className="avertissement">Notez ces accès maintenant : le mot de passe ne sera plus jamais affiché. Ils servent à vous connecter à ce compte sur un autre appareil.</p>
       <div className="boutons">
@@ -349,4 +349,55 @@ function MesComptesEnLigne({ apres }: { apres: (login: number) => void }) {
       </div>
     </>
   );
+}
+
+/**
+ * Gestion d'un compte en ligne par son propriétaire (compte Parnassa relié) : renommer, nouveaux mots de passe,
+ * fermeture. Partagé par le Navigateur (bureau) et la liste des comptes (mobile).
+ */
+export function actionsProprietaire(
+  c: Compte,
+  t: Pick<Terminal, 'etat' | 'maj' | 'enLigne' | 'synchro' | 'signaler'>,
+  montrerAcces: (a: Acces) => void,
+): { libelle: string; action: () => void; danger?: boolean }[] {
+  if (!c.enLigne || t.synchro.statut === 'deconnecte') return [];
+  const echec = (e: unknown) => t.signaler(e instanceof Error ? e.message : 'Opération impossible.');
+  return [
+    {
+      libelle: 'Renommer le compte…',
+      action: () => {
+        const nom = window.prompt('Nouveau nom du compte', c.nom)?.trim();
+        if (!nom || nom === c.nom) return;
+        t.enLigne
+          .renommer(c.login, nom)
+          .then(() => t.maj((e) => ({ ...e, comptes: e.comptes.map((k) => (k.login === c.login ? { ...k, nom } : k)) })))
+          .catch(echec);
+      },
+    },
+    {
+      libelle: 'Changer les mots de passe…',
+      action: () => {
+        if (!window.confirm(`Nouveaux mots de passe pour le compte ${c.login} ? Les anciens ne marcheront plus et le compte sera déconnecté de tous les autres appareils.`)) return;
+        t.enLigne.nouveauxMotsDePasse(c.login).then(montrerAcces).catch(echec);
+      },
+    },
+    {
+      libelle: 'Fermer le compte…',
+      danger: true,
+      action: () => {
+        if (t.etat.comptes.length <= 1) return t.signaler('Ouvrez d’abord un autre compte : il en faut au moins un.');
+        if (!window.confirm(`Fermer définitivement le compte ${c.login} sur ${c.serveur} ? Ses accès ne marcheront plus et son historique en ligne sera effacé.`)) return;
+        t.enLigne
+          .fermerCompte(c.login)
+          .then(() => {
+            t.maj((e) => {
+              const comptes = e.comptes.filter((k) => k.login !== c.login);
+              return { ...e, comptes, actif: e.actif === c.login ? comptes[0].login : e.actif };
+            });
+            t.signaler(`Compte ${c.login} fermé`);
+          })
+          .catch(echec);
+      },
+    },
+  ];
 }
