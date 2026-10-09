@@ -2034,3 +2034,57 @@ kbd {
   border-radius: 2px;
   vertical-align: middle;
 }
+/* Assistant de création d'expert */
+.fenetre-assistant .assistant-blocs {
+  display: grid;
+  gap: 8px;
+  max-height: 55vh;
+  overflow: auto;
+}
+.bloc-conditions {
+  border: 1px solid var(--bordure);
+  padding: 6px 8px;
+}
+.bloc-conditions legend {
+  font-weight: 600;
+}
+.bloc-conditions .aide {
+  margin: 0 0 4px;
+}
+.condition {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--bordure);
+}
+.condition .et {
+  font-style: italic;
+  color: var(--muet);
+  width: 100%;
+}
+.operande {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+.operande-param {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.operande-param small {
+  color: var(--muet);
+  max-width: 70px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.operande .spin {
+  width: 70px;
+}
+.resume-expert {
+  font-style: italic;
+}

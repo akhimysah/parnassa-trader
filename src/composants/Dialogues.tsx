@@ -10,6 +10,7 @@ import { definirSuiveur, fermerPosition, levierEffectif, operationBalance, ouvri
 import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
 import { BlocSynchro, DialogueSynchro } from './Synchro';
 import { DialogueAcces, DialogueCompte, DialogueConnexion } from './DialoguesComptes';
+import { DialogueAssistant } from './Assistant';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
 import { Fenetre, Spin, argent, dateMT } from './ui';
 import { OBJETS } from '../graphique/dessins';
@@ -74,6 +75,8 @@ function Contenu({ d }: { d: Dialogue }) {
       return <DialogueSynchro />;
     case 'acces':
       return <DialogueAcces acces={d.acces} />;
+    case 'assistant':
+      return <DialogueAssistant id={d.id} />;
   }
 }
 

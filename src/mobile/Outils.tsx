@@ -4,7 +4,7 @@ import { identifiant, type Alerte } from '../etat';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
-import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
+import { tousExperts, definitionExpert, type TypeExpert } from '../algo/experts';
 import { calculerStats } from '../algo/statistiques';
 import { definirSuiveur, operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
 import { CourbeSolde } from '../composants/Courbe';
@@ -450,7 +450,7 @@ export function EcranExperts() {
         </ul>
         <div className="mm-section">Attacher au graphique actuel</div>
         <ul className="mm-liste">
-          {EXPERTS.map((x) => (
+          {tousExperts().map((x) => (
             <li key={x.type} className="fleche" onClick={() => pousser({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })}>
               <span className="mm-ico violet">🎓</span>
               <div className="mm-liste-texte">
@@ -487,7 +487,7 @@ export function EcranExpert({ graphique, expert }: { graphique: string; expert?:
           <label className="mm-ligne-champ">
             <span>Expert</span>
             <select value={type} onChange={(e) => setType(e.target.value as TypeExpert)}>
-              {EXPERTS.map((x) => (
+              {tousExperts().map((x) => (
                 <option key={x.type} value={x.type}>
                   {x.nom}
                 </option>

@@ -33,6 +33,7 @@ export type Dialogue =
   | { type: 'expert'; graphique: string; expert?: import('./algo/experts').TypeExpert }
   | { type: 'rapport' }
   | { type: 'synchro' }
+  | { type: 'assistant'; id?: string }
   | { type: 'acces'; acces: Acces };
 
 /** Ce qu'affiche la barre d'état au survol d'un graphique. */

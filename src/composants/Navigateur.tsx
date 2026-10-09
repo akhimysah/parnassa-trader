@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { actionsProprietaire } from './DialoguesComptes';
 import { useTerminal } from '../contexte';
 import { DEFINITIONS, GROUPES } from '../graphique/indicateurs';
-import { EXPERTS } from '../algo/experts';
+import { tousExperts } from '../algo/experts';
 import { preparerTest } from './Testeur';
 import { fermerPosition, profitPosition, supprimerOrdre, type Compte } from '../compte/moteur';
 import { useMenuContextuel } from './ui';
@@ -104,11 +104,11 @@ export function Navigateur() {
               ))}
             </Noeud>
             <Noeud libelle="Expert Advisors" icone="🎓" ouvertParDefaut>
-              {EXPERTS.map((x) => (
+              {tousExperts().map((x) => (
                 <Noeud
                   key={x.type}
                   libelle={x.nom}
-                  icone="🎓"
+                  icone={x.type.startsWith('perso:') ? '🧩' : '🎓'}
                   onDoubleClick={() => ouvrir({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -123,10 +123,14 @@ export function Navigateur() {
                           setTimeout(() => preparerTest({ expert: x.type, symbole: g?.symbole ?? 'EURUSD', periode: g?.periode ?? 'H1' }), 0);
                         },
                       },
+                      { separateur: true },
+                      ...(x.type.startsWith('perso:') ? [{ libelle: "Modifier dans l'assistant…", action: () => ouvrir({ type: 'assistant', id: x.type.slice(6) }) }] : []),
+                      { libelle: "Créer un expert (assistant)…", action: () => ouvrir({ type: 'assistant' }) },
                     ]);
                   }}
                 />
               ))}
+              <Noeud libelle="Créer un expert…" icone="✚" onDoubleClick={() => ouvrir({ type: 'assistant' })} />
             </Noeud>
             <Noeud libelle="Scripts" icone="📜" ouvertParDefaut>
               {SCRIPTS.map((sc) => (

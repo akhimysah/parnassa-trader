@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ContexteTerminal, useTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
 import { reglagesModele } from './modeles';
+import { definirExpertsPerso } from './algo/experts';
 import { chargerEtat, nouveauGraphique, sauverEtat, type EtatTerminal, type Graphique } from './etat';
 import { definirAbonnements, definirTypeCompte, useCotations } from './marche/cotations';
 import { appliquerCotations, type Compte, type Resultat } from './compte/moteur';
@@ -24,6 +25,8 @@ import { notifier } from './notifications';
 
 export function App() {
   const [etat, setEtat] = useState<EtatTerminal>(chargerEtat);
+  // Experts de l'assistant : lus par le moteur des experts et le testeur comme les experts intégrés.
+  definirExpertsPerso(etat.expertsPerso);
   const refEtat = useRef(etat);
   // Toutes les mises à jour passent par `maj` : la référence reste à jour entre deux rendus.
   const maj = useCallback((f: (e: EtatTerminal) => EtatTerminal) => {

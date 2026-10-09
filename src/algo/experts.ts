@@ -5,8 +5,10 @@
 import type { Bougie } from '../marche/bougies';
 import { calculer, moyenne } from '../graphique/indicateurs';
 import type { Sens } from '../compte/moteur';
+import { decrireExpert, deciderPerso, type ExpertPerso } from './assistant';
 
-export type TypeExpert = 'croisement-ma' | 'rsi' | 'bollinger' | 'cassure';
+/** Experts intégrés, ou créés avec l'assistant (« perso:<id> »). */
+export type TypeExpert = 'croisement-ma' | 'rsi' | 'bollinger' | 'cassure' | `perso:${string}`;
 
 export interface Expert {
   type: TypeExpert;
@@ -57,8 +59,26 @@ export const EXPERTS: DefinitionExpert[] = [
   },
 ];
 
+// Experts de l'assistant, tenus à jour par le terminal (état synchronisé) et lus comme les experts intégrés.
+let persos: ExpertPerso[] = [];
+export function definirExpertsPerso(liste: ExpertPerso[]) {
+  persos = liste;
+}
+export function expertPerso(t: TypeExpert): ExpertPerso | undefined {
+  return t.startsWith('perso:') ? persos.find((e) => `perso:${e.id}` === t) : undefined;
+}
+
+/** Experts intégrés puis ceux de l'assistant. */
+export function tousExperts(): DefinitionExpert[] {
+  return [...EXPERTS, ...persos.map((e) => definitionExpert(`perso:${e.id}`))];
+}
+
 export function definitionExpert(t: TypeExpert): DefinitionExpert {
-  return EXPERTS.find((e) => e.type === t)!;
+  if (t.startsWith('perso:')) {
+    const e = expertPerso(t);
+    return { type: t, nom: e ? e.nom : 'Expert supprimé', description: e ? decrireExpert(e) : "Cet expert de l'assistant a été supprimé : il ne trade plus.", defaut: { ...COMMUNS }, libelles: { ...LIBELLES_COMMUNS } };
+  }
+  return EXPERTS.find((e) => e.type === t) ?? EXPERTS[0];
 }
 
 export interface Decision {
@@ -78,6 +98,10 @@ const RIEN: Decision = { fermer: [], ouvrir: null, raison: '' };
 export function decider(e: Expert, b: Bougie[], sensActuel: Sens | null): Decision {
   const n = b.length;
   if (n < 3) return RIEN;
+  if (e.type.startsWith('perso:')) {
+    const perso = expertPerso(e.type);
+    return perso ? deciderPerso(perso, b, sensActuel) : RIEN;
+  }
   const p = e.p;
   const c = b.map((x) => x.close);
   const i = n - 1;
@@ -120,5 +144,7 @@ export function decider(e: Expert, b: Bougie[], sensActuel: Sens | null): Decisi
       if (c[i]! < plusBas) return { fermer: ['buy'], ouvrir: 'sell', raison: `cassure du plus bas ${p.periode} barres` };
       return RIEN;
     }
+    default:
+      return RIEN;
   }
 }

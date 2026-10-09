@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTerminal } from '../contexte';
-import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
+import { tousExperts, definitionExpert, type TypeExpert } from '../algo/experts';
 import { profitPosition } from '../compte/moteur';
 import { calculerStats } from '../algo/statistiques';
 import { CourbeSolde } from './Courbe';
@@ -9,7 +9,7 @@ import { Fenetre, Spin, argent } from './ui';
 
 /** Attacher un Expert Advisor au graphique et régler ses paramètres (onglet « Entrées » de MT5). */
 export function DialogueExpert({ graphique, expert }: { graphique: string; expert?: TypeExpert }) {
-  const { etat, maj, majGraphique, fermer, compte, cotations } = useTerminal();
+  const { etat, maj, majGraphique, fermer, compte, cotations, ouvrir } = useTerminal();
   const g = etat.graphiques.find((x) => x.id === graphique);
   const [type, setType] = useState<TypeExpert>(expert ?? g?.expert?.type ?? 'croisement-ma');
   const def = definitionExpert(type);
@@ -35,14 +35,21 @@ export function DialogueExpert({ graphique, expert }: { graphique: string; exper
         <label>
           <span>Expert :</span>
           <select value={type} onChange={(e) => setType(e.target.value as TypeExpert)}>
-            {EXPERTS.map((x) => (
+            {tousExperts().map((x) => (
               <option key={x.type} value={x.type}>
                 {x.nom}
               </option>
             ))}
           </select>
         </label>
-        <p className="aide">{def.description}</p>
+        <p className="aide">
+          {def.description}{' '}
+          {type.startsWith('perso:') && (
+            <button className="lien" onClick={() => ouvrir({ type: 'assistant', id: type.slice(6) })}>
+              Modifier dans l'assistant
+            </button>
+          )}
+        </p>
         <fieldset>
           <legend>Entrées</legend>
           {Object.keys(def.defaut).map((k) => (

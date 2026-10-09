@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CandlestickSeries, ColorType, createChart, createSeriesMarkers, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type Time, type UTCTimestamp } from 'lightweight-charts';
 import { useTerminal } from '../contexte';
-import { EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
+import { tousExperts, EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
 import { combinaisons, lancerTest, optimiser, type Modelisation, type Passe, type PlageOptimisation, type ResultatTest } from '../algo/testeur';
 import { chargerHistoriqueLong, PERIODES, type Bougie, type Periode } from '../marche/bougies';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
@@ -35,7 +35,7 @@ function reglagesDefaut(): Reglages {
 function charger(): Reglages {
   try {
     const r = JSON.parse(localStorage.getItem(CLE) ?? 'null') as Reglages | null;
-    return r && symbole(r.symbole) && EXPERTS.some((e) => e.type === r.expert) ? { ...reglagesDefaut(), ...r } : reglagesDefaut();
+    return r && symbole(r.symbole) && tousExperts().some((e) => e.type === r.expert) ? { ...reglagesDefaut(), ...r } : reglagesDefaut();
   } catch {
     return reglagesDefaut();
   }
@@ -200,7 +200,7 @@ export function Testeur() {
                 <label>
                   <span>Expert :</span>
                   <select value={r.expert} onChange={(e) => changerExpert(e.target.value as TypeExpert)}>
-                    {EXPERTS.map((x) => (
+                    {tousExperts().map((x) => (
                       <option key={x.type} value={x.type}>
                         {x.nom}
                       </option>

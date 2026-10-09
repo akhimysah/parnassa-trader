@@ -85,6 +85,8 @@ export interface EtatTerminal {
   /** Profils (ensembles de graphiques) enregistrés, et le dernier chargé ou enregistré. */
   profils: import('./modeles').Profil[];
   profilActif: string | null;
+  /** Experts créés avec l'assistant. */
+  expertsPerso: import('./algo/assistant').ExpertPerso[];
 }
 
 export function identifiant(): string {
@@ -141,6 +143,7 @@ function etatInitial(): EtatTerminal {
     modeleDefaut: null,
     profils: [],
     profilActif: null,
+    expertsPerso: [],
   };
 }
 
