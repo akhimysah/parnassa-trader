@@ -28,6 +28,7 @@ import { formaterPrix, point, symbole } from '../marche/symboles';
 import { calculer, definition, nomCourt } from './indicateurs';
 import { couleursSchema } from './couleurs';
 import { Dessins, OBJETS } from './dessins';
+import { chargerCalendrier, devisesSymbole, valeurEvenement, type Evenement } from '../marche/calendrier';
 
 /** Indicateurs en sous-fenêtre exprimés en prix : même nombre de décimales que le symbole (l'échelle reste aussi large). */
 const EN_PRIX = ['atr', 'stddev', 'bears', 'bulls', 'ao', 'ac'];
@@ -35,7 +36,7 @@ import { menuModeles } from '../composants/Barres';
 import { registreGraphiques } from './registre';
 import { decider, definitionExpert } from '../algo/experts';
 import { journaliser, LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
-import { PrixGros, VolumeRapide, useMenuContextuel, type ElementMenu } from '../composants/ui';
+import { PrixGros, VolumeRapide, dateMT, useMenuContextuel, type ElementMenu } from '../composants/ui';
 
 interface Props {
   g: Graphique;
@@ -276,6 +277,24 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   useEffect(() => {
     dessinsRef.current?.definir(g.objets, bougiesRef.current.map((b) => b.time));
   }, [g.objets, version, versionSerie, nbBarres]);
+
+  // Annonces du calendrier économique des devises du symbole (moyenne et haute importance).
+  const [annonce, setAnnonce] = useState<{ x: number; y: number; evenements: Evenement[] } | null>(null);
+  const calendrierVisible = g.calendrier !== false;
+  useEffect(() => {
+    if (!calendrierVisible) {
+      dessinsRef.current?.definirEvenements([]);
+      return;
+    }
+    let actif = true;
+    const devises = devisesSymbole(s);
+    void chargerCalendrier().then((liste) => {
+      if (actif) dessinsRef.current?.definirEvenements(liste.filter((e) => e.importance >= 0 && devises.includes(e.devise)));
+    });
+    return () => {
+      actif = false;
+    };
+  }, [s, calendrierVisible, versionSerie]);
 
   // ---------- Historique ----------
   const [rechargement, setRechargement] = useState(0);
@@ -648,6 +667,9 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       const gl = glisse.current;
       if (!gl) {
         const libre = !refEtat.current.outil && dansPrincipal(e);
+        const h = chartRef.current?.panes()[0]?.getHeight() ?? 0;
+        const ev = libre ? (dessinsRef.current?.evenementProche(xDe(e), yDe(e), h) ?? []) : [];
+        setAnnonce(ev.length ? { x: xDe(e), y: yDe(e), evenements: ev } : null);
         const ancre = libre ? dessinsRef.current?.ancreProche(xDe(e), yDe(e)) : null;
         const corps = libre && !ancre ? dessinsRef.current?.corpsProche(xDe(e), yDe(e)) : null;
         dessinsRef.current?.selectionner(ancre?.id ?? corps ?? null);
@@ -820,6 +842,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           { libelle: 'Ligne', raccourci: 'Alt+3', coche: g.type === 'ligne', action: () => majGraphique(g.id, { type: 'ligne' }) },
         ],
       },
+      { libelle: 'Calendrier économique sur le graphique', coche: g.calendrier !== false, action: () => majGraphique(g.id, { calendrier: g.calendrier === false }) },
       { libelle: 'Modèle', sousMenu: menuModeles(etat, t.maj, g) },
       {
         libelle: 'Expert Advisors',
@@ -861,7 +884,22 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
 
   return (
     <div className={`graphique${actif ? ' actif' : ''}`} onMouseDown={activer} style={{ background: coul.fond, color: coul.texte }}>
-      <div ref={conteneur} className="graphique-zone" onContextMenu={menuGraphique} />
+      <div ref={conteneur} className="graphique-zone" onContextMenu={menuGraphique} onMouseLeave={() => setAnnonce(null)} />
+      {annonce && (
+        <div className="bulle-annonce" style={{ left: Math.max(4, annonce.x - 120), bottom: 30 }}>
+          {annonce.evenements.slice(0, 4).map((e) => (
+            <div key={e.id}>
+              <b>
+                {dateMT(e.date, false).slice(0, 16)} · {e.devise} · {e.importance >= 1 ? 'haute' : 'moyenne'}
+              </b>
+              <div>{e.titreFr ?? e.titre}</div>
+              <small>
+                Actuel {valeurEvenement(e.actuel, e)} · Prévision {valeurEvenement(e.prevision, e)} · Précédent {valeurEvenement(e.precedent, e)}
+              </small>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="graphique-entete">
         <div className="graphique-titre">
           {g.symbole}, {g.periode} : {s.description}

@@ -1,5 +1,6 @@
 import type { IChartApi, ISeriesApi, ISeriesPrimitive, IPrimitivePaneRenderer, IPrimitivePaneView, SeriesType, Time } from 'lightweight-charts';
 import type { ObjetGraphique } from '../etat';
+import type { Evenement } from '../marche/calendrier';
 
 type CanvasRenderingTarget2D = Parameters<IPrimitivePaneRenderer['draw']>[0];
 
@@ -19,6 +20,7 @@ export class Dessins implements ISeriesPrimitive<Time> {
   /** Tous les objets à poignées (sauf la ligne horizontale, qui se tire comme une ligne de prix). */
   private ancrables: ObjetGraphique[] = [];
   private selection: string | null = null;
+  private evenements: Evenement[] = [];
   private temps: number[] = [];
   private readonly vue: IPrimitivePaneView;
 
@@ -47,6 +49,21 @@ export class Dessins implements ISeriesPrimitive<Time> {
     this.ancrables = objets.filter((o) => o.type !== 'horizontale');
     this.temps = temps;
     this.demander?.();
+  }
+
+  /** Annonces du calendrier économique, marquées au bas du graphique comme dans MT5. */
+  definirEvenements(e: Evenement[]) {
+    this.evenements = e;
+    this.demander?.();
+  }
+
+  /** Annonce sous le pointeur (marque du bas du graphique). */
+  evenementProche(x: number, y: number, hauteur: number): Evenement[] {
+    if (Math.abs(y - (hauteur - 12)) > 9) return [];
+    return this.evenements.filter((e) => {
+      const ex = this.x(e.date / 1000);
+      return ex !== null && Math.abs(ex - x) <= 8;
+    });
   }
 
   /** Objet sélectionné (survolé ou tiré) : ses poignées sont dessinées. */
@@ -232,6 +249,22 @@ export class Dessins implements ISeriesPrimitive<Time> {
             ctx.fillText(o.texte ?? '', x + 3, y);
           }
         }
+        ctx.restore();
+      }
+      // Annonces économiques : pastille à la date, couleur selon l'importance.
+      for (const e of this.evenements) {
+        const x = this.x(e.date / 1000);
+        if (x === null || x < -10 || x > mediaSize.width + 10) continue;
+        const y = mediaSize.height - 12;
+        ctx.save();
+        ctx.fillStyle = e.importance >= 1 ? '#e0393e' : e.importance === 0 ? '#f0a020' : '#9a9a9a';
+        ctx.globalAlpha = e.date > Date.now() ? 0.95 : 0.6;
+        ctx.beginPath();
+        ctx.moveTo(x, y - 7);
+        ctx.lineTo(x + 6, y + 4);
+        ctx.lineTo(x - 6, y + 4);
+        ctx.closePath();
+        ctx.fill();
         ctx.restore();
       }
       // Poignées de l'objet sélectionné, comme MT5.

@@ -37,6 +37,8 @@ export interface Graphique {
   schema: Schema;
   /** Expert Advisor attaché au graphique. */
   expert: Expert | null;
+  /** Annonces du calendrier économique sur le graphique (affichées si absent). */
+  calendrier?: boolean;
 }
 
 export interface Alerte {

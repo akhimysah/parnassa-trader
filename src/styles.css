@@ -2097,3 +2097,23 @@ kbd {
   right: 6px;
   z-index: 1;
 }
+/* Annonces du calendrier sur le graphique */
+.bulle-annonce {
+  position: absolute;
+  z-index: 6;
+  width: 260px;
+  padding: 6px 8px;
+  border: 1px solid var(--bordure-forte);
+  background: var(--fond);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  font-size: 11px;
+  pointer-events: none;
+}
+.bulle-annonce > div + div {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--bordure);
+}
+.bulle-annonce small {
+  color: var(--muet);
+}
