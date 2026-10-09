@@ -30,7 +30,7 @@ export function bienvenueVue(): boolean {
 }
 
 /** Accueil au premier lancement, en trois pages. */
-export function Bienvenue({ fermer }: { fermer: () => void }) {
+export function Bienvenue({ fermer, connecter }: { fermer: () => void; connecter?: () => void }) {
   const [page, setPage] = useState(0);
   const [depart, setDepart] = useState<number | null>(null);
   const terminer = () => {
@@ -72,6 +72,17 @@ export function Bienvenue({ fermer }: { fermer: () => void }) {
       <button className="mm-bouton principal mm-bienvenue-bouton" onClick={() => (derniere ? terminer() : setPage(page + 1))}>
         {derniere ? 'COMMENCER' : 'SUIVANT'}
       </button>
+      {derniere && connecter && (
+        <button
+          className="mm-bienvenue-lien"
+          onClick={() => {
+            terminer();
+            connecter();
+          }}
+        >
+          J'ai déjà un compte · Se connecter
+        </button>
+      )}
     </div>
   );
 }

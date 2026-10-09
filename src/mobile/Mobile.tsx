@@ -119,7 +119,7 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
           </nav>
         )}
         {feuille && <FeuilleActions titre={feuille.titre} actions={feuille.actions} fermer={() => setFeuille(null)} />}
-        {accueil && <Bienvenue fermer={() => setAccueil(false)} />}
+        {accueil && <Bienvenue fermer={() => setAccueil(false)} connecter={() => pousser({ type: 'connexion' })} />}
       </div>
     </ContexteNav.Provider>
   );
