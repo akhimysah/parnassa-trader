@@ -48,6 +48,8 @@ function Contenu({ d }: { d: Dialogue }) {
       return <DialogueListeIndicateurs graphique={d.graphique} />;
     case 'objets':
       return <DialogueObjets graphique={d.graphique} />;
+    case 'objet':
+      return <DialogueObjet graphique={d.graphique} id={d.id} />;
     case 'proprietes':
       return <DialogueProprietes graphique={d.graphique} />;
     case 'options':
@@ -277,6 +279,65 @@ function DialogueDepot() {
   );
 }
 
+/** Propriétés d'un objet graphique : couleur, texte, points d'ancrage, comme la fenêtre de MT5. */
+function DialogueObjet({ graphique, id }: { graphique: string; id: string }) {
+  const { etat, majGraphique, fermer, ouvrir } = useTerminal();
+  const g = etat.graphiques.find((x) => x.id === graphique);
+  const o = g?.objets.find((x) => x.id === id);
+  const [couleur, setCouleur] = useState(o?.couleur ?? '#1e90ff');
+  const [texte, setTexte] = useState(o?.texte ?? '');
+  const [points, setPoints] = useState(o?.points ?? []);
+  if (!g || !o) return null;
+  const s = symbole(g.symbole)!;
+  const valider = () => {
+    majGraphique(g.id, (gr) => ({ objets: gr.objets.map((x) => (x.id === id ? { ...x, couleur, points, ...(x.type === 'texte' ? { texte: texte.trim().slice(0, 80) || x.texte } : {}) } : x)) }));
+    fermer();
+  };
+  return (
+    <Fenetre titre={`${OBJETS[o.type].nom} — propriétés`} fermer={fermer} largeur={400}>
+      <div className="formulaire">
+        {o.type === 'texte' && (
+          <label>
+            <span>Texte :</span>
+            <input value={texte} maxLength={80} onChange={(e) => setTexte(e.target.value)} autoFocus />
+          </label>
+        )}
+        <label>
+          <span>Couleur :</span>
+          <span className="palette">
+            {COULEURS.map((c) => (
+              <button key={c} type="button" className={c === couleur ? 'actif' : ''} style={{ background: c }} title={c} onClick={() => setCouleur(c)} />
+            ))}
+            <input type="color" value={couleur} onChange={(e) => setCouleur(e.target.value)} />
+          </span>
+        </label>
+        {o.type !== 'verticale' &&
+          points.map((p, i) => (
+            <label key={i}>
+              <span>{o.type === 'horizontale' ? 'Prix :' : `Point ${i + 1}, prix :`}</span>
+              <Spin valeur={p.prix} changer={(v) => setPoints(points.map((x, k) => (k === i ? { ...x, prix: v } : x)))} pas={point(s)} decimales={s.chiffres} />
+            </label>
+          ))}
+        {o.type !== 'horizontale' && <p className="aide">Dates : {points.map((p) => dateMT(p.t * 1000)).join(' → ')}. Tirez les poignées sur le graphique pour les changer.</p>}
+      </div>
+      <div className="boutons">
+        <button
+          onClick={() => {
+            majGraphique(g.id, (gr) => ({ objets: gr.objets.filter((x) => x.id !== id) }));
+            fermer();
+          }}
+        >
+          Supprimer
+        </button>
+        <button onClick={() => ouvrir({ type: 'objets', graphique: g.id })}>Tous les objets…</button>
+        <button className="principal" onClick={valider}>
+          OK
+        </button>
+      </div>
+    </Fenetre>
+  );
+}
+
 const COULEURS = ['#ff3b30', '#1e90ff', '#20b2aa', '#ffa500', '#9932cc', '#32cd32', '#ff1493', '#808080', '#000000', '#ffd700'];
 
 function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['type']; graphique: string; existant?: string }) {
@@ -384,7 +445,7 @@ function DialogueListeIndicateurs({ graphique }: { graphique: string }) {
 }
 
 function DialogueObjets({ graphique }: { graphique: string }) {
-  const { etat, majGraphique, fermer } = useTerminal();
+  const { etat, majGraphique, fermer, ouvrir } = useTerminal();
   const g = etat.graphiques.find((x) => x.id === graphique);
   if (!g) return null;
   const s = symbole(g.symbole);
@@ -396,6 +457,7 @@ function DialogueObjets({ graphique }: { graphique: string }) {
           <li key={o.id}>
             <span style={{ color: o.couleur }}>■</span> {OBJETS[o.type].nom}{o.texte ? ` « ${o.texte} »` : ''} — {o.type === 'verticale' ? dateMT(o.points[0].t * 1000) : o.points.map((p) => formaterPrix(s, p.prix)).join(' → ')}
             <span className="actions">
+              <button onClick={() => ouvrir({ type: 'objet', graphique: g.id, id: o.id })}>Propriétés</button>
               <button onClick={() => majGraphique(g.id, (gr) => ({ objets: gr.objets.filter((x) => x.id !== o.id) }))}>Supprimer</button>
             </span>
           </li>

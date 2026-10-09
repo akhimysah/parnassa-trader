@@ -1997,3 +1997,10 @@ kbd {
 .testeur-lecteur-infos b.negatif {
   color: var(--negatif);
 }
+.fenetre .palette input[type="color"] {
+  width: 28px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+}

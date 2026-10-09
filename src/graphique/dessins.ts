@@ -76,6 +76,45 @@ export class Dessins implements ISeriesPrimitive<Time> {
     return meilleur;
   }
 
+  /** Objet dont le tracé passe sous le pointeur (pour le déplacer d'un bloc ou ouvrir ses propriétés). */
+  corpsProche(x: number, y: number): string | null {
+    const seg = (x1: number, y1: number, x2: number, y2: number) => {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const l = dx * dx + dy * dy || 1;
+      const u = Math.max(0, Math.min(1, ((x - x1) * dx + (y - y1) * dy) / l));
+      return Math.hypot(x - (x1 + u * dx), y - (y1 + u * dy));
+    };
+    for (const o of [...this.ancrables].reverse()) {
+      const [a, b, c] = o.points;
+      const xa = this.x(a.t);
+      const ya = this.y(a.prix);
+      if (xa === null || ya === null) continue;
+      if (o.type === 'texte') {
+        if (x >= xa - 4 && x <= xa + 8 + 7 * (o.texte?.length ?? 0) && Math.abs(y - ya) <= 9) return o.id;
+        continue;
+      }
+      if (!b) continue;
+      const xb = this.x(b.t);
+      const yb = this.y(b.prix);
+      if (xb === null || yb === null) continue;
+      if (o.type === 'rectangle' && x >= Math.min(xa, xb) && x <= Math.max(xa, xb) && y >= Math.min(ya, yb) && y <= Math.max(ya, yb)) return o.id;
+      if (o.type === 'tendance' && seg(xa, ya, xb, yb) <= 5) return o.id;
+      if (o.type === 'canal') {
+        const pente = (b.prix - a.prix) / (b.t - a.t || 1);
+        const decalage = c ? c.prix - (a.prix + pente * (c.t - a.t)) : 0;
+        const tFin = (this.temps[this.temps.length - 1] ?? b.t) + (b.t - a.t) * 2;
+        const xf = this.x(tFin);
+        for (const d of [0, decalage]) {
+          const y1 = this.y(a.prix + d);
+          const y2 = this.y(a.prix + d + pente * (tFin - a.t));
+          if (xf !== null && y1 !== null && y2 !== null && seg(xa, y1, xf, y2) <= 5) return o.id;
+        }
+      }
+    }
+    return null;
+  }
+
   /** Temps (secondes) d'une position horizontale, interpolé entre les barres comme `x`. */
   tempsEn(x: number): number | null {
     const ts = this.temps;

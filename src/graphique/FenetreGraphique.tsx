@@ -101,7 +101,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   const premierPoint = useRef<{ t: number; prix: number }[]>([]);
   const [etape, setEtape] = useState(0);
   const dessinsRef = useRef<Dessins | null>(null);
-  const glisseObjet = useRef<{ id: string; index: number } | null>(null);
+  /** Point d'objet tiré (index), ou objet entier (index -1) avec ses points et le point de départ du pointeur. */
+  const glisseObjet = useRef<{ id: string; index: number; depart?: { t: number; prix: number }; points?: { t: number; prix: number }[] } | null>(null);
   // Nouvel outil (ou Échap) : les points déjà posés sont oubliés.
   useEffect(() => {
     premierPoint.current = [];
@@ -550,7 +551,16 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     const bas = (e: PointerEvent) => {
       if (e.button !== 0 || refEtat.current.outil || !dansPrincipal(e)) return;
       // Poignée d'un objet (tendance, Fibonacci, rectangle, canal, verticale, texte) : on tire ce point.
-      const ancre = dessinsRef.current?.ancreProche(xDe(e), yDe(e));
+      const dessins = dessinsRef.current;
+      let ancre: { id: string; index: number; depart?: { t: number; prix: number }; points?: { t: number; prix: number }[] } | null = dessins?.ancreProche(xDe(e), yDe(e)) ?? null;
+      if (!ancre && dessins) {
+        // Tracé de l'objet : on le déplace d'un bloc.
+        const id = dessins.corpsProche(xDe(e), yDe(e));
+        const o = id ? refEtat.current.g.objets.find((x) => x.id === id) : undefined;
+        const t = dessins.tempsEn(xDe(e));
+        const prix = serieRef.current?.coordinateToPrice(yDe(e));
+        if (o && t !== null && prix !== null && prix !== undefined) ancre = { id: o.id, index: -1, depart: { t, prix }, points: o.points };
+      }
       if (ancre) {
         e.stopPropagation();
         e.preventDefault();
@@ -610,8 +620,12 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           const prix = serieRef.current?.coordinateToPrice(y);
           if (t === null || t === undefined || prix === null || prix === undefined) return;
           const sy = symbole(refEtat.current.g.symbole)!;
-          const pt = { t, prix: Number(prix.toFixed(sy.chiffres)) };
-          majGraphique(refEtat.current.g.id, (gr) => ({ objets: gr.objets.map((o) => (o.id === go.id ? { ...o, points: o.points.map((p, i) => (i === go.index ? pt : p)) } : o)) }));
+          const arrondi = (v: number) => Number(v.toFixed(sy.chiffres));
+          const nouveaux = (o: ObjetGraphique) =>
+            go.index >= 0
+              ? o.points.map((p, i) => (i === go.index ? { t, prix: arrondi(prix) } : p))
+              : (go.points ?? o.points).map((p) => ({ t: p.t + (t - go.depart!.t), prix: arrondi(p.prix + (prix - go.depart!.prix)) }));
+          majGraphique(refEtat.current.g.id, (gr) => ({ objets: gr.objets.map((o) => (o.id === go.id ? { ...o, points: nouveaux(o) } : o)) }));
         });
         return;
       }
@@ -619,8 +633,9 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       if (!gl) {
         const libre = !refEtat.current.outil && dansPrincipal(e);
         const ancre = libre ? dessinsRef.current?.ancreProche(xDe(e), yDe(e)) : null;
-        dessinsRef.current?.selectionner(ancre?.id ?? null);
-        el.style.cursor = ancre ? 'move' : libre && ligneProche(yDe(e)) ? 'ns-resize' : refEtat.current.outil ? 'crosshair' : '';
+        const corps = libre && !ancre ? dessinsRef.current?.corpsProche(xDe(e), yDe(e)) : null;
+        dessinsRef.current?.selectionner(ancre?.id ?? corps ?? null);
+        el.style.cursor = ancre ? 'crosshair' : corps ? 'move' : libre && ligneProche(yDe(e)) ? 'ns-resize' : refEtat.current.outil ? 'crosshair' : '';
         return;
       }
       e.stopPropagation();
@@ -681,6 +696,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     };
     const double = (e: MouseEvent) => {
       if (!dansPrincipal(e)) return;
+      const id = dessinsRef.current?.ancreProche(xDe(e), yDe(e))?.id ?? dessinsRef.current?.corpsProche(xDe(e), yDe(e));
+      if (id) {
+        e.stopPropagation();
+        return ouvrir({ type: 'objet', graphique: refEtat.current.g.id, id });
+      }
       const d = ligneProche(yDe(e));
       if (!d) return;
       e.stopPropagation();
@@ -716,7 +736,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     const v = volume;
     const elements: ElementMenu[] = [];
     const ancre = dessinsRef.current?.ancreProche(e.clientX - el.getBoundingClientRect().left, y);
-    const objet = g.objets.find((o) => o.id === (ancre?.id ?? (d?.genre === 'objet' ? d.objet : undefined)));
+    const objet = g.objets.find((o) => o.id === (ancre?.id ?? dessinsRef.current?.corpsProche(e.clientX - el.getBoundingClientRect().left, y) ?? (d?.genre === 'objet' ? d.objet : undefined)));
     if (objet) {
       elements.push(
         { libelle: `Supprimer : ${OBJETS[objet.type].nom}${objet.texte ? ` « ${objet.texte} »` : ''}`, action: () => majGraphique(g.id, (gr) => ({ objets: gr.objets.filter((o) => o.id !== objet.id) })) },
@@ -731,6 +751,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
               },
             ]
           : []),
+        { libelle: 'Propriétés…', action: () => ouvrir({ type: 'objet', graphique: g.id, id: objet.id }) },
         { libelle: 'Liste des objets…', raccourci: 'Ctrl+B', action: () => ouvrir({ type: 'objets', graphique: g.id }) },
         { separateur: true },
       );

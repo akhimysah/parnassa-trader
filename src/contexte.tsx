@@ -21,6 +21,7 @@ export type Dialogue =
   | { type: 'indicateur'; indicateur: TypeIndicateur; graphique: string; existant?: string }
   | { type: 'liste-indicateurs'; graphique: string }
   | { type: 'objets'; graphique: string }
+  | { type: 'objet'; graphique: string; id: string }
   | { type: 'proprietes'; graphique: string }
   | { type: 'options' }
   | { type: 'unclic' }
