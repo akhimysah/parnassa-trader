@@ -101,6 +101,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   const premierPoint = useRef<{ t: number; prix: number }[]>([]);
   const [etape, setEtape] = useState(0);
   const dessinsRef = useRef<Dessins | null>(null);
+  const glisseObjet = useRef<{ id: string; index: number } | null>(null);
   // Nouvel outil (ou Échap) : les points déjà posés sont oubliés.
   useEffect(() => {
     premierPoint.current = [];
@@ -465,10 +466,6 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           const prix = b.prix + (a.prix - b.prix) * n;
           ajouter(Number(prix.toFixed(s.chiffres)), o.couleur, `${(n * 100).toFixed(1)}`, n === 0 || n === 1 ? LineStyle.Solid : LineStyle.Dotted);
         }
-      } else if (o.type === 'tendance' && b && chartRef.current) {
-        const se = chartRef.current.addSeries(LineSeries, { color: o.couleur, lineWidth: 2, lastValueVisible: false, priceLineVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider: () => null });
-        se.setData([{ time: a.t as UTCTimestamp, value: a.prix }, { time: b.t as UTCTimestamp, value: b.prix }]);
-        tendances.push(se);
       }
     }
     deplacables.current = liste;
@@ -549,8 +546,20 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       const h = chart.panes()[0]?.getHeight() ?? 0;
       return yDe(e) < h && xDe(e) < el.clientWidth - chart.priceScale('right').width();
     };
+    let image = 0;
     const bas = (e: PointerEvent) => {
       if (e.button !== 0 || refEtat.current.outil || !dansPrincipal(e)) return;
+      // Poignée d'un objet (tendance, Fibonacci, rectangle, canal, verticale, texte) : on tire ce point.
+      const ancre = dessinsRef.current?.ancreProche(xDe(e), yDe(e));
+      if (ancre) {
+        e.stopPropagation();
+        e.preventDefault();
+        glisseObjet.current = ancre;
+        dessinsRef.current?.selectionner(ancre.id);
+        chartRef.current?.applyOptions({ handleScroll: false, handleScale: false });
+        el.setPointerCapture(e.pointerId);
+        return;
+      }
       const d = ligneProche(yDe(e));
       // Appui long au doigt (mobile) : menu « trader à ce prix » au prix pointé.
       if (!d && e.pointerType === 'touch' && refEtat.current.appuiLong) {
@@ -590,9 +599,28 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         appui.current = null;
         window.clearTimeout(minuteurAppui.current);
       }
+      const go = glisseObjet.current;
+      if (go) {
+        e.stopPropagation();
+        const x = xDe(e);
+        const y = yDe(e);
+        cancelAnimationFrame(image);
+        image = requestAnimationFrame(() => {
+          const t = dessinsRef.current?.tempsEn(x);
+          const prix = serieRef.current?.coordinateToPrice(y);
+          if (t === null || t === undefined || prix === null || prix === undefined) return;
+          const sy = symbole(refEtat.current.g.symbole)!;
+          const pt = { t, prix: Number(prix.toFixed(sy.chiffres)) };
+          majGraphique(refEtat.current.g.id, (gr) => ({ objets: gr.objets.map((o) => (o.id === go.id ? { ...o, points: o.points.map((p, i) => (i === go.index ? pt : p)) } : o)) }));
+        });
+        return;
+      }
       const gl = glisse.current;
       if (!gl) {
-        el.style.cursor = !refEtat.current.outil && dansPrincipal(e) && ligneProche(yDe(e)) ? 'ns-resize' : refEtat.current.outil ? 'crosshair' : '';
+        const libre = !refEtat.current.outil && dansPrincipal(e);
+        const ancre = libre ? dessinsRef.current?.ancreProche(xDe(e), yDe(e)) : null;
+        dessinsRef.current?.selectionner(ancre?.id ?? null);
+        el.style.cursor = ancre ? 'move' : libre && ligneProche(yDe(e)) ? 'ns-resize' : refEtat.current.outil ? 'crosshair' : '';
         return;
       }
       e.stopPropagation();
@@ -605,6 +633,13 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     const haut = (e: PointerEvent) => {
       appui.current = null;
       window.clearTimeout(minuteurAppui.current);
+      if (glisseObjet.current) {
+        e.stopPropagation();
+        glisseObjet.current = null;
+        chartRef.current?.applyOptions({ handleScroll: true, handleScale: true });
+        el.releasePointerCapture(e.pointerId);
+        return;
+      }
       const gl = glisse.current;
       if (!gl) return;
       e.stopPropagation();
@@ -680,6 +715,26 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     const d = ligneProche(y);
     const v = volume;
     const elements: ElementMenu[] = [];
+    const ancre = dessinsRef.current?.ancreProche(e.clientX - el.getBoundingClientRect().left, y);
+    const objet = g.objets.find((o) => o.id === (ancre?.id ?? (d?.genre === 'objet' ? d.objet : undefined)));
+    if (objet) {
+      elements.push(
+        { libelle: `Supprimer : ${OBJETS[objet.type].nom}${objet.texte ? ` « ${objet.texte} »` : ''}`, action: () => majGraphique(g.id, (gr) => ({ objets: gr.objets.filter((o) => o.id !== objet.id) })) },
+        ...(objet.type === 'texte'
+          ? [
+              {
+                libelle: 'Modifier le texte…',
+                action: () => {
+                  const texte = window.prompt('Texte', objet.texte ?? '')?.trim();
+                  if (texte) majGraphique(g.id, (gr) => ({ objets: gr.objets.map((o) => (o.id === objet.id ? { ...o, texte: texte.slice(0, 80) } : o)) }));
+                },
+              },
+            ]
+          : []),
+        { libelle: 'Liste des objets…', raccourci: 'Ctrl+B', action: () => ouvrir({ type: 'objets', graphique: g.id }) },
+        { separateur: true },
+      );
+    }
     if (d && d.genre !== 'objet') {
       const p = compte.positions.find((x) => x.ticket === d.ticket);
       const o = compte.ordres.find((x) => x.ticket === d.ticket);

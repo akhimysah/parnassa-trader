@@ -4,7 +4,7 @@ import type { ObjetGraphique } from '../etat';
 type CanvasRenderingTarget2D = Parameters<IPrimitivePaneRenderer['draw']>[0];
 
 /** Objets dessinés sur le canevas du graphique (ceux qui ne sont pas de simples lignes de prix). */
-export const TYPES_DESSINES: ObjetGraphique['type'][] = ['verticale', 'rectangle', 'canal', 'texte'];
+export const TYPES_DESSINES: ObjetGraphique['type'][] = ['tendance', 'verticale', 'rectangle', 'canal', 'texte'];
 
 /**
  * Primitive de série : lignes verticales, rectangles, canaux équidistants et textes, comme les objets de MT5.
@@ -16,6 +16,9 @@ export class Dessins implements ISeriesPrimitive<Time> {
   private serie: ISeriesApi<SeriesType> | null = null;
   private demander: (() => void) | null = null;
   private objets: ObjetGraphique[] = [];
+  /** Tous les objets à poignées (sauf la ligne horizontale, qui se tire comme une ligne de prix). */
+  private ancrables: ObjetGraphique[] = [];
+  private selection: string | null = null;
   private temps: number[] = [];
   private readonly vue: IPrimitivePaneView;
 
@@ -41,8 +44,49 @@ export class Dessins implements ISeriesPrimitive<Time> {
 
   definir(objets: ObjetGraphique[], temps: number[]) {
     this.objets = objets.filter((o) => TYPES_DESSINES.includes(o.type));
+    this.ancrables = objets.filter((o) => o.type !== 'horizontale');
     this.temps = temps;
     this.demander?.();
+  }
+
+  /** Objet sélectionné (survolé ou tiré) : ses poignées sont dessinées. */
+  selectionner(id: string | null) {
+    if (id === this.selection) return;
+    this.selection = id;
+    this.demander?.();
+  }
+
+  /** Poignée d'objet sous le pointeur (coordonnées du graphique), à 8 px près. */
+  ancreProche(x: number, y: number): { id: string; index: number } | null {
+    let meilleur: { id: string; index: number } | null = null;
+    let distance = 8;
+    for (const o of this.ancrables) {
+      o.points.forEach((p, index) => {
+        const px = this.x(p.t);
+        // La ligne verticale se saisit sur toute sa hauteur.
+        const py = o.type === 'verticale' ? y : this.y(p.prix);
+        if (px === null || py === null) return;
+        const d = Math.hypot(px - x, py - y);
+        if (d <= distance) {
+          distance = d;
+          meilleur = { id: o.id, index };
+        }
+      });
+    }
+    return meilleur;
+  }
+
+  /** Temps (secondes) d'une position horizontale, interpolé entre les barres comme `x`. */
+  tempsEn(x: number): number | null {
+    const ts = this.temps;
+    const logique = this.chart?.timeScale().coordinateToLogical(x);
+    if (logique === null || logique === undefined || ts.length < 2) return null;
+    const l = Number(logique);
+    const n = ts.length;
+    if (l <= 0) return Math.round(ts[0] + l * (ts[1] - ts[0]));
+    if (l >= n - 1) return Math.round(ts[n - 1] + (l - (n - 1)) * (ts[n - 1] - ts[n - 2]));
+    const i = Math.floor(l);
+    return Math.round(ts[i] + (l - i) * (ts[i + 1] - ts[i]));
   }
 
   /** Position horizontale d'un temps : indice logique interpolé entre les barres, extrapolé au-delà. */
@@ -83,6 +127,18 @@ export class Dessins implements ISeriesPrimitive<Time> {
             ctx.beginPath();
             ctx.moveTo(Math.round(x) + 0.5, 0);
             ctx.lineTo(Math.round(x) + 0.5, mediaSize.height);
+            ctx.stroke();
+          }
+        } else if (o.type === 'tendance' && b) {
+          const x1 = this.x(a.t);
+          const x2 = this.x(b.t);
+          const y1 = this.y(a.prix);
+          const y2 = this.y(b.prix);
+          if (x1 !== null && x2 !== null && y1 !== null && y2 !== null) {
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
             ctx.stroke();
           }
         } else if (o.type === 'rectangle' && b) {
@@ -136,6 +192,22 @@ export class Dessins implements ISeriesPrimitive<Time> {
             ctx.textBaseline = 'middle';
             ctx.fillText(o.texte ?? '', x + 3, y);
           }
+        }
+        ctx.restore();
+      }
+      // Poignées de l'objet sélectionné, comme MT5.
+      const sel = this.ancrables.find((o) => o.id === this.selection);
+      if (sel) {
+        ctx.save();
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = sel.couleur;
+        ctx.lineWidth = 1.5;
+        for (const p of sel.points) {
+          const x = this.x(p.t);
+          const y = sel.type === 'verticale' ? mediaSize.height / 2 : this.y(p.prix);
+          if (x === null || y === null) continue;
+          ctx.fillRect(x - 4, y - 4, 8, 8);
+          ctx.strokeRect(x - 4, y - 4, 8, 8);
         }
         ctx.restore();
       }
