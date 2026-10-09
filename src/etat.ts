@@ -79,6 +79,12 @@ export interface EtatTerminal {
   mobileAvance: boolean;
   /** Messages de la boîte aux lettres déjà lus. */
   lus: string[];
+  /** Modèles de graphique enregistrés, et celui appliqué aux nouveaux graphiques. */
+  modeles: import('./modeles').ModeleGraphique[];
+  modeleDefaut: string | null;
+  /** Profils (ensembles de graphiques) enregistrés, et le dernier chargé ou enregistré. */
+  profils: import('./modeles').Profil[];
+  profilActif: string | null;
 }
 
 export function identifiant(): string {
@@ -131,6 +137,10 @@ function etatInitial(): EtatTerminal {
     profitEnPoints: false,
     notifications: false,
     lus: [],
+    modeles: [],
+    modeleDefaut: null,
+    profils: [],
+    profilActif: null,
   };
 }
 

@@ -28,6 +28,7 @@ import { formaterPrix, point, symbole } from '../marche/symboles';
 import { calculer, definition, nomCourt } from './indicateurs';
 import { couleursSchema } from './couleurs';
 import { Dessins, OBJETS } from './dessins';
+import { menuModeles } from '../composants/Barres';
 import { registreGraphiques } from './registre';
 import { decider, definitionExpert } from '../algo/experts';
 import { journaliser, LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
@@ -804,6 +805,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           { libelle: 'Ligne', raccourci: 'Alt+3', coche: g.type === 'ligne', action: () => majGraphique(g.id, { type: 'ligne' }) },
         ],
       },
+      { libelle: 'Modèle', sousMenu: menuModeles(etat, t.maj, g) },
       {
         libelle: 'Expert Advisors',
         sousMenu: [

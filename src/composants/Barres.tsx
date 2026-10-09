@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTerminal } from '../contexte';
-import { identifiant, nouveauGraphique, type Graphique } from '../etat';
+import { identifiant, nouveauGraphique, type EtatTerminal, type Graphique } from '../etat';
+import { chargerProfil, demanderNom, enregistrerModele, enregistrerProfil, reglagesModele } from '../modeles';
 import { PERIODES } from '../marche/bougies';
 import { SYMBOLES } from '../marche/symboles';
 import { DEFINITIONS } from '../graphique/indicateurs';
@@ -43,6 +44,8 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Nouveau graphique', sousMenu: groupes.map((gr) => ({ libelle: gr, sousMenu: SYMBOLES.filter((s) => s.chemin.startsWith(gr)).map((s) => ({ libelle: `${s.nom}, ${s.description}`, action: () => ouvrirGraphique(s.nom) })) })) },
         { libelle: 'Fermer le graphique', raccourci: 'Ctrl+F4', desactive: !g, action: () => g && fermerGraphique(g.id) },
         { libelle: 'Enregistrer comme image', desactive: !g, action: () => g && registreGraphiques.get(g.id)?.capturer() },
+        { separateur: true },
+        { libelle: 'Profils', sousMenu: menuProfils(etat, maj) },
         { separateur: true },
         { libelle: 'Ouvrir un compte…', action: () => ouvrir({ type: 'compte' }) },
         { libelle: 'Se connecter à un compte de trading…', action: () => ouvrir({ type: 'connexion' }) },
@@ -104,6 +107,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { separateur: true },
         { libelle: 'Zoom avant', raccourci: '+', action: () => g && registreGraphiques.get(g.id)?.zoomer(1.25) },
         { libelle: 'Zoom arrière', raccourci: '−', action: () => g && registreGraphiques.get(g.id)?.zoomer(0.8) },
+        { libelle: 'Modèle', desactive: !g, sousMenu: g ? menuModeles(etat, maj, g) : [] },
         { libelle: 'Propriétés…', raccourci: 'F8', desactive: !g, action: () => g && ouvrir({ type: 'proprietes', graphique: g.id }) },
       ],
     ],
@@ -334,4 +338,66 @@ function IndicateurCompte() {
       {compte.login} · {compte.serveur} · {texte}
     </button>
   );
+}
+
+/** Sous-menu « Modèle » d'un graphique : appliquer, enregistrer, modèle par défaut, supprimer. */
+export function menuModeles(etat: EtatTerminal, maj: (f: (e: EtatTerminal) => EtatTerminal) => void, g: Graphique): ElementMenu[] {
+  return [
+    ...etat.modeles.map((m) => ({
+      libelle: m.nom,
+      coche: etat.modeleDefaut === m.nom,
+      action: () => maj((e) => ({ ...e, graphiques: e.graphiques.map((x) => (x.id === g.id ? { ...x, ...reglagesModele(m) } : x)) })),
+    })),
+    ...(etat.modeles.length ? [{ separateur: true } as ElementMenu] : []),
+    {
+      libelle: 'Enregistrer le modèle…',
+      action: () => {
+        const nom = demanderNom('Nom du modèle (type, couleurs, indicateurs, options et expert de ce graphique)', etat.modeles.length ? `Modèle ${etat.modeles.length + 1}` : 'Mon modèle');
+        if (!nom) return;
+        if (etat.modeles.some((m) => m.nom === nom) && !window.confirm(`Remplacer le modèle « ${nom} » ?`)) return;
+        maj((e) => enregistrerModele(e, g, nom));
+      },
+    },
+    {
+      libelle: 'Modèle par défaut (nouveaux graphiques)',
+      desactive: !etat.modeles.length,
+      sousMenu: [
+        { libelle: 'Aucun', coche: !etat.modeleDefaut, action: () => maj((e) => ({ ...e, modeleDefaut: null })) },
+        ...etat.modeles.map((m) => ({ libelle: m.nom, coche: etat.modeleDefaut === m.nom, action: () => maj((e) => ({ ...e, modeleDefaut: m.nom })) })),
+      ],
+    },
+    {
+      libelle: 'Supprimer un modèle',
+      desactive: !etat.modeles.length,
+      sousMenu: etat.modeles.map((m) => ({
+        libelle: m.nom,
+        action: () => window.confirm(`Supprimer le modèle « ${m.nom} » ?`) && maj((e) => ({ ...e, modeles: e.modeles.filter((x) => x.nom !== m.nom), modeleDefaut: e.modeleDefaut === m.nom ? null : e.modeleDefaut })),
+      })),
+    },
+  ];
+}
+
+/** Sous-menu « Profils » : charger, enregistrer, supprimer. */
+function menuProfils(etat: EtatTerminal, maj: (f: (e: EtatTerminal) => EtatTerminal) => void): ElementMenu[] {
+  return [
+    ...etat.profils.map((p) => ({ libelle: `${p.nom} (${p.graphiques.length} graphique${p.graphiques.length > 1 ? 's' : ''})`, coche: etat.profilActif === p.nom, action: () => maj((e) => chargerProfil(e, p.nom)) })),
+    ...(etat.profils.length ? [{ separateur: true } as ElementMenu] : []),
+    {
+      libelle: 'Enregistrer le profil…',
+      action: () => {
+        const nom = demanderNom('Nom du profil (tous les graphiques ouverts et leur disposition)', etat.profilActif ?? 'Mon profil');
+        if (!nom) return;
+        if (etat.profils.some((p) => p.nom === nom) && nom !== etat.profilActif && !window.confirm(`Remplacer le profil « ${nom} » ?`)) return;
+        maj((e) => enregistrerProfil(e, nom));
+      },
+    },
+    {
+      libelle: 'Supprimer un profil',
+      desactive: !etat.profils.length,
+      sousMenu: etat.profils.map((p) => ({
+        libelle: p.nom,
+        action: () => window.confirm(`Supprimer le profil « ${p.nom} » ?`) && maj((e) => ({ ...e, profils: e.profils.filter((x) => x.nom !== p.nom), profilActif: e.profilActif === p.nom ? null : e.profilActif })),
+      })),
+    },
+  ];
 }

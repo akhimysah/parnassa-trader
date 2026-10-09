@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ContexteTerminal, useTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
+import { reglagesModele } from './modeles';
 import { chargerEtat, nouveauGraphique, sauverEtat, type EtatTerminal, type Graphique } from './etat';
 import { definirAbonnements, definirTypeCompte, useCotations } from './marche/cotations';
 import { appliquerCotations, type Compte, type Resultat } from './compte/moteur';
@@ -195,7 +196,8 @@ export function App() {
     (sym: string, periode?: Graphique['periode']) =>
       maj((e) => {
         const actif = e.graphiques.find((g) => g.id === e.graphiqueActif);
-        const g = nouveauGraphique(sym, periode ?? actif?.periode ?? 'H1', actif ? { schema: actif.schema, type: actif.type } : undefined);
+        const defaut = e.modeles.find((m) => m.nom === e.modeleDefaut);
+        const g = nouveauGraphique(sym, periode ?? actif?.periode ?? 'H1', defaut ? reglagesModele(defaut) : actif ? { schema: actif.schema, type: actif.type } : undefined);
         return { ...e, graphiques: [...e.graphiques, g], graphiqueActif: g.id };
       }),
     [maj],
