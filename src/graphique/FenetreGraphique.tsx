@@ -27,6 +27,7 @@ import { chargerBougies, debutBougie, PERIODES, type Bougie } from '../marche/bo
 import { formaterPrix, point, symbole } from '../marche/symboles';
 import { calculer, definition, nomCourt } from './indicateurs';
 import { couleursSchema } from './couleurs';
+import { Dessins, OBJETS } from './dessins';
 import { registreGraphiques } from './registre';
 import { decider, definitionExpert } from '../algo/experts';
 import { journaliser, LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
@@ -97,7 +98,14 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   const glisse = useRef<{ d: Deplacable; prix: number } | null>(null);
   const appui = useRef<{ x: number; y: number } | null>(null);
   const minuteurAppui = useRef<number | undefined>(undefined);
-  const premierPoint = useRef<{ t: number; prix: number } | null>(null);
+  const premierPoint = useRef<{ t: number; prix: number }[]>([]);
+  const [etape, setEtape] = useState(0);
+  const dessinsRef = useRef<Dessins | null>(null);
+  // Nouvel outil (ou Échap) : les points déjà posés sont oubliés.
+  useEffect(() => {
+    premierPoint.current = [];
+    setEtape(0);
+  }, [outil]);
   // Volume du panneau un clic, mémorisé par graphique (ramené aux limites du symbole affiché).
   const volume = Math.min(s.volumeMax, Math.max(s.volumeMin, g.volumeUnClic ?? etat.volumeDefaut));
   const setVolume = (v: number) => majGraphique(g.id, { volumeUnClic: v });
@@ -147,16 +155,30 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       const ajouter = (objet: ObjetGraphique) => {
         majGraphique(refEtat.current.g.id, (gr) => ({ objets: [...gr.objets, objet] }));
         choisirOutil(null);
-        premierPoint.current = null;
+        premierPoint.current = [];
       };
-      if (o === 'horizontale') return ajouter({ id: identifiant(), type: o, points: [pt], couleur: '#ff3b30' });
-      if (!premierPoint.current) {
-        premierPoint.current = pt;
+      const def = OBJETS[o];
+      const points = [...premierPoint.current, pt];
+      // Deux points au même instant ne font ni ligne ni rectangle.
+      if (points.length === 2 && o !== 'canal' && points[0].t === points[1].t) return;
+      if (points.length < def.points) {
+        premierPoint.current = points;
+        setEtape(points.length);
         return;
       }
-      const a = premierPoint.current;
-      if (a.t === pt.t) return;
-      ajouter({ id: identifiant(), type: o, points: a.t < pt.t ? [a, pt] : [pt, a], couleur: o === 'fibo' ? '#dc143c' : '#1e90ff' });
+      setEtape(0);
+      if (o === 'texte') {
+        const texte = window.prompt('Texte à placer sur le graphique')?.trim();
+        if (!texte) {
+          choisirOutil(null);
+          premierPoint.current = [];
+          return;
+        }
+        return ajouter({ id: identifiant(), type: o, points, couleur: def.couleur, texte: texte.slice(0, 80) });
+      }
+      // Les deux premiers points sont rangés dans l'ordre du temps (le troisième du canal reste à part).
+      const tries = points.length >= 2 && points[0].t > points[1].t ? [points[1], points[0], ...points.slice(2)] : points;
+      ajouter({ id: identifiant(), type: o, points: tries, couleur: def.couleur });
     };
     chart.subscribeClick(surClic);
     registreGraphiques.set(g.id, {
@@ -213,18 +235,29 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     serieRef.current = serie;
     serie.setData(bougiesRef.current.map(versBougie));
     marqueursRef.current = createSeriesMarkers(serie, []);
+    dessinsRef.current = new Dessins();
+    serie.attachPrimitive(dessinsRef.current);
     chart.panes()[0]?.setStretchFactor(3);
     setVersion((v) => v + 1);
     setVersionSerie((v) => v + 1);
     return () => {
       sansErreur(() => marqueursRef.current?.detach());
       marqueursRef.current = null;
+      const d = dessinsRef.current;
+      if (d) sansErreur(() => serie.detachPrimitive(d));
+      dessinsRef.current = null;
       sansErreur(() => chart.removeSeries(serie));
       deplacables.current = [];
       if (serieRef.current === serie) serieRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [g.type, coul, s]);
+
+  // Objets dessinés sur le canevas (verticales, rectangles, canaux, textes), recalés à chaque nouvelle barre.
+  const nbBarres = bougiesRef.current.length;
+  useEffect(() => {
+    dessinsRef.current?.definir(g.objets, bougiesRef.current.map((b) => b.time));
+  }, [g.objets, version, versionSerie, nbBarres]);
 
   // ---------- Historique ----------
   const [rechargement, setRechargement] = useState(0);
@@ -786,7 +819,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       })}
       {chargement === 'en-cours' && <div className="graphique-message">Chargement de l'historique {g.symbole}, {periode.libelle.toLowerCase()}…</div>}
       {chargement === 'vide' && bougiesRef.current.length === 0 && <div className="graphique-message">En attente de cotations pour {g.symbole}…</div>}
-      {outil && actif && <div className="graphique-outil">{premierPoint.current ? 'Cliquez sur le second point' : 'Cliquez sur le graphique pour placer l\'objet'} — Échap pour annuler</div>}
+      {outil && actif && (
+        <div className="graphique-outil">
+          {OBJETS[outil].nom} : {etape === 0 ? 'cliquez sur le graphique pour placer l\'objet' : outil === 'canal' && etape === 2 ? 'cliquez pour la largeur du canal' : 'cliquez sur le point suivant'} — Échap pour annuler
+        </div>
+      )}
       {menu}
     </div>
   );

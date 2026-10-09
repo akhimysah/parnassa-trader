@@ -7,6 +7,7 @@ import { FenetreGraphique } from '../graphique/FenetreGraphique';
 import { registreGraphiques } from '../graphique/registre';
 import { useRef } from 'react';
 import { BoutonIcone, EnTete, IconePlus, useNav, vibrer } from './commun';
+import { OBJETS } from '../graphique/dessins';
 
 /** Graphique plein écran avec les barres de commandes de MT5 mobile. */
 export function GraphiqueMobile() {
@@ -64,9 +65,7 @@ export function GraphiqueMobile() {
   const indicateurs = () => pousser({ type: 'indicateurs' });
   const objets = () =>
     feuille('Objets', [
-      { libelle: 'Ligne horizontale', action: () => choisirOutil('horizontale') },
-      { libelle: 'Ligne de tendance', action: () => choisirOutil('tendance') },
-      { libelle: 'Retracement de Fibonacci', action: () => choisirOutil('fibo') },
+      ...(Object.keys(OBJETS) as (keyof typeof OBJETS)[]).map((o) => ({ libelle: OBJETS[o].nom, action: () => choisirOutil(o) })),
       ...(g.objets.length ? [{ libelle: `Supprimer les ${g.objets.length} objets`, danger: true, action: () => majGraphique(g.id, { objets: [] }) }] : []),
     ]);
   const reglages = () =>

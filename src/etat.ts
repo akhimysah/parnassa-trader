@@ -10,10 +10,12 @@ export type Schema = 'vert-noir' | 'noir-blanc' | 'couleurs';
 
 export interface ObjetGraphique {
   id: string;
-  type: 'horizontale' | 'tendance' | 'fibo';
+  type: 'horizontale' | 'tendance' | 'fibo' | 'verticale' | 'rectangle' | 'canal' | 'texte';
   /** Points d'ancrage (temps en secondes, prix). La ligne horizontale n'utilise que le prix du premier. */
   points: { t: number; prix: number }[];
   couleur: string;
+  /** Texte de l'objet « texte ». */
+  texte?: string;
 }
 
 export interface Graphique {

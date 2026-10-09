@@ -11,7 +11,8 @@ import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
 import { BlocSynchro, DialogueSynchro } from './Synchro';
 import { DialogueAcces, DialogueCompte, DialogueConnexion } from './DialoguesComptes';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
-import { Fenetre, Spin, argent } from './ui';
+import { Fenetre, Spin, argent, dateMT } from './ui';
+import { OBJETS } from '../graphique/dessins';
 
 export function Dialogues() {
   const { dialogue } = useTerminal();
@@ -387,14 +388,13 @@ function DialogueObjets({ graphique }: { graphique: string }) {
   const g = etat.graphiques.find((x) => x.id === graphique);
   if (!g) return null;
   const s = symbole(g.symbole);
-  const noms = { horizontale: 'Ligne horizontale', tendance: 'Ligne de tendance', fibo: 'Retracement de Fibonacci' };
   return (
     <Fenetre titre={`Objets sur ${g.symbole}, ${g.periode}`} fermer={fermer} largeur={440}>
       {g.objets.length === 0 && <p className="aide">Aucun objet. Menu Insertion → Objets.</p>}
       <ul className="liste-simple">
         {g.objets.map((o) => (
           <li key={o.id}>
-            <span style={{ color: o.couleur }}>■</span> {noms[o.type]} — {o.points.map((p) => formaterPrix(s, p.prix)).join(' → ')}
+            <span style={{ color: o.couleur }}>■</span> {OBJETS[o.type].nom}{o.texte ? ` « ${o.texte} »` : ''} — {o.type === 'verticale' ? dateMT(o.points[0].t * 1000) : o.points.map((p) => formaterPrix(s, p.prix)).join(' → ')}
             <span className="actions">
               <button onClick={() => majGraphique(g.id, (gr) => ({ objets: gr.objets.filter((x) => x.id !== o.id) }))}>Supprimer</button>
             </span>

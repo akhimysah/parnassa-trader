@@ -46,7 +46,7 @@ export interface Survol {
 }
 
 /** Outil de dessin en attente de clics sur un graphique. */
-export type OutilDessin = 'horizontale' | 'tendance' | 'fibo' | null;
+export type OutilDessin = import('./etat').ObjetGraphique['type'] | null;
 
 export interface Terminal {
   etat: EtatTerminal;

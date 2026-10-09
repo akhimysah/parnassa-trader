@@ -7,6 +7,7 @@ import { DEFINITIONS } from '../graphique/indicateurs';
 import { registreGraphiques } from '../graphique/registre';
 import { REST_BINANCE } from '../marche/binance';
 import { ListeMenu, type ElementMenu } from './ui';
+import { OBJETS } from '../graphique/dessins';
 import { IndicateurSynchro } from './Synchro';
 import { LIBELLE_STATUT } from './DialoguesComptes';
 import { choisirInterface } from '../interface';
@@ -77,9 +78,9 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         {
           libelle: 'Objets',
           sousMenu: [
-            { libelle: 'Ligne horizontale', desactive: !g, action: () => choisirOutil('horizontale') },
-            { libelle: 'Ligne de tendance', desactive: !g, action: () => choisirOutil('tendance') },
-            { libelle: 'Retracement de Fibonacci', desactive: !g, action: () => choisirOutil('fibo') },
+            ...(Object.keys(OBJETS) as (keyof typeof OBJETS)[]).map((o) => ({ libelle: OBJETS[o].nom, desactive: !g, action: () => choisirOutil(o) })),
+            { separateur: true },
+            { libelle: 'Liste des objets…', raccourci: 'Ctrl+B', desactive: !g, action: () => g && ouvrir({ type: 'objets', graphique: g.id }) },
           ],
         },
       ],
@@ -238,6 +239,18 @@ export function BarreOutils() {
       </button>
       <button title="Retracement de Fibonacci" className={outil === 'fibo' ? 'actif' : ''} onClick={() => choisirOutil(outil === 'fibo' ? null : 'fibo')}>
         <svg viewBox="0 0 20 20"><path d="M2 4h16M2 8h16M2 11h16M2 16h16" stroke="#dc143c" strokeWidth="1" strokeDasharray="2 1" /></svg>
+      </button>
+      <button title="Ligne verticale" className={outil === 'verticale' ? 'actif' : ''} onClick={() => choisirOutil(outil === 'verticale' ? null : 'verticale')}>
+        <svg viewBox="0 0 20 20"><path d="M10 2v16" stroke="#808080" strokeWidth="1.6" /></svg>
+      </button>
+      <button title="Canal équidistant" className={outil === 'canal' ? 'actif' : ''} onClick={() => choisirOutil(outil === 'canal' ? null : 'canal')}>
+        <svg viewBox="0 0 20 20"><path d="M2 11L14 3M6 17L18 9" stroke="#9932cc" strokeWidth="1.5" /></svg>
+      </button>
+      <button title="Rectangle" className={outil === 'rectangle' ? 'actif' : ''} onClick={() => choisirOutil(outil === 'rectangle' ? null : 'rectangle')}>
+        <svg viewBox="0 0 20 20"><rect x="3" y="5" width="14" height="10" fill="#20b2aa33" stroke="#20b2aa" strokeWidth="1.4" /></svg>
+      </button>
+      <button title="Texte" className={outil === 'texte' ? 'actif' : ''} onClick={() => choisirOutil(outil === 'texte' ? null : 'texte')}>
+        <svg viewBox="0 0 20 20"><text x="5" y="15" fontSize="14" fontWeight="700" fill="#ffa500">A</text></svg>
       </button>
       <span className="sep" />
       <div className="periodes">
