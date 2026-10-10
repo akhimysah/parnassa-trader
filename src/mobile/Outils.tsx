@@ -305,7 +305,7 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
 // ---------- Alertes ----------
 
 export function EcranAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: string }) {
-  const { etat, maj, cotations } = useTerminal();
+  const { etat, maj, cotations, ouvrir } = useTerminal();
   const { retour } = useNav();
   const actuelle = etat.alertes.find((a) => a.id === id);
   const [sym, setSym] = useState(actuelle?.symbole ?? symboleInitial ?? etat.observation[0] ?? 'EURUSD');
@@ -335,12 +335,25 @@ export function EcranAlerte({ id, symboleInitial }: { id?: string; symboleInitia
           </label>
           <label className="mm-ligne-champ">
             <span>Condition</span>
-            <select value={condition} onChange={(e) => setCondition(e.target.value as Alerte['condition'])}>
+            <select
+              value={condition}
+              onChange={(e) => {
+                const v = e.target.value as Alerte['condition'];
+                // Les conditions sur indicateur s'éditent dans la fenêtre complète (choix de l'indicateur et de ses paramètres).
+                if (v === 'indicateur') {
+                  retour();
+                  ouvrir({ type: 'alerte', id: actuelle?.id, symbole: sym });
+                  return;
+                }
+                setCondition(v);
+              }}
+            >
               <option value="bid>">Bid supérieur à</option>
               <option value="bid<">Bid inférieur à</option>
               <option value="ask>">Ask supérieur à</option>
               <option value="ask<">Ask inférieur à</option>
               <option value="heure=">À une heure précise</option>
+              <option value="indicateur">Sur un indicateur…</option>
             </select>
           </label>
           {condition === 'heure=' ? (

@@ -731,7 +731,7 @@ function Journal() {
 }
 
 function Alertes() {
-  const { etat, maj, cotations } = useTerminal();
+  const { etat, maj, cotations, ouvrir } = useTerminal();
   const { feuille, pousser } = useNav();
   if (etat.alertes.length === 0) return <div className="mm-vide grand">Aucune alerte. Touchez + pour en créer une.</div>;
   return (
@@ -745,7 +745,7 @@ function Alertes() {
             className={a.active ? '' : 'muet'}
             onClick={() =>
               feuille(`${a.symbole} ${libelleAlerte(a)}`, [
-                { libelle: 'Modifier', action: () => pousser({ type: 'alerte', id: a.id }) },
+                { libelle: 'Modifier', action: () => (a.condition === 'indicateur' ? ouvrir({ type: 'alerte', id: a.id }) : pousser({ type: 'alerte', id: a.id })) },
                 { libelle: a.active ? 'Désactiver' : 'Réactiver', action: () => maj((e) => ({ ...e, alertes: e.alertes.map((x) => (x.id === a.id ? { ...x, active: !x.active, declencheeLe: undefined } : x)) })) },
                 { libelle: 'Supprimer', danger: true, action: () => maj((e) => ({ ...e, alertes: e.alertes.filter((x) => x.id !== a.id) })) },
               ])
