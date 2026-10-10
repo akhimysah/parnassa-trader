@@ -103,6 +103,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Défilement automatique', coche: g?.defilement, action: () => majActif((x) => ({ defilement: !x.defilement })) },
         { libelle: 'Décalage du graphique', coche: g?.decalage, action: () => majActif((x) => ({ decalage: !x.decalage })) },
         { libelle: 'Grille', raccourci: 'Ctrl+G', coche: g?.grille, action: () => majActif((x) => ({ grille: !x.grille })) },
+        { libelle: 'Séparateurs de périodes', raccourci: 'Ctrl+Y', coche: g?.separateurs, action: () => majActif((x) => ({ separateurs: !x.separateurs })) },
         { libelle: 'Volumes', raccourci: 'Ctrl+L', coche: g?.indicateurs.some((i) => i.type === 'volumes'), action: basculerVolumes },
         { libelle: 'Trading en un clic', raccourci: 'Alt+T', coche: g?.unClic, action: () => majActif((x) => ({ unClic: !x.unClic })) },
         { separateur: true },

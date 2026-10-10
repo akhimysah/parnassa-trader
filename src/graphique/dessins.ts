@@ -21,6 +21,9 @@ export class Dessins implements ISeriesPrimitive<Time> {
   private ancrables: ObjetGraphique[] = [];
   private selection: string | null = null;
   private evenements: Evenement[] = [];
+  /** Séparateurs de périodes : jour, semaine, mois ou année selon la période du graphique (0 = masqués). */
+  private separateurs: 'jour' | 'semaine' | 'mois' | 'annee' | null = null;
+  private couleurSeparateur = '#8a8a8a';
   private temps: number[] = [];
   private readonly vue: IPrimitivePaneView;
 
@@ -48,6 +51,12 @@ export class Dessins implements ISeriesPrimitive<Time> {
     this.objets = objets.filter((o) => TYPES_DESSINES.includes(o.type));
     this.ancrables = objets.filter((o) => o.type !== 'horizontale');
     this.temps = temps;
+    this.demander?.();
+  }
+
+  definirSeparateurs(unite: 'jour' | 'semaine' | 'mois' | 'annee' | null, couleur: string) {
+    this.separateurs = unite;
+    this.couleurSeparateur = couleur;
     this.demander?.();
   }
 
@@ -248,6 +257,35 @@ export class Dessins implements ISeriesPrimitive<Time> {
             ctx.textBaseline = 'middle';
             ctx.fillText(o.texte ?? '', x + 3, y);
           }
+        }
+        ctx.restore();
+      }
+      // Séparateurs de périodes, en heure locale comme le reste du graphique.
+      if (this.separateurs && this.temps.length > 1) {
+        const cle = (t: number) => {
+          const d = new Date(t * 1000);
+          if (this.separateurs === 'jour') return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+          if (this.separateurs === 'semaine') return Math.floor((t / 86400 + 3) / 7);
+          if (this.separateurs === 'mois') return `${d.getFullYear()}-${d.getMonth()}`;
+          return d.getFullYear();
+        };
+        ctx.save();
+        ctx.strokeStyle = this.couleurSeparateur;
+        ctx.globalAlpha = 0.85;
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1;
+        const ech = this.chart?.timeScale();
+        const visibles = ech?.getVisibleLogicalRange();
+        const debut = Math.max(1, Math.floor(visibles?.from ?? 1));
+        const fin = Math.min(this.temps.length - 1, Math.ceil(visibles?.to ?? this.temps.length - 1));
+        for (let i = debut; i <= fin; i++) {
+          if (cle(this.temps[i]) === cle(this.temps[i - 1])) continue;
+          const x = ech?.logicalToCoordinate(i as never);
+          if (x === null || x === undefined) continue;
+          ctx.beginPath();
+          ctx.moveTo(Math.round(x) + 0.5, 0);
+          ctx.lineTo(Math.round(x) + 0.5, mediaSize.height);
+          ctx.stroke();
         }
         ctx.restore();
       }

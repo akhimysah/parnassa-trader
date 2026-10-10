@@ -77,6 +77,8 @@ export function GraphiqueMobile() {
       { libelle: `Ligne${g.type === 'ligne' ? ' ✓' : ''}`, action: () => majGraphique(g.id, { type: 'ligne' }) },
       { libelle: `${g.unClic ? 'Masquer' : 'Afficher'} le trading en un clic`, action: () => majGraphique(g.id, { unClic: !g.unClic }) },
       { libelle: `${g.niveauxTrading ? 'Masquer' : 'Afficher'} les niveaux de trading`, action: () => majGraphique(g.id, { niveauxTrading: !g.niveauxTrading }) },
+      { libelle: `${g.separateurs ? 'Masquer' : 'Afficher'} les séparateurs de périodes`, action: () => majGraphique(g.id, { separateurs: !g.separateurs }) },
+      { libelle: `${g.calendrier === false ? 'Afficher' : 'Masquer'} le calendrier économique`, action: () => majGraphique(g.id, { calendrier: g.calendrier === false }) },
       { libelle: `${g.indicateurs.some((i) => i.type === 'volumes') ? 'Masquer' : 'Afficher'} les volumes`, action: () => majGraphique(g.id, (gr) => ({ indicateurs: gr.indicateurs.some((i) => i.type === 'volumes') ? gr.indicateurs.filter((i) => i.type !== 'volumes') : [...gr.indicateurs, { id: identifiant(), type: 'volumes', p: {}, couleur: '#32cd32' }] })) },
       { libelle: 'Couleurs et propriétés…', action: () => ouvrir({ type: 'proprietes', graphique: g.id }) },
       { libelle: 'Expert Advisor…', action: () => pousser({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },

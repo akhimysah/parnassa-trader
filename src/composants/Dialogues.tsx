@@ -792,6 +792,7 @@ const RACCOURCIS: [string, string][] = [
   ['Ctrl+I', 'Liste des indicateurs'],
   ['Ctrl+B', 'Liste des objets'],
   ['Ctrl+D', 'Fenêtre de données'],
+  ['Ctrl+Y', 'Séparateurs de périodes'],
   ['Taper un symbole ou une période', 'Navigation rapide (ex. GBPUSD,H4 puis Entrée)'],
   ['Alt+1 / Alt+2 / Alt+3', 'Barres / bougies / ligne'],
   ['Alt+T', 'Trading en un clic sur le graphique'],

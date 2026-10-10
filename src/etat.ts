@@ -39,6 +39,8 @@ export interface Graphique {
   expert: Expert | null;
   /** Annonces du calendrier économique sur le graphique (affichées si absent). */
   calendrier?: boolean;
+  /** Séparateurs de périodes (jour, semaine, mois ou année selon la période). */
+  separateurs?: boolean;
 }
 
 export interface Alerte {

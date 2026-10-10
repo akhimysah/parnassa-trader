@@ -260,6 +260,7 @@ export function App() {
         if (touche === 'r') return faire(() => panneau('testeur'));
         if (touche === 'd') return faire(() => panneau('donnees'));
         if (g && touche === 'g') return faire(() => majGraphique(g.id, { grille: !g.grille }));
+        if (g && touche === 'y') return faire(() => majGraphique(g.id, { separateurs: !g.separateurs }));
         if (g && touche === 'i') return faire(() => setDialogue({ type: 'liste-indicateurs', graphique: g.id }));
         if (g && touche === 'b') return faire(() => setDialogue({ type: 'objets', graphique: g.id }));
         if (g && touche === 'l')

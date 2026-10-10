@@ -278,6 +278,12 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     dessinsRef.current?.definir(g.objets, bougiesRef.current.map((b) => b.time));
   }, [g.objets, version, versionSerie, nbBarres]);
 
+  // Séparateurs de périodes, comme MT5 : jour jusqu'en H1, semaine en H4, mois en D1, année au-delà.
+  useEffect(() => {
+    const unite = !g.separateurs ? null : ['M1', 'M5', 'M15', 'M30', 'H1'].includes(g.periode) ? 'jour' : g.periode === 'H4' ? 'semaine' : g.periode === 'D1' ? 'mois' : 'annee';
+    dessinsRef.current?.definirSeparateurs(unite, coul.texte);
+  }, [g.separateurs, g.periode, coul, versionSerie]);
+
   // Annonces du calendrier économique des devises du symbole (moyenne et haute importance).
   const [annonce, setAnnonce] = useState<{ x: number; y: number; evenements: Evenement[] } | null>(null);
   const calendrierVisible = g.calendrier !== false;
@@ -849,6 +855,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           { libelle: 'Ligne', raccourci: 'Alt+3', coche: g.type === 'ligne', action: () => majGraphique(g.id, { type: 'ligne' }) },
         ],
       },
+      { libelle: 'Séparateurs de périodes', raccourci: 'Ctrl+Y', coche: Boolean(g.separateurs), action: () => majGraphique(g.id, { separateurs: !g.separateurs }) },
       { libelle: 'Calendrier économique sur le graphique', coche: g.calendrier !== false, action: () => majGraphique(g.id, { calendrier: g.calendrier === false }) },
       { libelle: 'Modèle', sousMenu: menuModeles(etat, t.maj, g) },
       {
