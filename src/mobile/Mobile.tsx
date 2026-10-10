@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Cotation } from '../marche/cotations';
 import { useTerminal } from '../contexte';
-import { MESSAGES } from '../composants/BoiteOutils';
+import { messagesCompte } from '../courrier';
 import { ContexteNav, FeuilleActions, ICONES, type Action, type Ecran, type Onglet } from './commun';
 import { AjouterSymbole, Cotations, EditerCotations, ProprietesSymbole } from './Cotations';
 import { GraphiqueMobile } from './GraphiqueMobile';
@@ -73,7 +73,7 @@ export function Mobile({ cadre = false }: { cadre?: boolean }) {
   const ongletDroit: Onglet = tablette && onglet === 'cotations' ? 'graphique' : onglet;
 
   const haut = pile[pile.length - 1];
-  const nonLus = MESSAGES.filter((m) => !etat.lus.includes(m.id)).length;
+  const nonLus = messagesCompte(compte).filter((m) => !etat.lus.includes(m.id)).length;
   const positions = compte.positions.length;
 
   return (

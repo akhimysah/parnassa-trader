@@ -6,6 +6,7 @@ import { RELAIS } from '../marche/bougies';
 import { argent, dateMT, useMenuContextuel, type ElementMenu } from './ui';
 import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
 import { CONDITIONS } from '../alertes';
+import { messagesCompte } from '../courrier';
 
 export type OngletBoite = 'trading' | 'exposition' | 'historique' | 'actualites' | 'courrier' | 'calendrier' | 'alertes' | 'journal';
 
@@ -21,8 +22,8 @@ export const ONGLETS_BOITE: [OngletBoite, string][] = [
 ];
 
 export function BoiteOutils({ onglet, changer }: { onglet: OngletBoite; changer: (o: OngletBoite) => void }) {
-  const { maj, etat } = useTerminal();
-  const nonLus = MESSAGES.filter((m) => !etat.lus.includes(m.id)).length;
+  const { maj, etat, compte } = useTerminal();
+  const nonLus = messagesCompte(compte).filter((m) => !etat.lus.includes(m.id)).length;
   return (
     <div className="panneau boite">
       <div className="boite-poignee" title="Boîte à outils">
@@ -638,37 +639,10 @@ export function OngletCalendrier() {
 
 // ---------- Boîte aux lettres ----------
 
-export const MESSAGES = [
-  {
-    id: 'bienvenue',
-    de: 'Parnassa Trader',
-    date: Date.UTC(2026, 9, 7, 8, 0),
-    titre: 'Bienvenue sur Parnassa Trader',
-    texte:
-      "Bienvenue ! Votre compte de démonstration est ouvert sur le serveur Parnassa-Demo avec 10 000 USD et un levier de 1:100.\n\n" +
-      "• Ouvrez une position avec F9 (Nouvel ordre) ou directement depuis le panneau de trading en un clic du graphique.\n" +
-      "• Faites glisser les lignes SL, TP et des ordres en attente sur le graphique pour les modifier.\n" +
-      "• Clic droit sur le graphique → Trading pour placer un ordre limite ou stop au prix pointé.\n" +
-      "• Les cotations sont réelles (forex, or, indices, actions, crypto) ; l'argent ne l'est pas.\n\n" +
-      'Bon trading !',
-  },
-  {
-    id: 'regles',
-    de: 'Parnassa Trader',
-    date: Date.UTC(2026, 9, 7, 8, 1),
-    titre: 'Conditions de trading du compte démo',
-    texte:
-      "Mode de compte : couverture (hedging). Achat à l'Ask, vente au Bid.\n" +
-      'Appel de marge : 100 %. Stop-out : 50 % (la position la plus perdante est fermée en premier).\n' +
-      'Forex : écarts fixes de 1,2 à 3 pips selon la paire. Crypto : carnet d\'ordres réel de Binance.\n' +
-      'Séances : forex, métaux, indices et énergie du dimanche 22:00 au vendredi 21:00 UTC ; actions selon leur bourse ; crypto 24 h/24.',
-  },
-];
-
 export function OngletCourrier() {
-  const { etat, maj } = useTerminal();
+  const { etat, maj, compte } = useTerminal();
   const [ouvert, setOuvert] = useState<string | null>(null);
-  const m = MESSAGES.find((x) => x.id === ouvert);
+  const m = messagesCompte(compte).find((x) => x.id === ouvert);
   return (
     <div className="courrier">
       <table className="table boite-table">
@@ -680,7 +654,7 @@ export function OngletCourrier() {
           </tr>
         </thead>
         <tbody>
-          {MESSAGES.map((x) => (
+          {messagesCompte(compte).map((x) => (
             <tr
               key={x.id}
               className={`${etat.lus.includes(x.id) ? '' : 'gras'} ${ouvert === x.id ? 'choisi' : ''}`}

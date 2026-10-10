@@ -112,3 +112,18 @@ describe('utilitaires', () => {
     expect(r.indicateurs![0].id).not.toBe('rsi');
   });
 });
+
+describe('boîte aux lettres', () => {
+  it('ajoute un relevé pour chaque jour de trading passé, pas pour aujourd’hui', async () => {
+    const { messagesCompte } = await import('../src/courrier');
+    const { nouveauCompte } = await import('../src/compte/moteur');
+    const c = nouveauCompte('t', 10000, 100);
+    const hier = Date.now() - 86400000;
+    const sortie = (heure: number, profit: number) => ({ ticket: heure, ordre: 0, position: 1, heure, symbole: 'EURUSD', type: 'sell' as const, entree: 'out' as const, volume: 0.1, prix: 1, commission: 0, swap: 0, profit, solde: 10000 + profit, commentaire: '' });
+    c.transactions.push(sortie(hier, 50), sortie(hier + 1000, -20), sortie(Date.now(), 10));
+    const releves = messagesCompte(c).filter((m) => m.id.startsWith('releve-'));
+    expect(releves).toHaveLength(1);
+    expect(releves[0].titre).toContain('+30,00');
+    expect(releves[0].texte).toContain('Trades fermés : 2');
+  });
+});

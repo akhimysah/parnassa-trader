@@ -3,7 +3,7 @@ import { useTerminal } from '../contexte';
 import { nouveauCompte, SERVEUR } from '../compte/moteur';
 import { RELAIS } from '../marche/bougies';
 import { TYPES_COMPTE, formaterPrix, symbole, type TypeCompte } from '../marche/symboles';
-import { MESSAGES } from '../composants/BoiteOutils';
+import { messagesCompte } from '../courrier';
 import { BlocSynchro } from '../composants/Synchro';
 import { actionsProprietaire, BlocAcces, DEPOTS, LEVIERS, LIBELLE_STATUT } from '../composants/DialoguesComptes';
 import { SERVEUR_EN_LIGNE, type Acces } from '../compte/enLigne';
@@ -27,7 +27,7 @@ export function Reglages() {
       signaler('Notifications activées : exécutions, SL/TP, stop-out et alertes');
     } else signaler('Notifications refusées par le navigateur : autorisez-les dans les réglages du site');
   };
-  const nonLus = MESSAGES.filter((m) => !etat.lus.includes(m.id)).length;
+  const nonLus = messagesCompte(compte).filter((m) => !etat.lus.includes(m.id)).length;
   return (
     <div className="mm-ecran">
       <EnTete titre="Paramètres" />
@@ -554,11 +554,11 @@ export function EcranListe({ quoi }: { quoi: keyof typeof TITRES }) {
 }
 
 function Courrier() {
-  const { etat, maj } = useTerminal();
+  const { etat, maj, compte } = useTerminal();
   const [ouvert, setOuvert] = useState<string | null>(null);
   return (
     <ul className="mm-liste mm-messages">
-      {MESSAGES.map((m) => (
+      {messagesCompte(compte).map((m) => (
         <li
           key={m.id}
           className={etat.lus.includes(m.id) ? '' : 'non-lu'}
