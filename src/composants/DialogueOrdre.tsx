@@ -71,7 +71,6 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
 
   const pas = point(s);
   const marge = q ? margeRequise(s, volume, mode === 'marche' ? q.ask : prix || q.ask, compte.levier, cotations) : 0;
-  const libre = etatCompte(compte, cotations).margeLibre;
   const ouvert = marcheOuvert(s);
 
   const passerMarche = (type: Sens) => {
@@ -83,8 +82,22 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
     setResultat(r.erreur ? { ok: false, texte: `Erreur : ${r.erreur}` } : { ok: true, texte: `Placé : #${r.ticket} ${r.message}` });
   };
 
-  const entreeSens: Sens = mode === 'marche' ? 'buy' : sensDe(typeAttente);
-  const prixEntree = mode === 'marche' ? q?.ask : typeAttente.endsWith('stop_limit') ? prixLimite : prix;
+  // Au marché, le sens se déduit du stop-loss (sous le prix : achat, au-dessus : vente) pour estimer le risque.
+  const entreeSens: Sens = mode === 'marche' ? (sl && q && sl > q.bid ? 'sell' : 'buy') : sensDe(typeAttente);
+  const prixEntree = mode === 'marche' ? (entreeSens === 'sell' ? q?.bid : q?.ask) : typeAttente.endsWith('stop_limit') ? prixLimite : prix;
+  const { fondsPropres, margeLibre } = etatCompte(compte, cotations);
+  const perte = sl && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, sl, cotations) : null;
+  const gain = tp && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, tp, cotations) : null;
+  const [risquePct, setRisquePct] = useState(1);
+  /** Volume pour perdre `risquePct` % des fonds propres si le stop-loss est touché, plafonné par la marge libre. */
+  const ajusterVolume = () => {
+    if (!sl || !prixEntree) return;
+    const parLot = Math.abs(resultatA(sym, entreeSens, 1, prixEntree, sl, cotations));
+    const margeParLot = margeRequise(s, 1, prixEntree, compte.levier, cotations);
+    const plafond = Math.min(s.volumeMax, margeParLot > 0 ? margeLibre / margeParLot : s.volumeMax);
+    const brut = parLot > 0 ? (fondsPropres * risquePct) / 100 / parLot : 0;
+    setVolume(Number(Math.max(s.volumeMin, Math.floor(Math.min(brut, plafond) / s.pasVolume) * s.pasVolume).toFixed(2)));
+  };
 
   if (resultat) {
     return (
@@ -151,6 +164,24 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
               {mode === 'attente' && prixEntree && erreurStop(s, entreeSens, prixEntree, 'tp', tp) && <small className="erreur-champ">{erreurStop(s, entreeSens, prixEntree, 'tp', tp)}</small>}
             </label>
           </div>
+          <div className="ordre-risque">
+            <span>Risque :</span>
+            <select value={risquePct} onChange={(e) => setRisquePct(Number(e.target.value))} title="Part des fonds propres perdue si le stop-loss est touché">
+              {[0.25, 0.5, 1, 2, 3, 5].map((v) => (
+                <option key={v} value={v}>
+                  {v} %
+                </option>
+              ))}
+            </select>
+            <button disabled={!sl || !prixEntree} onClick={ajusterVolume} title={sl ? 'Calcule le volume pour ce risque' : "Placez d'abord un stop-loss"}>
+              Ajuster le volume
+            </button>
+            <small className="aide">
+              {perte !== null ? `perte au S/L ${argent(Math.abs(perte))} USD (${((Math.abs(perte) / Math.max(1, fondsPropres)) * 100).toFixed(2)} % des fonds)` : 'placez un S/L pour mesurer le risque'}
+              {perte && gain ? ` · ratio gain/risque 1 : ${(Math.abs(gain) / Math.abs(perte)).toFixed(2)}` : ''}
+              {mode === 'marche' && sl ? ` · ${entreeSens === 'buy' ? 'achat' : 'vente'}` : ''}
+            </small>
+          </div>
           {mode === 'attente' && (
             <>
               <label>
@@ -205,7 +236,7 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
                 </span>
               </div>
               {!ouvert && <div className="avertissement">Marché fermé</div>}
-              {marge > libre && <div className="avertissement">Marge libre insuffisante ({argent(libre)} USD)</div>}
+              {marge > margeLibre && <div className="avertissement">Marge libre insuffisante ({argent(margeLibre)} USD)</div>}
               <div className="ordre-boutons">
                 <button className="vente" disabled={!q || !ouvert} onClick={() => passerMarche('sell')}>
                   Vente au marché
