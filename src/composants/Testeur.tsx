@@ -587,6 +587,8 @@ function Backtest({ res }: { res: ResultatTest & { reglages: Reglages; bougies: 
       ['Positions courtes (% gagnantes)', `${s.courts} (${pct(s.courtsGagnants, s.courts)})`],
       ['Trades gagnants', `${s.gagnants} (${pct(s.gagnants, s.trades)})`],
       ['Plus gros gain / plus grosse perte', `${argent(s.plusGrosGain)} / ${argent(s.plusGrossePerte)}`],
+      ['MFE / MAE moyens (points)', s.mfeMoyen === null ? '—' : `${s.mfeMoyen.toFixed(0)} / ${s.maeMoyen!.toFixed(0)}`],
+      ['Efficacité des sorties', s.efficacite === null ? '—' : `${(s.efficacite * 100).toFixed(0)} %`],
     ],
   ];
   const enregistrer = () =>

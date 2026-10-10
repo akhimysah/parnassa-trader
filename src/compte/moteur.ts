@@ -28,6 +28,9 @@ export interface Position {
   suiveur: number;
   /** Seuil de mise à break-even, en points de gain : le stop-loss passe au prix d'ouverture (0 = aucun). */
   equilibre?: number;
+  /** Plus grand gain (MFE) et plus grande perte (MAE) latents atteints depuis l'ouverture, en points. */
+  mfe?: number;
+  mae?: number;
   /** Identifiant de l'Expert Advisor qui a ouvert la position (0 = manuelle). */
   magic?: number;
   /** Dernier rollover dont le swap a été compté (ms) ; à défaut, l'heure d'ouverture. */
@@ -68,6 +71,9 @@ export interface Transaction {
   commentaire: string;
   /** Sur les transactions de sortie : prix d'ouverture, heure d'ouverture et stops de la position fermée. */
   prixOuverture?: number;
+  /** Sur les sorties : MFE et MAE de la position (points). */
+  mfe?: number;
+  mae?: number;
   heureOuverture?: number;
   sl?: number;
   tp?: number;
@@ -577,6 +583,8 @@ export function fermerPosition(c: Compte, ticket: number, cot: Cotations, volume
     heureOuverture: p.heure,
     sl: p.sl,
     tp: p.tp,
+    mfe: Math.max(p.mfe ?? 0, Math.round(((p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix) / point(s)) * 10) / 10),
+    mae: Math.min(p.mae ?? 0, Math.round(((p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix) / point(s)) * 10) / 10),
   };
   const histo: OrdreHistorique = {
     ticket: ticketOrdre,
@@ -769,6 +777,11 @@ export function appliquerCotations(c: Compte, cot: Cotations): { compte: Compte;
     const s = symbole(p.symbole);
     if (!q || !s) continue;
     const prix = prixFermeture(p.type, q);
+    // MFE / MAE : extrêmes du résultat latent, notés seulement quand ils changent.
+    const latent = Math.round(((p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix) / point(s)) * 10) / 10;
+    if (latent > (p.mfe ?? 0) || latent < (p.mae ?? 0)) {
+      courant = { ...courant, positions: courant.positions.map((x) => (x.ticket === p.ticket ? { ...x, mfe: Math.max(x.mfe ?? 0, latent), mae: Math.min(x.mae ?? 0, latent) } : x)) };
+    }
     // Break-even : passé le seuil de gain, le stop-loss est remonté au prix d'ouverture, une seule fois.
     if (p.equilibre && p.equilibre > 0) {
       const enGain = p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix;

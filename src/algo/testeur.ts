@@ -63,6 +63,9 @@ interface PositionTest {
   /** Stop suiveur et seuil de break-even, en points (0 = aucun). */
   suiveur: number;
   equilibre: number;
+  /** Extrêmes du résultat latent (points). */
+  mfe: number;
+  mae: number;
 }
 
 /** Fenêtre de barres transmise à l'expert : assez pour amorcer ses indicateurs, sans recalcul quadratique. */
@@ -114,6 +117,8 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
       heureOuverture: p.heure,
       sl: p.sl,
       tp: p.tp,
+      mfe: Math.round(Math.max(p.mfe, (p.type === 'buy' ? prix - p.prix : p.prix - prix) / pas) * 10) / 10,
+      mae: Math.round(Math.min(p.mae, (p.type === 'buy' ? prix - p.prix : p.prix - prix) / pas) * 10) / 10,
     });
     marqueurs.push({ time: Math.floor(heure / 1000), sens: p.type === 'buy' ? 'sell' : 'buy', entree: false, prix, texte: raison });
     positions.splice(positions.indexOf(p), 1);
@@ -141,6 +146,8 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
         dernierSwap: heure,
         suiveur: expert.p.suiveur ?? 0,
         equilibre: expert.p.equilibre ?? 0,
+        mfe: 0,
+        mae: 0,
       };
       const fondsPropres = solde + positions.reduce((t, x) => t + valeur(x, barre.open), 0);
       const utilisee = positions.reduce((t, x) => t + marge(x), 0);
@@ -163,6 +170,8 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
         // Break-even puis stop suiveur, au prix de fermeture du chemin (Bid pour un achat, Ask pour une vente).
         const fermeture = p.type === 'buy' ? bid : ask;
         const gain = p.type === 'buy' ? fermeture - p.prix : p.prix - fermeture;
+        p.mfe = Math.max(p.mfe, gain / pas);
+        p.mae = Math.min(p.mae, gain / pas);
         if (p.equilibre > 0 && gain >= p.equilibre * pas) {
           if (p.type === 'buy' ? p.prix > p.sl : p.sl === 0 || p.prix < p.sl) p.sl = p.prix;
           p.equilibre = 0;

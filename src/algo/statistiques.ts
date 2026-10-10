@@ -1,4 +1,5 @@
 import type { Transaction } from '../compte/moteur';
+import { point, symbole } from '../marche/symboles';
 
 export interface Stats {
   depots: number;
@@ -33,6 +34,10 @@ export interface Stats {
   /** Durée moyenne de détention (ms) des trades gagnants et perdants. */
   dureeGains: number;
   dureePertes: number;
+  /** MFE et MAE moyens (points) et efficacité des sorties : part du meilleur gain latent réellement encaissée. */
+  mfeMoyen: number | null;
+  maeMoyen: number | null;
+  efficacite: number | null;
 }
 
 /** Statistiques façon rapport MT5, à partir des transactions (compte réel ou testeur de stratégie). */
@@ -116,6 +121,16 @@ export function calculerStats(transactions: Transaction[]): Stats {
     if (d.heureOuverture) (r > 0 ? durees.gains : durees.pertes).push(d.heure - d.heureOuverture);
   }
   const moyenneDe = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0);
+  const avecExcursion = sorties.filter((d) => d.mfe !== undefined && d.mae !== undefined && d.prixOuverture);
+  let encaisse = 0;
+  let potentiel = 0;
+  for (const d of avecExcursion) {
+    const s = symbole(d.symbole);
+    if (!s || !d.mfe || d.mfe <= 0) continue;
+    // Le deal de sortie est en sens inverse : une sortie « sell » ferme un achat.
+    encaisse += ((d.type === 'sell' ? d.prix - d.prixOuverture! : d.prixOuverture! - d.prix) / point(s));
+    potentiel += d.mfe;
+  }
   // Le deal de sortie est en sens inverse de la position : une sortie « sell » ferme un achat (long).
   const longs = sorties.filter((d) => d.type === 'sell');
   const courts = sorties.filter((d) => d.type === 'buy');
@@ -150,6 +165,9 @@ export function calculerStats(transactions: Transaction[]): Stats {
     parJour,
     dureeGains: moyenneDe(durees.gains),
     dureePertes: moyenneDe(durees.pertes),
+    mfeMoyen: avecExcursion.length ? moyenneDe(avecExcursion.map((d) => d.mfe!)) : null,
+    maeMoyen: avecExcursion.length ? moyenneDe(avecExcursion.map((d) => d.mae!)) : null,
+    efficacite: potentiel > 0 ? encaisse / potentiel : null,
   };
 }
 

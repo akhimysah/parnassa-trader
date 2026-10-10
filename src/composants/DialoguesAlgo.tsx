@@ -218,6 +218,18 @@ export function DialogueRapport() {
             Durée moyenne : <b>{duree(s.dureeGains)}</b> pour les gagnants, <b>{duree(s.dureePertes)}</b> pour les perdants
             {s.dureePertes > s.dureeGains * 1.5 && s.dureeGains > 0 ? ' — les pertes sont gardées plus longtemps que les gains.' : '.'}
           </p>
+          {s.mfeMoyen !== null && (
+            <p className="aide">
+              Gain latent maximal moyen (MFE) <b>{s.mfeMoyen.toFixed(0)} points</b>, perte latente maximale moyenne (MAE) <b>{s.maeMoyen!.toFixed(0)} points</b>
+              {s.efficacite !== null && (
+                <>
+                  {' '}
+                  · efficacité des sorties <b>{(s.efficacite * 100).toFixed(0)} %</b> du meilleur gain latent encaissé
+                </>
+              )}
+              .
+            </p>
+          )}
         </div>
       )}
       <div className="boutons">
