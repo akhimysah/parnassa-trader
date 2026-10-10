@@ -596,7 +596,7 @@ export function EcranExpert({ graphique, expert }: { graphique: string; expert?:
           {Object.keys(def.defaut).map((k) => (
             <div key={k} className="mm-ligne-champ">
               <span>{def.libelles[k]}</span>
-              <ChampPas valeur={p[k] ?? def.defaut[k]} changer={(v) => setP({ ...p, [k]: v })} pas={k === 'volume' ? 0.01 : k === 'sl' || k === 'tp' ? 50 : 1} min={k === 'volume' ? 0.01 : 0} decimales={k === 'volume' ? 2 : 0} />
+              <ChampPas valeur={p[k] ?? def.defaut[k]} changer={(v) => setP({ ...p, [k]: v })} pas={!Number.isInteger(def.defaut[k]) ? 0.01 : k === 'sl' || k === 'tp' || k === 'suiveur' || k === 'equilibre' ? 50 : 1} min={k === 'volume' ? 0.01 : 0} decimales={Number.isInteger(def.defaut[k]) ? 0 : 2} />
             </div>
           ))}
         </div>

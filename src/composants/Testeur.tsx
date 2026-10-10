@@ -402,27 +402,28 @@ export function Testeur() {
               </thead>
               <tbody>
                 {Object.keys(def.defaut).map((k) => {
-                  const o = r.optimiser[k] ?? { actif: false, debut: r.p[k], pas: k === 'volume' ? 0.01 : k === 'sl' || k === 'tp' || k === 'suiveur' || k === 'equilibre' ? 50 : 1, fin: r.p[k] * 2 || 100 };
-                  const dec = k === 'volume' ? 2 : 0;
+                  const o = r.optimiser[k] ?? { actif: false, debut: r.p[k], pas: !Number.isInteger(def.defaut[k]) ? 0.01 : k === 'sl' || k === 'tp' || k === 'suiveur' || k === 'equilibre' ? 50 : 1, fin: r.p[k] * 2 || 100 };
+                  const dec = Number.isInteger(def.defaut[k]) ? 0 : 2;
+                  const pasK = Number.isInteger(def.defaut[k]) ? 1 : 0.01;
                   const majO = (patch: Partial<typeof o>) => changer({ optimiser: { ...r.optimiser, [k]: { ...o, ...patch } } });
                   const nb = o.pas > 0 ? Math.max(0, Math.floor((o.fin - o.debut) / o.pas + 1e-9) + 1) : 0;
                   return (
                     <tr key={k}>
                       <td>{def.libelles[k]}</td>
                       <td>
-                        <Spin valeur={r.p[k]} changer={(v) => changer({ p: { ...r.p, [k]: v } })} pas={k === 'volume' ? 0.01 : 1} min={k === 'volume' ? 0.01 : 0} decimales={dec} />
+                        <Spin valeur={r.p[k]} changer={(v) => changer({ p: { ...r.p, [k]: v } })} pas={pasK} min={k === 'volume' ? 0.01 : 0} decimales={dec} />
                       </td>
                       <td>
                         <input type="checkbox" checked={o.actif} onChange={() => majO({ actif: !o.actif })} />
                       </td>
                       <td>
-                        <Spin valeur={o.debut} changer={(v) => majO({ debut: v })} pas={k === 'volume' ? 0.01 : 1} decimales={dec} />
+                        <Spin valeur={o.debut} changer={(v) => majO({ debut: v })} pas={pasK} decimales={dec} />
                       </td>
                       <td>
-                        <Spin valeur={o.pas} changer={(v) => majO({ pas: v })} pas={k === 'volume' ? 0.01 : 1} min={0} decimales={dec} />
+                        <Spin valeur={o.pas} changer={(v) => majO({ pas: v })} pas={pasK} min={0} decimales={dec} />
                       </td>
                       <td>
-                        <Spin valeur={o.fin} changer={(v) => majO({ fin: v })} pas={k === 'volume' ? 0.01 : 1} decimales={dec} />
+                        <Spin valeur={o.fin} changer={(v) => majO({ fin: v })} pas={pasK} decimales={dec} />
                       </td>
                       <td className="d muet">{o.actif ? nb : ''}</td>
                     </tr>

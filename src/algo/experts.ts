@@ -8,7 +8,7 @@ import type { Sens } from '../compte/moteur';
 import { decrireExpert, deciderPerso, type ExpertPerso } from './assistant';
 
 /** Experts intégrés, ou créés avec l'assistant (« perso:<id> »). */
-export type TypeExpert = 'croisement-ma' | 'rsi' | 'bollinger' | 'cassure' | `perso:${string}`;
+export type TypeExpert = 'croisement-ma' | 'rsi' | 'bollinger' | 'cassure' | 'macd' | 'stochastique' | 'sar' | 'alligator' | `perso:${string}`;
 
 export interface Expert {
   type: TypeExpert;
@@ -62,6 +62,34 @@ export const EXPERTS: DefinitionExpert[] = [
     description: 'Achète la cassure du plus haut des N dernières barres, vend la cassure du plus bas (canal de Donchian), position retournée à chaque cassure.',
     defaut: { periode: 20, ...COMMUNS },
     libelles: { periode: 'Barres du canal', ...LIBELLES_COMMUNS },
+  },
+  {
+    type: 'macd',
+    nom: 'MACD Sample',
+    description: "L'exemple classique de MT5 : achète quand le MACD croise son signal au-dessus en zone négative et que la tendance (EMA) monte ; vend à l'inverse. Sortie au croisement contraire.",
+    defaut: { rapide: 12, lente: 26, signal: 9, tendance: 26, ...COMMUNS },
+    libelles: { rapide: 'EMA rapide', lente: 'EMA lente', signal: 'SMA du signal', tendance: 'EMA de tendance', ...LIBELLES_COMMUNS },
+  },
+  {
+    type: 'stochastique',
+    nom: 'Stochastic Cross',
+    description: 'Achète quand %K croise %D au-dessus en zone de survente, vend quand %K croise %D en dessous en zone de surachat.',
+    defaut: { k: 5, d: 3, ralenti: 3, bas: 20, haut: 80, ...COMMUNS },
+    libelles: { k: 'Période %K', d: 'Période %D', ralenti: 'Ralentissement', bas: 'Survente', haut: 'Surachat', ...LIBELLES_COMMUNS },
+  },
+  {
+    type: 'sar',
+    nom: 'Parabolic SAR Reversal',
+    description: 'Toujours en position : achète quand le prix passe au-dessus du SAR, vend quand il passe en dessous.',
+    defaut: { pas: 0.02, max: 0.2, ...COMMUNS },
+    libelles: { pas: 'Pas', max: 'Maximum', ...LIBELLES_COMMUNS },
+  },
+  {
+    type: 'alligator',
+    nom: 'Alligator Trend',
+    description: "Bill Williams : achète quand les lèvres, les dents et la mâchoire s'ouvrent vers le haut et que le prix est au-dessus, vend à l'inverse ; sort quand les lèvres recroisent les dents.",
+    defaut: { machoire: 13, dents: 8, levres: 5, ...COMMUNS },
+    libelles: { machoire: 'Mâchoire', dents: 'Dents', levres: 'Lèvres', ...LIBELLES_COMMUNS },
   },
 ];
 
@@ -148,6 +176,43 @@ export function decider(e: Expert, b: Bougie[], sensActuel: Sens | null): Decisi
       const plusBas = Math.min(...canal.map((x) => x.low));
       if (c[i]! > plusHaut) return { fermer: ['sell'], ouvrir: 'buy', raison: `cassure du plus haut ${p.periode} barres` };
       if (c[i]! < plusBas) return { fermer: ['buy'], ouvrir: 'sell', raison: `cassure du plus bas ${p.periode} barres` };
+      return RIEN;
+    }
+    case 'macd': {
+      const [macd, signal] = calculer({ id: '', type: 'macd', p: { rapide: p.rapide, lente: p.lente, signal: p.signal }, couleur: '' }, b).traces.map((t) => t.valeurs);
+      const tendance = moyenne(c, p.tendance, 'ema');
+      const [m0, m1, s0, s1, t0, t1] = [macd[i - 1], macd[i], signal[i - 1], signal[i], tendance[i - 1], tendance[i]];
+      if (m0 === null || m1 === null || s0 === null || s1 === null || t0 === null || t1 === null) return RIEN;
+      if (sensActuel === 'buy' && m0 >= s0 && m1 < s1) return { fermer: ['buy'], ouvrir: null, raison: 'MACD repasse sous son signal' };
+      if (sensActuel === 'sell' && m0 <= s0 && m1 > s1) return { fermer: ['sell'], ouvrir: null, raison: 'MACD repasse au-dessus de son signal' };
+      if (m1 < 0 && m0 <= s0 && m1 > s1 && t1 > t0) return { fermer: ['sell'], ouvrir: 'buy', raison: 'MACD croise son signal au-dessus sous zéro, tendance haussière' };
+      if (m1 > 0 && m0 >= s0 && m1 < s1 && t1 < t0) return { fermer: ['buy'], ouvrir: 'sell', raison: 'MACD croise son signal en dessous au-dessus de zéro, tendance baissière' };
+      return RIEN;
+    }
+    case 'stochastique': {
+      const [k, d] = calculer({ id: '', type: 'stoch', p: { k: p.k, d: p.d, ralenti: p.ralenti }, couleur: '' }, b).traces.map((t) => t.valeurs);
+      const [k0, k1, d0, d1] = [k[i - 1], k[i], d[i - 1], d[i]];
+      if (k0 === null || k1 === null || d0 === null || d1 === null) return RIEN;
+      if (k0 <= d0 && k1 > d1 && Math.min(k0, k1) < p.bas) return { fermer: ['sell'], ouvrir: 'buy', raison: `%K croise %D au-dessus en survente (${k1.toFixed(1)})` };
+      if (k0 >= d0 && k1 < d1 && Math.max(k0, k1) > p.haut) return { fermer: ['buy'], ouvrir: 'sell', raison: `%K croise %D en dessous en surachat (${k1.toFixed(1)})` };
+      return RIEN;
+    }
+    case 'sar': {
+      const sar = calculer({ id: '', type: 'sar', p: { pas: p.pas, max: p.max }, couleur: '' }, b).traces[0]?.valeurs ?? [];
+      const [a0, a1] = [sar[i - 1], sar[i]];
+      if (a0 === null || a1 === null || a0 === undefined || a1 === undefined) return RIEN;
+      if (c[i - 1]! <= a0 && c[i]! > a1) return { fermer: ['sell'], ouvrir: 'buy', raison: 'le prix passe au-dessus du SAR' };
+      if (c[i - 1]! >= a0 && c[i]! < a1) return { fermer: ['buy'], ouvrir: 'sell', raison: 'le prix passe sous le SAR' };
+      return RIEN;
+    }
+    case 'alligator': {
+      const [m, dn, l] = calculer({ id: '', type: 'alligator', p: { machoire: p.machoire, dents: p.dents, levres: p.levres }, couleur: '' }, b).traces.map((t) => t.valeurs);
+      const [mi, di, li] = [m[i], dn[i], l[i]];
+      if (mi === null || di === null || li === null) return RIEN;
+      if (sensActuel === 'buy' && li < di) return { fermer: ['buy'], ouvrir: null, raison: "les lèvres repassent sous les dents : l'alligator se referme" };
+      if (sensActuel === 'sell' && li > di) return { fermer: ['sell'], ouvrir: null, raison: "les lèvres repassent au-dessus des dents : l'alligator se referme" };
+      if (li > di && di > mi && c[i]! > li && sensActuel !== 'buy') return { fermer: ['sell'], ouvrir: 'buy', raison: "l'alligator s'ouvre vers le haut" };
+      if (li < di && di < mi && c[i]! < li && sensActuel !== 'sell') return { fermer: ['buy'], ouvrir: 'sell', raison: "l'alligator s'ouvre vers le bas" };
       return RIEN;
     }
     default:

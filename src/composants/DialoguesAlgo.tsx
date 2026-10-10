@@ -56,7 +56,7 @@ export function DialogueExpert({ graphique, expert }: { graphique: string; exper
           {Object.keys(def.defaut).map((k) => (
             <label key={k}>
               <span>{def.libelles[k]} :</span>
-              <Spin valeur={p[k] ?? def.defaut[k]} changer={(v) => setP({ ...p, [k]: v })} pas={pas(k)} min={k === 'volume' ? 0.01 : 0} decimales={k === 'volume' ? 2 : 0} />
+              <Spin valeur={p[k] ?? def.defaut[k]} changer={(v) => setP({ ...p, [k]: v })} pas={Number.isInteger(def.defaut[k]) ? pas(k) : 0.01} min={k === 'volume' ? 0.01 : 0} decimales={Number.isInteger(def.defaut[k]) ? 0 : 2} />
             </label>
           ))}
         </fieldset>
