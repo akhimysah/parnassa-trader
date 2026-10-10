@@ -10,7 +10,7 @@ import { CourbeSolde } from './Courbe';
 import { enregistrerRapport, rapportHtml } from '../algo/rapportHtml';
 import { Spin, argent, dateMT } from './ui';
 
-type Onglet = 'parametres' | 'entrees' | 'backtest' | 'graphique' | 'visualisation' | 'trades' | 'optimisation' | 'journal';
+type Onglet = 'parametres' | 'entrees' | 'backtest' | 'multi' | 'graphique' | 'visualisation' | 'trades' | 'optimisation' | 'journal';
 
 interface Reglages {
   expert: TypeExpert;
@@ -29,6 +29,8 @@ interface Reglages {
   avant?: 0 | 2 | 3 | 4;
   /** Optimisation : toutes les combinaisons, ou algorithme génétique (indispensable au-delà de 2 000 combinaisons). */
   algorithme?: 'complet' | 'genetique';
+  /** Symboles testés en plus du symbole principal (même expert, mêmes entrées). */
+  multi?: string[];
 }
 
 const CLE = 'parnassa-trader:testeur';
@@ -56,6 +58,7 @@ const ONGLETS: [Onglet, string][] = [
   ['parametres', 'Paramètres'],
   ['entrees', 'Entrées'],
   ['backtest', 'Backtest'],
+  ['multi', 'Multi-symboles'],
   ['graphique', 'Graphique'],
   ['visualisation', 'Visualisation'],
   ['trades', 'Trades'],
@@ -71,6 +74,8 @@ export function Testeur() {
   const [enCours, setEnCours] = useState<null | { texte: string; fait: number; total: number }>(null);
   const [resultat, setResultat] = useState<(ResultatTest & { reglages: Reglages; bougies: Bougie[]; avant?: ResultatTest & { bougies: Bougie[] } }) | null>(null);
   const [passes, setPasses] = useState<Passe[]>([]);
+  const [multi, setMulti] = useState<{ symbole: string; stats: ResultatTest['stats'] | null; erreur?: string }[]>([]);
+  const [choixMulti, setChoixMulti] = useState(false);
   const [journal, setJournal] = useState<string[]>([]);
   const annuler = useRef(false);
   const [vueOpti, setVueOpti] = useState<'tableau' | 'carte'>('tableau');
@@ -159,6 +164,34 @@ export function Testeur() {
       const futur = r.avant ? b.slice(amorce) : [];
       const baseAvant = r.avant ? { ...base(futur), debut: coupe - amorce } : undefined;
       if (r.avant) noter(`avant-test : ${passe.length} barres de test, ${b.length - coupe} barres d'avant-test à partir du ${dateMT(b[coupe].time * 1000, false)}`);
+      if (!optimisation && (r.multi ?? []).length) {
+        // Plusieurs symboles : le même expert sur chacun, puis un tableau par symbole et le total.
+        const liste = [r.symbole, ...(r.multi ?? []).filter((x) => x !== r.symbole)];
+        const lignes: typeof multi = [];
+        for (const [k, nom] of liste.entries()) {
+          setEnCours({ texte: `Test multi-symboles : ${nom} (${k + 1} / ${liste.length})`, fait: k, total: liste.length });
+          const sy = symbole(nom)!;
+          const qy = cotations[nom];
+          try {
+            const hist = nom === r.symbole ? passe : await chargerHistoriqueLong(sy, r.periode, r.barres, qy ? (qy.bid + qy.ask) / 2 : undefined);
+            const res = lancerTest({
+              ...base(hist),
+              s: sy,
+              spread: r.spreadActuel && qy ? Math.max(1, Math.round((qy.ask - qy.bid) / point(sy))) : sy.spread,
+              conversion: conversion(sy, cotations),
+            });
+            if (nom === r.symbole) setResultat({ ...res, reglages, bougies: hist });
+            lignes.push({ symbole: nom, stats: res.stats });
+            noter(`${nom} : ${res.stats.trades} trades, bénéfice net ${argent(res.stats.net)} USD`);
+          } catch {
+            lignes.push({ symbole: nom, stats: null, erreur: 'historique indisponible' });
+          }
+          setMulti([...lignes]);
+          await new Promise((ok) => setTimeout(ok, 0));
+        }
+        setOnglet('multi');
+        return;
+      }
       if (!optimisation) {
         setEnCours({ texte: 'Test en cours…', fait: 0, total: 1 });
         await new Promise((ok) => setTimeout(ok, 20));
@@ -268,6 +301,30 @@ export function Testeur() {
                     ))}
                   </select>
                 </label>
+                <label>
+                  <span>Autres symboles :</span>
+                  <span className="testeur-info">
+                    <button type="button" onClick={() => setChoixMulti(!choixMulti)}>
+                      {(r.multi ?? []).length ? `${(r.multi ?? []).length} de plus` : 'Aucun'} ▾
+                    </button>
+                  </span>
+                </label>
+                {choixMulti && (
+                  <div className="choix-multi">
+                    {etat.observation
+                      .filter((n) => n !== r.symbole)
+                      .map((n) => (
+                        <label key={n} className="case">
+                          <input
+                            type="checkbox"
+                            checked={(r.multi ?? []).includes(n)}
+                            onChange={() => changer({ multi: (r.multi ?? []).includes(n) ? (r.multi ?? []).filter((x) => x !== n) : [...(r.multi ?? []), n] })}
+                          />
+                          {n}
+                        </label>
+                      ))}
+                  </div>
+                )}
                 <label>
                   <span>Période :</span>
                   <select value={r.periode} onChange={(e) => changer({ periode: e.target.value as Periode })}>
@@ -433,6 +490,59 @@ export function Testeur() {
             </table>
           )}
           {onglet === 'backtest' && (resultat ? <Backtest res={resultat} /> : <div className="vide-boite">Lancez un test depuis l'onglet Paramètres.</div>)}
+          {onglet === 'multi' &&
+            (multi.length ? (
+              <table className="table boite-table">
+                <thead>
+                  <tr>
+                    <th>Symbole</th>
+                    <th className="d">Bénéfice net</th>
+                    <th className="d">Trades</th>
+                    <th className="d">% gagnants</th>
+                    <th className="d">Facteur de profit</th>
+                    <th className="d">Drawdown max %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {multi.map((m) => (
+                    <tr key={m.symbole}>
+                      <td>
+                        <b>{m.symbole}</b>
+                      </td>
+                      {m.stats ? (
+                        <>
+                          <td className={`d gras ${m.stats.net >= 0 ? 'positif' : 'negatif'}`}>{argent(m.stats.net)}</td>
+                          <td className="d">{m.stats.trades}</td>
+                          <td className="d">{m.stats.trades ? `${((m.stats.gagnants / m.stats.trades) * 100).toFixed(1)} %` : '—'}</td>
+                          <td className="d">{m.stats.facteur === null ? '—' : m.stats.facteur.toFixed(2)}</td>
+                          <td className="d">{m.stats.ddMaxPct.toFixed(2)}</td>
+                        </>
+                      ) : (
+                        <td colSpan={5} className="muet">
+                          {m.erreur}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                  <tr className="gras">
+                    <td>Total</td>
+                    <td className={`d ${multi.reduce((t, m) => t + (m.stats?.net ?? 0), 0) >= 0 ? 'positif' : 'negatif'}`}>{argent(multi.reduce((t, m) => t + (m.stats?.net ?? 0), 0))}</td>
+                    <td className="d">{multi.reduce((t, m) => t + (m.stats?.trades ?? 0), 0)}</td>
+                    <td className="d">
+                      {(() => {
+                        const tr = multi.reduce((t, m) => t + (m.stats?.trades ?? 0), 0);
+                        const g = multi.reduce((t, m) => t + (m.stats?.gagnants ?? 0), 0);
+                        return tr ? `${((g / tr) * 100).toFixed(1)} %` : '—';
+                      })()}
+                    </td>
+                    <td className="d">—</td>
+                    <td className="d">—</td>
+                  </tr>
+                </tbody>
+              </table>
+            ) : (
+              <div className="vide-boite">Cochez des « Autres symboles » dans les Paramètres, puis Démarrer.</div>
+            ))}
           {onglet === 'graphique' &&
             (resultat ? (
               <div className="testeur-graphique">
