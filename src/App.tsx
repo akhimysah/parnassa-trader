@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ContexteTerminal, useTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+// Interfaces chargées à la demande : le téléphone ne télécharge pas le terminal de bureau, et inversement.
+const Bureau = lazy(() => import('./Bureau'));
+const Mobile = lazy(() => import('./mobile/Mobile').then((m) => ({ default: m.Mobile })));
+const Dialogues = lazy(() => import('./composants/Dialogues').then((m) => ({ default: m.Dialogues })));
+import { ContexteTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
 import { reglagesModele } from './modeles';
 import { definirExpertsPerso } from './algo/experts';
 import { chargerEtat, nouveauGraphique, sauverEtat, type EtatTerminal, type Graphique } from './etat';
@@ -9,16 +14,8 @@ import { symbole } from './marche/symboles';
 import { jouer } from './sons';
 import { registreGraphiques } from './graphique/registre';
 import { identifiant } from './etat';
-import { BarreEtat, BarreMenus, BarreOutils } from './composants/Barres';
-import { ObservationMarche } from './composants/ObservationMarche';
-import { Navigateur } from './composants/Navigateur';
-import { FenetreDonnees } from './composants/FenetreDonnees';
 import { NavigationRapide } from './composants/NavigationRapide';
-import { BoiteOutils, type OngletBoite } from './composants/BoiteOutils';
-import { ZoneGraphiques } from './composants/ZoneGraphiques';
-import { Testeur } from './composants/Testeur';
-import { Dialogues } from './composants/Dialogues';
-import { Mobile } from './mobile/Mobile';
+import type { OngletBoite } from './composants/BoiteOutils';
 import { useSynchro } from './synchro';
 import { refusTrading, useComptesEnLigne } from './compte/enLigne';
 import { useInterface } from './interface';
@@ -293,40 +290,22 @@ export function App() {
     ? `${new Date(survol.temps).toLocaleString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}   O: ${survol.o.toFixed(survol.chiffres)}   H: ${survol.h.toFixed(survol.chiffres)}   L: ${survol.l.toFixed(survol.chiffres)}   C: ${survol.c.toFixed(survol.chiffres)}   V: ${Math.round(survol.v)}`
     : '';
 
-  const p = etat.panneaux;
   return (
     <ContexteTerminal.Provider value={terminal}>
       {mobile ? (
         <div className={force ? 'fond-cadre' : 'plein'}>
-          <Mobile cadre={force} />
+          <Suspense fallback={<div className="chargement-app">Parnassa Trader…</div>}>
+            <Mobile cadre={force} />
+          </Suspense>
         </div>
       ) : (
-        <div className="terminal">
-          <BarreMenus />
-          {p.barreOutils && <BarreOutils />}
-          <div className="corps">
-            {(p.observation || p.navigateur || p.donnees) && (
-              <aside className="colonne-gauche">
-                {p.observation && <ObservationMarche />}
-                {p.donnees && <FenetreDonnees />}
-                {p.navigateur && <Navigateur />}
-              </aside>
-            )}
-            <div className="centre">
-              <ZoneGraphiques />
-              {(p.boite || p.testeur) && (
-                <div className="boite-cadre" style={{ height: etat.hauteurBoite }}>
-                  <Poignee />
-                  {/* Comme dans MT5, le testeur de stratégie occupe le bas de la fenêtre à la place de la boîte à outils. */}
-                  {p.testeur ? <Testeur /> : <BoiteOutils onglet={onglet} changer={setOnglet} />}
-                </div>
-              )}
-            </div>
-          </div>
-          {p.barreEtat && <BarreEtat texteSurvol={texteSurvol} />}
-        </div>
+        <Suspense fallback={<div className="chargement-app">Parnassa Trader…</div>}>
+          <Bureau texteSurvol={texteSurvol} onglet={onglet} changerOnglet={setOnglet} />
+        </Suspense>
       )}
-      <Dialogues />
+      <Suspense fallback={null}>
+        <Dialogues />
+      </Suspense>
       {navRapide !== null && (
         <NavigationRapide
           initial={navRapide}
@@ -342,26 +321,3 @@ export function App() {
     </ContexteTerminal.Provider>
   );
 }
-
-/** Poignée de redimensionnement de la Boîte à outils. */
-function Poignee() {
-  const { maj, etat } = useTerminal();
-  const depart = useRef<{ y: number; h: number } | null>(null);
-  return (
-    <div
-      className="poignee"
-      onPointerDown={(e) => {
-        depart.current = { y: e.clientY, h: etat.hauteurBoite };
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-      }}
-      onPointerMove={(e) => {
-        const d = depart.current;
-        if (d) maj((x) => ({ ...x, hauteurBoite: Math.max(90, Math.min(window.innerHeight - 220, d.h - (e.clientY - d.y))) }));
-      }}
-      onPointerUp={() => {
-        depart.current = null;
-      }}
-    />
-  );
-}
-
