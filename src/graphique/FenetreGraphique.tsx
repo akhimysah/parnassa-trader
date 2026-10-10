@@ -383,6 +383,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
             tp: e.p.tp ? arrondi(prix + sens * e.p.tp * point(sy)) : 0,
             commentaire: nom,
             magic: e.magic,
+            suiveur: e.p.suiveur ?? 0,
+            equilibre: e.p.equilibre ?? 0,
           },
           cot,
         );

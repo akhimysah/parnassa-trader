@@ -60,6 +60,9 @@ interface PositionTest {
   heure: number;
   swap: number;
   dernierSwap: number;
+  /** Stop suiveur et seuil de break-even, en points (0 = aucun). */
+  suiveur: number;
+  equilibre: number;
 }
 
 /** Fenêtre de barres transmise à l'expert : assez pour amorcer ses indicateurs, sans recalcul quadratique. */
@@ -136,6 +139,8 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
         heure,
         swap: 0,
         dernierSwap: heure,
+        suiveur: expert.p.suiveur ?? 0,
+        equilibre: expert.p.equilibre ?? 0,
       };
       const fondsPropres = solde + positions.reduce((t, x) => t + valeur(x, barre.open), 0);
       const utilisee = positions.reduce((t, x) => t + marge(x), 0);
@@ -155,6 +160,17 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
       const bid = chemin[k];
       const ask = bid + ecart;
       for (const p of [...positions]) {
+        // Break-even puis stop suiveur, au prix de fermeture du chemin (Bid pour un achat, Ask pour une vente).
+        const fermeture = p.type === 'buy' ? bid : ask;
+        const gain = p.type === 'buy' ? fermeture - p.prix : p.prix - fermeture;
+        if (p.equilibre > 0 && gain >= p.equilibre * pas) {
+          if (p.type === 'buy' ? p.prix > p.sl : p.sl === 0 || p.prix < p.sl) p.sl = p.prix;
+          p.equilibre = 0;
+        }
+        if (p.suiveur > 0 && gain > p.suiveur * pas) {
+          const cible = arrondi(p.type === 'buy' ? fermeture - p.suiveur * pas : fermeture + p.suiveur * pas);
+          if (p.type === 'buy' ? cible > p.sl : p.sl === 0 || cible < p.sl) p.sl = cible;
+        }
         // À l'ouverture (k = 0), un écart de cotation exécute le stop au prix d'ouverture ; ensuite au niveau exact.
         if (p.type === 'buy') {
           if (p.sl && bid <= p.sl) fermer(p, k === 0 ? bid : p.sl, heure, 'sl');

@@ -38,7 +38,8 @@ function reglagesDefaut(): Reglages {
 function charger(): Reglages {
   try {
     const r = JSON.parse(localStorage.getItem(CLE) ?? 'null') as Reglages | null;
-    return r && symbole(r.symbole) && tousExperts().some((e) => e.type === r.expert) ? { ...reglagesDefaut(), ...r } : reglagesDefaut();
+    // Entrées complétées par les valeurs par défaut (nouvelles entrées ajoutées depuis : stop suiveur, break-even).
+    return r && symbole(r.symbole) && tousExperts().some((e) => e.type === r.expert) ? { ...reglagesDefaut(), ...r, p: { ...definitionExpert(r.expert).defaut, ...r.p } } : reglagesDefaut();
   } catch {
     return reglagesDefaut();
   }
@@ -359,7 +360,7 @@ export function Testeur() {
               </thead>
               <tbody>
                 {Object.keys(def.defaut).map((k) => {
-                  const o = r.optimiser[k] ?? { actif: false, debut: r.p[k], pas: k === 'volume' ? 0.01 : k === 'sl' || k === 'tp' ? 50 : 1, fin: r.p[k] * 2 || 100 };
+                  const o = r.optimiser[k] ?? { actif: false, debut: r.p[k], pas: k === 'volume' ? 0.01 : k === 'sl' || k === 'tp' || k === 'suiveur' || k === 'equilibre' ? 50 : 1, fin: r.p[k] * 2 || 100 };
                   const dec = k === 'volume' ? 2 : 0;
                   const majO = (patch: Partial<typeof o>) => changer({ optimiser: { ...r.optimiser, [k]: { ...o, ...patch } } });
                   const nb = o.pas > 0 ? Math.max(0, Math.floor((o.fin - o.debut) / o.pas + 1e-9) + 1) : 0;

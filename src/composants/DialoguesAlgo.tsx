@@ -14,9 +14,9 @@ export function DialogueExpert({ graphique, expert }: { graphique: string; exper
   const g = etat.graphiques.find((x) => x.id === graphique);
   const [type, setType] = useState<TypeExpert>(expert ?? g?.expert?.type ?? 'croisement-ma');
   const def = definitionExpert(type);
-  const [p, setP] = useState<Record<string, number>>(g?.expert?.type === type ? g.expert.p : def.defaut);
+  const [p, setP] = useState<Record<string, number>>(g?.expert?.type === type ? { ...def.defaut, ...g.expert.p } : def.defaut);
   useEffect(() => {
-    setP(g?.expert?.type === type ? g.expert.p : definitionExpert(type).defaut);
+    setP(g?.expert?.type === type ? { ...definitionExpert(type).defaut, ...g.expert.p } : definitionExpert(type).defaut);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
   if (!g) {
@@ -29,7 +29,7 @@ export function DialogueExpert({ graphique, expert }: { graphique: string; exper
   const actuel = g.expert;
   const ouvertes = actuel ? compte.positions.filter((x) => x.magic === actuel.magic) : [];
   const flottant = ouvertes.reduce((s, x) => s + profitPosition(x, cotations), 0);
-  const pas = (k: string) => (k === 'volume' ? 0.01 : k === 'sl' || k === 'tp' ? 10 : 1);
+  const pas = (k: string) => (k === 'volume' ? 0.01 : k === 'sl' || k === 'tp' || k === 'suiveur' || k === 'equilibre' ? 10 : 1);
   return (
     <Fenetre titre={`Expert Advisor — ${g.symbole}, ${g.periode}`} fermer={fermer} largeur={480}>
       <div className="formulaire">

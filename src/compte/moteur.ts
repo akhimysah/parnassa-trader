@@ -26,6 +26,8 @@ export interface Position {
   commentaire: string;
   /** Stop suiveur, en points (0 = désactivé). */
   suiveur: number;
+  /** Seuil de mise à break-even, en points de gain : le stop-loss passe au prix d'ouverture (0 = aucun). */
+  equilibre?: number;
   /** Identifiant de l'Expert Advisor qui a ouvert la position (0 = manuelle). */
   magic?: number;
   /** Dernier rollover dont le swap a été compté (ms) ; à défaut, l'heure d'ouverture. */
@@ -304,6 +306,9 @@ export interface DemandeMarche {
   tp: number;
   commentaire: string;
   magic?: number;
+  /** Stop suiveur et break-even posés dès l'ouverture (experts), en points. */
+  suiveur?: number;
+  equilibre?: number;
 }
 
 function decrireDemande(d: { type: string; volume: number; symbole: string; sl: number; tp: number }, s: SymboleMT | undefined, prix?: number): string {
@@ -345,7 +350,8 @@ export function ouvrirMarche(c: Compte, d: DemandeMarche, cot: Cotations, origin
     commission,
     swap: 0,
     commentaire: d.commentaire,
-    suiveur: 0,
+    suiveur: d.suiveur ?? 0,
+    equilibre: d.equilibre || undefined,
     magic: d.magic,
   };
   const deal: Transaction = {
@@ -746,6 +752,18 @@ export function appliquerCotations(c: Compte, cot: Cotations): { compte: Compte;
     const s = symbole(p.symbole);
     if (!q || !s) continue;
     const prix = prixFermeture(p.type, q);
+    // Break-even : passé le seuil de gain, le stop-loss est remonté au prix d'ouverture, une seule fois.
+    if (p.equilibre && p.equilibre > 0) {
+      const enGain = p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix;
+      if (enGain >= p.equilibre * point(s)) {
+        const meilleur = p.type === 'buy' ? p.prixOuverture > p.sl : p.sl === 0 || p.prixOuverture < p.sl;
+        courant = {
+          ...courant,
+          positions: courant.positions.map((x) => (x.ticket === p.ticket ? { ...x, sl: meilleur ? p.prixOuverture : x.sl, equilibre: undefined } : x)),
+        };
+        if (meilleur) evenements.push({ type: 'execution', message: `#${p.ticket} : stop-loss au prix d'ouverture (break-even à ${p.equilibre} points)` });
+      }
+    }
     // Stop suiveur : le stop-loss suit le prix dès que la position gagne plus que la distance choisie.
     if (p.suiveur > 0) {
       const distance = p.suiveur * point(s);

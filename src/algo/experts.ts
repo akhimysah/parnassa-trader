@@ -25,8 +25,14 @@ export interface DefinitionExpert {
   libelles: Record<string, string>;
 }
 
-const COMMUNS = { volume: 0.1, sl: 0, tp: 0 };
-const LIBELLES_COMMUNS = { volume: 'Volume (lots)', sl: 'Stop Loss (points, 0 = aucun)', tp: 'Take Profit (points, 0 = aucun)' };
+const COMMUNS = { volume: 0.1, sl: 0, tp: 0, suiveur: 0, equilibre: 0 };
+const LIBELLES_COMMUNS = {
+  volume: 'Volume (lots)',
+  sl: 'Stop Loss (points, 0 = aucun)',
+  tp: 'Take Profit (points, 0 = aucun)',
+  suiveur: 'Stop suiveur (points, 0 = aucun)',
+  equilibre: 'Break-even après (points, 0 = aucun)',
+};
 
 export const EXPERTS: DefinitionExpert[] = [
   {

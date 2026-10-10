@@ -553,9 +553,9 @@ export function EcranExpert({ graphique, expert }: { graphique: string; expert?:
   const g = etat.graphiques.find((x) => x.id === graphique) ?? etat.graphiques[0];
   const [type, setType] = useState<TypeExpert>(expert ?? g?.expert?.type ?? 'croisement-ma');
   const def = definitionExpert(type);
-  const [p, setP] = useState<Record<string, number>>(g?.expert?.type === type ? g.expert.p : def.defaut);
+  const [p, setP] = useState<Record<string, number>>(g?.expert?.type === type ? { ...def.defaut, ...g.expert.p } : def.defaut);
   useEffect(() => {
-    setP(g?.expert?.type === type ? g.expert.p : definitionExpert(type).defaut);
+    setP(g?.expert?.type === type ? { ...definitionExpert(type).defaut, ...g.expert.p } : definitionExpert(type).defaut);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
   if (!g) return null;
