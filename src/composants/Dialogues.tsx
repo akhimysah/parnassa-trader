@@ -4,7 +4,7 @@ import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
 import { HEURE_ROLLOVER_UTC, SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, point, spreadPoints, swapPoints, symbole, type Categorie } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { sourceDirecte } from '../marche/cotations';
-import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA } from '../graphique/indicateurs';
+import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA, APPLICABLES, SOURCES, type Source } from '../graphique/indicateurs';
 import { SCHEMAS } from '../graphique/couleurs';
 import { definirSuiveur, fermerPosition, levierEffectif, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
 import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
@@ -351,9 +351,13 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
   const [p, setP] = useState<Record<string, number>>(actuel?.p ?? def.defaut);
   const [methode, setMethode] = useState<MethodeMA>(actuel?.methode ?? 'sma');
   const [couleur, setCouleur] = useState(actuel?.couleur ?? def.couleur);
+  const [source, setSource] = useState<Source>(actuel?.source ?? 'close');
   if (!g) return null;
+  // Position de l'indicateur dans la liste : « précédent » et « premier » n'ont de sens qu'après un autre indicateur.
+  const position = actuel ? g.indicateurs.findIndex((i) => i.id === actuel.id) : g.indicateurs.length;
+  const applicable = APPLICABLES.includes(type);
   const valider = () => {
-    const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur };
+    const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur, source: applicable && source !== 'close' ? source : undefined };
     majGraphique(g.id, (gr) => ({ indicateurs: actuel ? gr.indicateurs.map((i) => (i.id === actuel.id ? ind : i)) : [...gr.indicateurs, ind] }));
     fermer();
   };
@@ -387,7 +391,24 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
             </span>
           </label>
         )}
-        <p className="aide">Appliqué aux prix de clôture (Bid).</p>
+        {applicable ? (
+          <label>
+            <span>Appliquer à :</span>
+            <select value={source} onChange={(e) => setSource(e.target.value as Source)}>
+              {(Object.keys(SOURCES) as Source[])
+                .filter((k) => position > 0 || (k !== 'precedent' && k !== 'premier'))
+                .map((k) => (
+                  <option key={k} value={k}>
+                    {SOURCES[k]}
+                    {k === 'precedent' && position > 0 ? ` (${nomCourt(g.indicateurs[position - 1])})` : k === 'premier' && position > 0 ? ` (${nomCourt(g.indicateurs[0])})` : ''}
+                  </option>
+                ))}
+            </select>
+          </label>
+        ) : (
+          <p className="aide">Appliqué aux prix (Bid).</p>
+        )}
+        {(source === 'precedent' || source === 'premier') && <p className="aide">Calculé sur la première courbe de cet indicateur et dessiné dans sa fenêtre (par exemple une moyenne mobile du RSI).</p>}
       </div>
       <div className="boutons">
         {actuel && (

@@ -3,7 +3,7 @@ import { useTerminal } from '../contexte';
 import { identifiant, type Alerte } from '../etat';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
-import { DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
+import { APPLICABLES, SOURCES, type Source, DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
 import { tousExperts, definitionExpert, type TypeExpert } from '../algo/experts';
 import { calculerStats } from '../algo/statistiques';
 import { definirSuiveur, operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
@@ -200,7 +200,10 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
   const [p, setP] = useState<Record<string, number>>(actuel?.p ?? def.defaut);
   const [methode, setMethode] = useState<MethodeMA>(actuel?.methode ?? 'sma');
   const [couleur, setCouleur] = useState(actuel?.couleur ?? def.couleur);
+  const [source, setSource] = useState<Source>(actuel?.source ?? 'close');
   if (!g) return null;
+  const position = actuel ? g.indicateurs.findIndex((i) => i.id === actuel.id) : g.indicateurs.length;
+  const applicable = APPLICABLES.includes(type);
   const pas = (k: string) => (k === 'pas' || k === 'max' ? 0.01 : k === 'ecart' ? 0.05 : k === 'ecarts' ? 0.5 : 1);
   const dec = (k: string) => (k === 'pas' || k === 'max' || k === 'ecart' ? 2 : k === 'ecarts' ? 1 : 0);
   return (
@@ -225,6 +228,20 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
               </select>
             </label>
           )}
+          {applicable && (
+            <label className="mm-ligne-champ">
+              <span>Appliquer à</span>
+              <select value={source} onChange={(e) => setSource(e.target.value as Source)}>
+                {(Object.keys(SOURCES) as Source[])
+                  .filter((k) => position > 0 || (k !== 'precedent' && k !== 'premier'))
+                  .map((k) => (
+                    <option key={k} value={k}>
+                      {SOURCES[k]}
+                    </option>
+                  ))}
+              </select>
+            </label>
+          )}
           {!['ichimoku', 'env', 'macd', 'stoch'].includes(type) && (
             <div className="mm-ligne-champ">
               <span>Couleur</span>
@@ -236,7 +253,7 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
             </div>
           )}
         </div>
-        <p className="mm-note">Calculé sur les prix de clôture (Bid) des bougies du graphique.</p>
+        <p className="mm-note">{source === 'precedent' || source === 'premier' ? "Calculé sur la première courbe de l'indicateur choisi et dessiné dans sa fenêtre." : 'Calculé sur les prix (Bid) des bougies du graphique.'}</p>
       </div>
       <div className="mm-boutons-bas">
         {actuel && (
@@ -253,7 +270,7 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
         <button
           className="mm-bouton principal"
           onClick={() => {
-            const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur };
+            const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur, source: applicable && source !== 'close' ? source : undefined };
             majGraphique(g.id, (gr) => ({ indicateurs: actuel ? gr.indicateurs.map((i) => (i.id === actuel.id ? ind : i)) : [...gr.indicateurs, ind] }));
             vibrer(15);
             retour();

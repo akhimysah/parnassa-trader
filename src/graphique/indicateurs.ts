@@ -14,6 +14,73 @@ export interface Indicateur {
   p: Record<string, number>;
   methode?: MethodeMA;
   couleur: string;
+  /** « Appliquer à » de MT5 : prix utilisé, ou données d'un autre indicateur du graphique. */
+  source?: Source;
+}
+
+export type Source = 'close' | 'open' | 'high' | 'low' | 'median' | 'typique' | 'pondere' | 'precedent' | 'premier';
+export const SOURCES: Record<Source, string> = {
+  close: 'Clôture',
+  open: 'Ouverture',
+  high: 'Plus haut',
+  low: 'Plus bas',
+  median: 'Prix médian (HL/2)',
+  typique: 'Prix typique (HLC/3)',
+  pondere: 'Clôture pondérée (HLCC/4)',
+  precedent: "Données de l'indicateur précédent",
+  premier: 'Données du premier indicateur',
+};
+/** Indicateurs calculés sur une seule série : ils acceptent « Appliquer à ». */
+export const APPLICABLES: TypeIndicateur[] = ['ma', 'bb', 'env', 'dema', 'tema', 'stddev', 'rsi', 'macd', 'osma', 'mom'];
+const sourceIndicateur = (s?: Source) => s === 'precedent' || s === 'premier';
+
+function prixSource(b: Bougie[], s: Source = 'close'): Valeurs {
+  switch (s) {
+    case 'open':
+      return b.map((x) => x.open);
+    case 'high':
+      return b.map((x) => x.high);
+    case 'low':
+      return b.map((x) => x.low);
+    case 'median':
+      return b.map((x) => (x.high + x.low) / 2);
+    case 'typique':
+      return b.map((x) => (x.high + x.low + x.close) / 3);
+    case 'pondere':
+      return b.map((x) => (x.high + x.low + 2 * x.close) / 4);
+    default:
+      return b.map((x) => x.close);
+  }
+}
+
+/** Fenêtre de chaque indicateur (0 = graphique principal), sans rien calculer. */
+export function panneauxIndicateurs(liste: Indicateur[]): number[] {
+  const r: number[] = [];
+  let n = 0;
+  liste.forEach((ind, i) => {
+    const ref = ind.source === 'precedent' ? r[i - 1] : ind.source === 'premier' ? r[0] : undefined;
+    r.push(APPLICABLES.includes(ind.type) && sourceIndicateur(ind.source) && i > 0 && ref !== undefined ? ref : definition(ind.type).superpose ? 0 : ++n);
+  });
+  return r;
+}
+
+/**
+ * Calcule tous les indicateurs d'un graphique dans l'ordre : un indicateur appliqué aux données du précédent (ou du
+ * premier) reçoit leur première courbe, et se dessine dans la même fenêtre.
+ */
+export function calculerTous(liste: Indicateur[], b: Bougie[]): { resultat: Resultat; panneau: number }[] {
+  const sortie: { resultat: Resultat; panneau: number }[] = [];
+  let panneaux = 0;
+  liste.forEach((ind, i) => {
+    const ref = ind.source === 'precedent' ? sortie[i - 1] : ind.source === 'premier' ? sortie[0] : undefined;
+    const applicable = APPLICABLES.includes(ind.type) && sourceIndicateur(ind.source) && ref && i > 0;
+    const resultat = calculer(ind, b, applicable ? ref.resultat.traces[0]?.valeurs : undefined);
+    // Sur des données d'indicateur, l'échelle est celle de l'indicateur source : pas de bornes fixes propres.
+    if (applicable) delete resultat.bornes;
+    const panneau = applicable ? ref.panneau : definition(ind.type).superpose ? 0 : ++panneaux;
+    sortie.push({ resultat, panneau });
+  });
+  return sortie;
 }
 
 export const GROUPES = ['Tendance', 'Oscillateurs', 'Volumes', 'Bill Williams'] as const;
@@ -239,8 +306,8 @@ function plusHautBas(b: Bougie[], n: number, i: number): [number, number] {
   return [h, l];
 }
 
-export function calculer(ind: Indicateur, b: Bougie[]): Resultat {
-  const c: Valeurs = b.map((x) => x.close);
+export function calculer(ind: Indicateur, b: Bougie[], donnees?: Valeurs): Resultat {
+  const c: Valeurs = donnees ?? (APPLICABLES.includes(ind.type) && !sourceIndicateur(ind.source) ? prixSource(b, ind.source) : b.map((x) => x.close));
   const p = ind.p;
   switch (ind.type) {
     case 'ma':
@@ -322,12 +389,16 @@ export function calculer(ind: Indicateur, b: Bougie[]): Resultat {
       const r: Valeurs = new Array(b.length).fill(null);
       let gain = 0;
       let perte = 0;
-      for (let i = 1; i < b.length; i++) {
-        const d = b[i].close - b[i - 1].close;
-        if (i <= p.periode) {
+      // Sur la série `c` (prix choisi ou données d'un indicateur) : les valeurs absentes du début sont sautées.
+      const premier = c.findIndex((x) => x !== null);
+      if (premier < 0) return { traces: [{ nom: nomCourt(ind), valeurs: r, couleur: ind.couleur }], niveaux: [30, 70], bornes: [0, 100] };
+      for (let i = premier + 1; i < b.length; i++) {
+        const d = (c[i] ?? 0) - (c[i - 1] ?? 0);
+        const k = i - premier;
+        if (k <= p.periode) {
           gain += Math.max(0, d);
           perte += Math.max(0, -d);
-          if (i === p.periode) {
+          if (k === p.periode) {
             gain /= p.periode;
             perte /= p.periode;
             r[i] = perte === 0 ? 100 : 100 - 100 / (1 + gain / perte);
@@ -397,7 +468,7 @@ export function calculer(ind: Indicateur, b: Bougie[]): Resultat {
       return { traces: [{ nom: nomCourt(ind), valeurs: r, couleur: ind.couleur }], niveaux: [-100, 100] };
     }
     case 'mom':
-      return { traces: [{ nom: nomCourt(ind), valeurs: c.map((x, i) => (i < p.periode ? null : (x! / c[i - p.periode]!) * 100)), couleur: ind.couleur }], niveaux: [100] };
+      return { traces: [{ nom: nomCourt(ind), valeurs: c.map((x, i) => (i < p.periode || x === null || !c[i - p.periode] ? null : (x / c[i - p.periode]!) * 100)), couleur: ind.couleur }], niveaux: [100] };
     case 'wpr': {
       const r = b.map((x, i) => {
         if (i < p.periode - 1) return null;

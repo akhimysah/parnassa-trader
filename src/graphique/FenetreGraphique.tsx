@@ -25,7 +25,7 @@ import type { Graphique, ObjetGraphique } from '../etat';
 import { identifiant } from '../etat';
 import { chargerBougies, debutBougie, PERIODES, type Bougie } from '../marche/bougies';
 import { formaterPrix, point, symbole } from '../marche/symboles';
-import { calculer, definition, nomCourt } from './indicateurs';
+import { calculerTous, definition, nomCourt, panneauxIndicateurs } from './indicateurs';
 import { couleursSchema } from './couleurs';
 import { Dessins, OBJETS } from './dessins';
 import { chargerCalendrier, devisesSymbole, valeurEvenement, type Evenement } from '../marche/calendrier';
@@ -428,11 +428,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     for (const x of seriesIndicateurs.current) for (const se of x.series) sansErreur(() => chart.removeSeries(se));
     seriesIndicateurs.current = [];
     for (let i = chart.panes().length - 1; i >= 1; i--) sansErreur(() => chart.removePane(i));
-    let panneau = 0;
-    for (const ind of g.indicateurs) {
+    const tous = calculerTous(g.indicateurs, bougiesRef.current);
+    for (const [k, ind] of g.indicateurs.entries()) {
       const def = definition(ind.type);
-      const index = def.superpose ? 0 : ++panneau;
-      const r = calculer(ind, bougiesRef.current);
+      const index = tous[k].panneau;
+      const r = tous[k].resultat;
       const series = r.traces.map((tr) => {
         const commun = { lastValueVisible: !def.superpose, priceLineVisible: false, title: '', crosshairMarkerVisible: false };
         const se =
@@ -451,10 +451,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   }, [cleIndicateurs, s]);
   useEffect(() => {
     const b = bougiesRef.current;
+    const tous = calculerTous(g.indicateurs, b);
     g.indicateurs.forEach((ind, k) => {
       const x = seriesIndicateurs.current[k];
       if (!x || x.id !== ind.id) return;
-      const r = calculer(ind, b);
+      const r = tous[k].resultat;
       r.traces.forEach((tr, j) => {
         const se = x.series[j];
         if (!se) return;
@@ -884,8 +885,10 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     operer((c) => ouvrirMarche(c, { symbole: g.symbole, type: sens, volume, sl: 0, tp: 0, commentaire: '' }, cotations), { confirmation: false });
   };
 
-  const superposes = g.indicateurs.filter((i) => definition(i.type).superpose);
-  const sousFenetres = g.indicateurs.filter((i) => !definition(i.type).superpose);
+  const fenetres = panneauxIndicateurs(g.indicateurs);
+  const superposes = g.indicateurs.filter((_, k) => fenetres[k] === 0);
+  // Une légende par sous-fenêtre, avec les indicateurs appliqués aux données de celui qui l'ouvre.
+  const sousFenetres = [...new Set(fenetres.filter((f) => f > 0))].map((f) => g.indicateurs.filter((_, k) => fenetres[k] === f));
   const periode = PERIODES.find((p) => p.id === g.periode)!;
 
   return (
@@ -946,11 +949,16 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           {definitionExpert(g.expert.type).nom}
         </button>
       )}
-      {sousFenetres.map((i, k) => {
+      {sousFenetres.map((liste, k) => {
         const haut = hauteursPanneaux.slice(0, k + 1).reduce((a, b) => a + b + 1, 0);
         return (
-          <div key={i.id} className="graphique-indicateur sous" style={{ top: haut + 2, color: coul.texte }} onDoubleClick={() => ouvrir({ type: 'indicateur', indicateur: i.type, graphique: g.id, existant: i.id })}>
-            {nomCourt(i)}
+          <div key={liste[0].id} className="graphique-indicateur sous" style={{ top: haut + 2, color: coul.texte }}>
+            {liste.map((i, j) => (
+              <span key={i.id} style={j ? { color: i.couleur, marginLeft: 8 } : undefined} onDoubleClick={() => ouvrir({ type: 'indicateur', indicateur: i.type, graphique: g.id, existant: i.id })}>
+                {nomCourt(i)}
+                {j ? ` (${i.source === 'premier' ? 'premier' : 'précédent'})` : ''}
+              </span>
+            ))}
           </div>
         );
       })}
