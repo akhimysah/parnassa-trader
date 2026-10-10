@@ -16,6 +16,9 @@ import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from '
 import { Fenetre, Spin, argent, dateMT } from './ui';
 import { OBJETS } from '../graphique/dessins';
 import { depuisChampDate, versChampDate } from '../alertes';
+import { EditeurOperande } from './Assistant';
+import { OPERATEURS, type Condition, type Operateur } from '../algo/assistant';
+import { PERIODES, type Periode } from '../marche/bougies';
 
 export function Dialogues() {
   const { dialogue } = useTerminal();
@@ -677,6 +680,10 @@ function DialogueAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: 
   const [max, setMax] = useState(actuelle?.max ?? 1);
   const [pause, setPause] = useState(actuelle?.pause ?? 10);
   const [expiration, setExpiration] = useState<number | null>(actuelle?.expiration ?? null);
+  const [regle, setRegle] = useState<Condition>(
+    actuelle?.regle ?? { a: { type: 'indicateur', indicateur: 'rsi', p: { periode: 14 }, trace: 0 }, op: 'croise-dessus', b: { type: 'valeur', valeur: 30 } },
+  );
+  const [periodeAlerte, setPeriodeAlerte] = useState<Periode>(actuelle?.periode ?? (etat.graphiques.find((g) => g.id === etat.graphiqueActif)?.periode ?? 'H1'));
   const s = symbole(sym)!;
   const q = cotations[sym];
   useEffect(() => {
@@ -701,9 +708,39 @@ function DialogueAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: 
             <option value="ask>">Ask &gt;</option>
             <option value="ask<">Ask &lt;</option>
             <option value="heure=">Heure =</option>
+            <option value="indicateur">Indicateur</option>
           </select>
         </label>
-        {condition === 'heure=' ? (
+        {condition === 'indicateur' ? (
+          <>
+            <label>
+              <span>Période :</span>
+              <select value={periodeAlerte} onChange={(e) => setPeriodeAlerte(e.target.value as Periode)}>
+                {PERIODES.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id} — {p.libelle}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="condition alerte-regle">
+              <EditeurOperande o={regle.a} changer={(a) => setRegle({ ...regle, a })} />
+              <select value={regle.op} onChange={(e) => setRegle({ ...regle, op: e.target.value as Operateur })}>
+                {(Object.keys(OPERATEURS) as Operateur[]).map((op) => (
+                  <option key={op} value={op}>
+                    {OPERATEURS[op]}
+                  </option>
+                ))}
+              </select>
+              <EditeurOperande o={regle.b} changer={(b) => setRegle({ ...regle, b })} />
+            </div>
+            <label>
+              <span>Déclenchements :</span>
+              <Spin valeur={max} changer={(v) => setMax(Math.max(1, Math.round(v)))} pas={1} min={1} decimales={0} />
+            </label>
+            <p className="aide">Vérifiée à la clôture de chaque barre {periodeAlerte}, au plus une fois par barre (application ouverte).</p>
+          </>
+        ) : condition === 'heure=' ? (
           <label>
             <span>Heure :</span>
             <input type="datetime-local" value={versChampDate(heure)} onChange={(e) => setHeure(depuisChampDate(e.target.value))} />
@@ -758,6 +795,7 @@ function DialogueAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: 
               valeur: condition === 'heure=' ? heure : valeur,
               commentaire,
               active: true,
+              ...(condition === 'indicateur' ? { regle, periode: periodeAlerte, derniereBarre: undefined } : {}),
               max: condition === 'heure=' ? 1 : max,
               pause,
               declenchements: 0,

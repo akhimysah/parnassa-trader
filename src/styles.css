@@ -2378,3 +2378,8 @@ kbd {
     grid-template-columns: 1fr;
   }
 }
+.alerte-regle {
+  border: 1px solid var(--bordure);
+  padding: 4px 6px;
+  margin: 2px 0 4px;
+}

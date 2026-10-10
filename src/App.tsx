@@ -6,7 +6,7 @@ const Mobile = lazy(() => import('./mobile/Mobile').then((m) => ({ default: m.Mo
 const Dialogues = lazy(() => import('./composants/Dialogues').then((m) => ({ default: m.Dialogues })));
 import { ContexteTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
 import { reglagesModele } from './modeles';
-import { evaluerAlertes } from './alertes';
+import { evaluerAlertes, evaluerAlertesIndicateurs } from './alertes';
 import { definirExpertsPerso } from './algo/experts';
 import { chargerEtat, nouveauGraphique, sauverEtat, type EtatTerminal, type Graphique } from './etat';
 import { definirAbonnements, definirTypeCompte, useCotations } from './marche/cotations';
@@ -116,6 +116,35 @@ export function App() {
       if (retour.son && refEtat.current.son) jouer(retour.son);
     }
   }, [cotations, maj, signaler]);
+
+  // Alertes sur indicateur : vérifiées toutes les 30 s sur la dernière barre fermée.
+  useEffect(() => {
+    let actif = true;
+    const verifier = async () => {
+      const e = refEtat.current;
+      if (!e.alertes.some((a) => a.active && a.condition === 'indicateur')) return;
+      const res = await evaluerAlertesIndicateurs(e.alertes, Date.now());
+      if (!actif || !res.length) return;
+      maj((x) => ({
+        ...x,
+        alertes: x.alertes.map((a) => {
+          const r = res.find((k) => k.id === a.id);
+          if (!r) return a;
+          const fois = (a.declenchements ?? 0) + 1;
+          return { ...a, derniereBarre: r.barre, declencheeLe: Date.now(), declenchements: fois, active: fois < (a.max ?? 1) };
+        }),
+      }));
+      signaler(res.map((r) => r.message).join(' · '));
+      if (refEtat.current.son) jouer('alerte');
+      for (const r of res) notifier('Alerte indicateur', r.message, true);
+    };
+    void verifier();
+    const t = window.setInterval(() => void verifier(), 30000);
+    return () => {
+      actif = false;
+      window.clearInterval(t);
+    };
+  }, [maj, signaler]);
 
   // Sauvegarde différée (au plus une écriture par seconde).
   useEffect(() => {

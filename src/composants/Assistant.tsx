@@ -10,7 +10,7 @@ import { Fenetre, Spin } from './ui';
 const INDICATEURS = DEFINITIONS.filter((d) => d.type !== 'volumes');
 
 /** Choix d'une opérande : prix, indicateur (avec ses paramètres et sa ligne) ou valeur fixe. */
-function EditeurOperande({ o, changer }: { o: Operande; changer: (o: Operande) => void }) {
+export function EditeurOperande({ o, changer }: { o: Operande; changer: (o: Operande) => void }) {
   const cle = o.type === 'prix' ? `prix:${o.champ}` : o.type === 'valeur' ? 'valeur' : `ind:${o.indicateur}`;
   const choisir = (v: string) => {
     if (v === 'valeur') return changer({ type: 'valeur', valeur: 0 });

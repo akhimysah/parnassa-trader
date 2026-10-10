@@ -72,11 +72,9 @@ export function nouvelExpertPerso(id: string): ExpertPerso {
   };
 }
 
-/** Décision à la clôture de la dernière barre de `b`, comme `decider` pour les experts intégrés. */
-export function deciderPerso(e: ExpertPerso, b: Bougie[], sensActuel: Sens | null): { fermer: Sens[]; ouvrir: Sens | null; raison: string } {
-  const rien = { fermer: [] as Sens[], ouvrir: null, raison: '' };
+/** Évaluateur de conditions sur les barres `b` (la dernière est la barre qui vient de se fermer). */
+export function evaluateur(b: Bougie[]): (c: Condition) => boolean {
   const n = b.length;
-  if (n < 3) return rien;
   const cache = new Map<string, Valeurs>();
   const serie = (o: Operande): Valeurs | number => {
     if (o.type === 'valeur') return o.valeur;
@@ -90,7 +88,8 @@ export function deciderPerso(e: ExpertPerso, b: Bougie[], sensActuel: Sens | nul
     return v;
   };
   const a = (s: Valeurs | number, i: number) => (typeof s === 'number' ? s : (s[i] ?? null));
-  const vraie = (c: Condition): boolean => {
+  return (c: Condition): boolean => {
+    if (n < 3) return false;
     const sa = serie(c.a);
     const sb = serie(c.b);
     const i = n - 1;
@@ -104,6 +103,13 @@ export function deciderPerso(e: ExpertPerso, b: Bougie[], sensActuel: Sens | nul
     if (a0 === null || b0 === null) return false;
     return c.op === 'croise-dessus' ? a0 <= b0 && a1 > b1 : a0 >= b0 && a1 < b1;
   };
+}
+
+/** Décision à la clôture de la dernière barre de `b`, comme `decider` pour les experts intégrés. */
+export function deciderPerso(e: ExpertPerso, b: Bougie[], sensActuel: Sens | null): { fermer: Sens[]; ouvrir: Sens | null; raison: string } {
+  const rien = { fermer: [] as Sens[], ouvrir: null, raison: '' };
+  if (b.length < 3) return rien;
+  const vraie = evaluateur(b);
   const tout = (cs: Condition[]) => cs.length > 0 && cs.every(vraie);
   if (tout(e.achat)) return { fermer: ['sell'], ouvrir: 'buy', raison: e.achat.map(libelleCondition).join(' et ') };
   if (tout(e.vente)) return { fermer: ['buy'], ouvrir: 'sell', raison: e.vente.map(libelleCondition).join(' et ') };

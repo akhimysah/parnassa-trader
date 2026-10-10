@@ -2,14 +2,53 @@ import type { Alerte } from './etat';
 import type { Cotation } from './marche/cotations';
 import { formaterPrix, symbole } from './marche/symboles';
 import { dateMT } from './composants/ui';
+import { evaluateur, libelleCondition } from './algo/assistant';
+import { chargerBougies, debutBougie, type Periode } from './marche/bougies';
+
+/**
+ * Alertes sur indicateur : pour chaque symbole et période concernés, les barres sont relues (au plus une fois par
+ * minute) et la condition est évaluée sur la dernière barre fermée ; une alerte ne se déclenche qu'une fois par barre.
+ */
+export async function evaluerAlertesIndicateurs(alertes: Alerte[], maintenant: number): Promise<{ id: string; barre: number; message: string }[]> {
+  const actives = alertes.filter((a) => a.active && a.condition === 'indicateur' && a.regle && (!a.expiration || maintenant < a.expiration));
+  const groupes = new Map<string, Alerte[]>();
+  for (const a of actives) {
+    const cle = `${a.symbole}|${a.periode ?? 'H1'}`;
+    groupes.set(cle, [...(groupes.get(cle) ?? []), a]);
+  }
+  const sortie: { id: string; barre: number; message: string }[] = [];
+  for (const [cle, liste] of groupes) {
+    const [nom, periode] = cle.split('|') as [string, Periode];
+    const s = symbole(nom);
+    if (!s) continue;
+    let b;
+    try {
+      b = await chargerBougies(s, periode);
+    } catch {
+      continue;
+    }
+    // Dernière barre fermée seulement : la barre en cours peut encore changer.
+    const enCours = debutBougie(Math.floor(maintenant / 1000), periode);
+    const fermees = b.filter((x) => x.time < enCours);
+    if (fermees.length < 3) continue;
+    const barre = fermees[fermees.length - 1].time;
+    const vraie = evaluateur(fermees);
+    for (const a of liste) {
+      if (a.derniereBarre && a.derniereBarre >= barre) continue;
+      if (vraie(a.regle!)) sortie.push({ id: a.id, barre, message: `Alerte ${a.symbole} ${a.periode ?? 'H1'} : ${libelleCondition(a.regle!)}${a.commentaire ? ` — ${a.commentaire}` : ''}` });
+    }
+  }
+  return sortie;
+}
 
 /**
  * Alertes comme dans MT5 : prix (Bid / Ask au-dessus ou en dessous) ou heure, avec un nombre de déclenchements, une
  * pause entre deux déclenchements et une expiration. Une alerte épuisée ou expirée se désactive.
  */
-export const CONDITIONS: Record<Alerte['condition'], string> = { 'bid>': 'Bid >', 'bid<': 'Bid <', 'ask>': 'Ask >', 'ask<': 'Ask <', 'heure=': 'Heure =' };
+export const CONDITIONS: Record<Alerte['condition'], string> = { 'bid>': 'Bid >', 'bid<': 'Bid <', 'ask>': 'Ask >', 'ask<': 'Ask <', 'heure=': 'Heure =', indicateur: 'Indicateur' };
 
 export function libelleAlerte(a: Alerte): string {
+  if (a.condition === 'indicateur') return a.regle ? `${a.periode ?? 'H1'} : ${libelleCondition(a.regle)}` : 'Indicateur';
   const s = symbole(a.symbole);
   const v = a.condition === 'heure=' ? dateMT(a.valeur).slice(0, 16) : s ? formaterPrix(s, a.valeur) : String(a.valeur);
   return `${CONDITIONS[a.condition]} ${v}`;
@@ -29,6 +68,7 @@ export function evaluerAlertes(alertes: Alerte[], cotations: Record<string, Cota
       change = true;
       return { ...a, active: false };
     }
+    if (a.condition === 'indicateur') return a;
     let vraie: boolean;
     if (a.condition === 'heure=') vraie = maintenant >= a.valeur;
     else {

@@ -47,7 +47,12 @@ export interface Alerte {
   id: string;
   symbole: string;
   /** Prix au-dessus / en dessous, ou heure atteinte (valeur = horodatage en ms). */
-  condition: 'bid>' | 'bid<' | 'ask>' | 'ask<' | 'heure=';
+  condition: 'bid>' | 'bid<' | 'ask>' | 'ask<' | 'heure=' | 'indicateur';
+  /** Alerte sur indicateur : condition de l'assistant, évaluée à la clôture de chaque barre de `periode`. */
+  regle?: import('./algo/assistant').Condition;
+  periode?: Periode;
+  /** Dernière barre (temps en s) qui a déclenché l'alerte sur indicateur. */
+  derniereBarre?: number;
   valeur: number;
   active: boolean;
   commentaire: string;
