@@ -2255,3 +2255,34 @@ kbd {
   text-align: left;
   padding-top: 2px;
 }
+/* Guide (F1) */
+.guide-tete {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.guide-tete button.actif {
+  background: var(--selection);
+  border-color: #0078d7;
+}
+.guide-tete input {
+  flex: 1;
+  min-width: 0;
+}
+.guide-corps {
+  max-height: 60vh;
+  overflow: auto;
+}
+.guide-corps h4 {
+  margin: 10px 0 4px;
+  font-size: 12px;
+}
+.guide-corps ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.guide-corps li {
+  margin: 3px 0;
+  line-height: 1.4;
+}

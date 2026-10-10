@@ -139,7 +139,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
     [
       'Aide',
       [
-        { libelle: 'Raccourcis clavier', action: () => ouvrir({ type: 'raccourcis' }) },
+        { libelle: 'Guide et raccourcis', raccourci: 'F1', action: () => ouvrir({ type: 'raccourcis' }) },
         { libelle: 'À propos', action: () => ouvrir({ type: 'apropos' }) },
       ],
     ],

@@ -11,6 +11,7 @@ import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
 import { BlocSynchro, DialogueSynchro } from './Synchro';
 import { DialogueAcces, DialogueCompte, DialogueConnexion } from './DialoguesComptes';
 import { DialogueAssistant } from './Assistant';
+import { DialogueGuide } from './Guide';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
 import { Fenetre, Spin, argent, dateMT } from './ui';
 import { OBJETS } from '../graphique/dessins';
@@ -67,7 +68,7 @@ function Contenu({ d }: { d: Dialogue }) {
     case 'apropos':
       return <DialogueAPropos />;
     case 'raccourcis':
-      return <DialogueRaccourcis />;
+      return <DialogueGuide raccourcis={RACCOURCIS as [string, string][]} />;
     case 'expert':
       return <DialogueExpert graphique={d.graphique} expert={d.expert} />;
     case 'rapport':
@@ -885,27 +886,3 @@ const RACCOURCIS: [string, string][] = [
   ['Échap', 'Annuler l\'outil de dessin, fermer une fenêtre'],
 ];
 
-function DialogueRaccourcis() {
-  const { fermer } = useTerminal();
-  return (
-    <Fenetre titre="Raccourcis clavier" fermer={fermer} largeur={440}>
-      <table className="table specification">
-        <tbody>
-          {RACCOURCIS.map(([a, b]) => (
-            <tr key={a}>
-              <td>
-                <kbd>{a}</kbd>
-              </td>
-              <td>{b}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div className="boutons">
-        <button className="principal" onClick={fermer}>
-          OK
-        </button>
-      </div>
-    </Fenetre>
-  );
-}

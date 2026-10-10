@@ -164,6 +164,9 @@ export function Reglages() {
             <span className="mm-ico violet">☁</span>Synchronisation
             <small className="mm-compte">{synchro.statut === 'deconnecte' ? 'désactivée' : synchro.statut === 'a-jour' ? 'à jour' : synchro.statut}</small>
           </li>
+          <li className="fleche" onClick={() => ouvrir({ type: 'raccourcis' })}>
+            <span className="mm-ico bleu">?</span>Guide
+          </li>
           <li className="fleche" onClick={() => ouvrir({ type: 'apropos' })}>
             <span className="mm-ico gris">ℹ</span>À propos
           </li>
