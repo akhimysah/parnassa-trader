@@ -46,6 +46,11 @@ export function App() {
   const [outil, setOutil] = useState<OutilDessin>(null);
   const [onglet, setOnglet] = useState<OngletBoite>('trading');
   const { mobile, force } = useInterface();
+  // Les fenêtres du terminal (assistant, scanner, objets…) s'affichent en plein écran sur téléphone.
+  useEffect(() => {
+    document.body.classList.toggle('interface-mobile', mobile && !force);
+    document.body.classList.toggle('interface-cadre', mobile && force);
+  }, [mobile, force]);
   const mobileRef = useRef(mobile);
   mobileRef.current = mobile;
   const [navRapide, setNavRapide] = useState<string | null>(null);
