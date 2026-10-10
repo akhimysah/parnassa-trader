@@ -134,6 +134,8 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
       [
         { libelle: 'Nouvelle fenêtre', sousMenu: SYMBOLES.slice(0, 20).map((s) => ({ libelle: s.nom, action: () => ouvrirGraphique(s.nom) })) },
         { libelle: 'Mosaïque', raccourci: 'Alt+R', coche: etat.disposition === 'mosaique', action: () => maj((e) => ({ ...e, disposition: 'mosaique' })) },
+        { libelle: 'Curseur synchronisé entre les graphiques', coche: etat.curseurSynchro, action: () => maj((e) => ({ ...e, curseurSynchro: !e.curseurSynchro })) },
+        { libelle: 'Détacher le graphique (nouvelle fenêtre)', desactive: !g, action: () => g && detacher(g.id) },
         { libelle: 'Onglets', coche: etat.disposition === 'onglets', action: () => maj((e) => ({ ...e, disposition: 'onglets' })) },
         { separateur: true },
         ...etat.graphiques.map((x, i) => ({ libelle: `${i + 1} ${x.symbole},${x.periode}`, coche: x.id === etat.graphiqueActif, action: () => maj((e) => ({ ...e, graphiqueActif: x.id })) })),
@@ -407,4 +409,12 @@ function menuProfils(etat: EtatTerminal, maj: (f: (e: EtatTerminal) => EtatTermi
       })),
     },
   ];
+}
+
+/** Ouvre le graphique dans une fenêtre à part (second écran), en affichage seul : le trading reste dans le terminal. */
+export function detacher(id: string) {
+  const url = new URL(window.location.href);
+  url.search = `?detache=${encodeURIComponent(id)}`;
+  url.hash = '';
+  window.open(url.toString(), `parnassa-graphique-${id}`, 'width=1000,height=640');
 }

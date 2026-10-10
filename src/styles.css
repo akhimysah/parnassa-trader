@@ -2419,3 +2419,12 @@ kbd {
   background: var(--bordure);
   margin: 0 4px;
 }
+.vue-detachee {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  background: var(--fond);
+}
+.vue-detachee > .graphique {
+  flex: 1;
+}

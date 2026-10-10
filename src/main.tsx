@@ -1,6 +1,8 @@
-import { StrictMode } from 'react';
+import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+
+const VueDetachee = lazy(() => import('./VueDetachee').then((m) => ({ default: m.VueDetachee })));
 import './styles.css';
 import { capturerJetonDepuisAdresse } from './synchro';
 import './installation';
@@ -8,9 +10,18 @@ import './installation';
 // Retour de la page de consentement Parnassa : le jeton arrive dans le fragment de l'adresse.
 capturerJetonDepuisAdresse();
 
+// Fenêtre détachée (second écran) : un seul graphique, en affichage seul.
+const detache = new URLSearchParams(window.location.search).get('detache');
+
 createRoot(document.getElementById('racine')!).render(
   <StrictMode>
-    <App />
+    {detache ? (
+      <Suspense fallback={null}>
+        <VueDetachee id={detache} />
+      </Suspense>
+    ) : (
+      <App />
+    )}
   </StrictMode>,
 );
 

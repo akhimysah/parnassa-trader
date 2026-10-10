@@ -120,8 +120,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   const setVolume = (v: number) => majGraphique(g.id, { volumeUnClic: v });
   const [hauteursPanneaux, setHauteursPanneaux] = useState<number[]>([]);
   const { ouvrirMenu, element: menu } = useMenuContextuel();
-  const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo, appuiLong, appuiLigne });
-  refEtat.current = { g, compte, cotations, outil, algo: etat.algo, appuiLong, appuiLigne };
+  const refEtat = useRef({ g, compte, cotations, outil, algo: etat.algo, appuiLong, appuiLigne, curseurSynchro: etat.curseurSynchro });
+  refEtat.current = { g, compte, cotations, outil, algo: etat.algo, appuiLong, appuiLigne, curseurSynchro: etat.curseurSynchro };
   /** Dernière barre clôturée déjà soumise à l'Expert Advisor (il ne trade jamais sur l'historique). */
   const derniereTraitee = useRef(0);
 
@@ -160,6 +160,10 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     chartRef.current = chart;
     const surCroix = (p: MouseEventParams<Time>) => {
       const serie = serieRef.current;
+      // Curseur synchronisé : un mouvement de souris sur ce graphique place le réticule des autres au même instant.
+      if (p.sourceEvent && refEtat.current.curseurSynchro) {
+        for (const [id, cmd] of registreGraphiques) if (id !== refEtat.current.g.id) cmd.croix(p.time ? Number(p.time) : null);
+      }
       if (!serie || !p.time) return survol(null);
       const d = p.seriesData.get(serie) as { open?: number; high?: number; low?: number; close?: number; value?: number } | undefined;
       if (!d) return survol(null);
@@ -233,6 +237,15 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       },
       allerALaFin: () => chart.timeScale().scrollToRealTime(),
       recharger: () => setVersion((v) => v + 1),
+      croix: (temps) => {
+        const serie = serieRef.current;
+        if (!serie) return;
+        if (temps === null) return chart.clearCrosshairPosition();
+        const t = debutBougie(temps, refEtat.current.g.periode);
+        const barre = bougiesRef.current.find((x) => x.time === t);
+        if (barre) chart.setCrosshairPosition(barre.close, t as UTCTimestamp, serie);
+        else chart.clearCrosshairPosition();
+      },
     });
     const ro = new ResizeObserver(() => setHauteursPanneaux(chart.panes().map((p) => p.getHeight())));
     ro.observe(el);

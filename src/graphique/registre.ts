@@ -4,6 +4,8 @@ export interface CommandesGraphique {
   capturer: () => void;
   allerALaFin: () => void;
   recharger: () => void;
+  /** Place le réticule à ce temps (curseur synchronisé entre graphiques) ; null l'efface. */
+  croix: (temps: number | null) => void;
 }
 
 export const registreGraphiques = new Map<string, CommandesGraphique>();

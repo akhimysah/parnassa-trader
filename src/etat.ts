@@ -114,6 +114,8 @@ export interface EtatTerminal {
   risque: import('./compte/risque').ReglesRisque;
   /** Rappel avant les annonces économiques importantes (minutes avant, 0 = désactivé). */
   rappelAnnonces: number;
+  /** Réticule synchronisé entre tous les graphiques (au même instant). */
+  curseurSynchro: boolean;
 }
 
 export function identifiant(): string {
@@ -174,6 +176,7 @@ function etatInitial(): EtatTerminal {
     ensembles: [],
     risque: { perteJourPct: 0, maxPositions: 0, maxVolume: 0, fermerAuSeuil: false },
     rappelAnnonces: 0,
+    curseurSynchro: false,
   };
 }
 
