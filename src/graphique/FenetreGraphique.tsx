@@ -585,6 +585,12 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     let image = 0;
     const bas = (e: PointerEvent) => {
       if (e.button !== 0 || refEtat.current.outil || !dansPrincipal(e)) return;
+      // Au doigt, toucher une annonce du calendrier affiche son détail (pas de survol sur téléphone).
+      if (e.pointerType === 'touch') {
+        const ev = dessinsRef.current?.evenementProche(xDe(e), yDe(e), chartRef.current?.panes()[0]?.getHeight() ?? 0) ?? [];
+        setAnnonce(ev.length ? { x: xDe(e), y: yDe(e), evenements: ev } : null);
+        if (ev.length) return;
+      }
       // Poignée d'un objet (tendance, Fibonacci, rectangle, canal, verticale, texte) : on tire ce point.
       const dessins = dessinsRef.current;
       let ancre: { id: string; index: number; depart?: { t: number; prix: number }; points?: { t: number; prix: number }[] } | null = dessins?.ancreProche(xDe(e), yDe(e)) ?? null;

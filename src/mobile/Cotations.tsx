@@ -5,6 +5,8 @@ import { levierEffectif } from '../compte/moteur';
 import { PrixGros, argent, heureMT } from '../composants/ui';
 import { BoutonIcone, BoutonRetour, EnTete, IconePlus, useAppuiLong, useNav, vibrer } from './commun';
 import { useInstallation } from '../installation';
+import { demanderNom } from '../modeles';
+import { ENSEMBLES_FIXES } from '../composants/ObservationMarche';
 
 const CATEGORIES: { id: Categorie; nom: string }[] = [
   { id: 'forex', nom: 'Forex' },
@@ -36,6 +38,15 @@ export function Cotations({ voirGraphique }: { voirGraphique: (s: string) => voi
       { libelle: `Alphabétique${tri === 'nom' ? ' ✓' : ''}`, action: () => setTri('nom') },
       { libelle: `Plus fortes hausses${tri === 'hausse' ? ' ✓' : ''}`, action: () => setTri('hausse') },
       { libelle: `Plus fortes baisses${tri === 'baisse' ? ' ✓' : ''}`, action: () => setTri('baisse') },
+      ...ENSEMBLES_FIXES.map(([n, f]) => ({ libelle: `Ensemble : ${n}`, action: () => maj((e) => ({ ...e, observation: SYMBOLES.filter(f).map((x) => x.nom) })) })),
+      ...etat.ensembles.map((x) => ({ libelle: `Ensemble : ${x.nom}`, action: () => maj((e) => ({ ...e, observation: x.symboles.filter((n) => SYMBOLES.some((k) => k.nom === n)) })) })),
+      {
+        libelle: 'Enregistrer la liste comme ensemble…',
+        action: () => {
+          const n = demanderNom(`Nom de l'ensemble (${etat.observation.length} symboles)`, 'Mon ensemble');
+          if (n) maj((e) => ({ ...e, ensembles: [...e.ensembles.filter((x) => x.nom !== n), { nom: n, symboles: [...e.observation] }] }));
+        },
+      },
     ]);
   return (
     <div className="mm-ecran">

@@ -89,6 +89,8 @@ export interface EtatTerminal {
   profilActif: string | null;
   /** Experts créés avec l'assistant. */
   expertsPerso: import('./algo/assistant').ExpertPerso[];
+  /** Ensembles de symboles de l'Observation du marché (comme les « sets » de MT5). */
+  ensembles: { nom: string; symboles: string[] }[];
 }
 
 export function identifiant(): string {
@@ -146,6 +148,7 @@ function etatInitial(): EtatTerminal {
     profils: [],
     profilActif: null,
     expertsPerso: [],
+    ensembles: [],
   };
 }
 

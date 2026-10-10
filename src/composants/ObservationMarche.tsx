@@ -4,6 +4,7 @@ import { SYMBOLES, formaterPrix, marcheOuvert, point, symbole } from '../marche/
 import { historiqueTicks } from '../marche/cotations';
 import { ouvrirMarche } from '../compte/moteur';
 import { PrixGros, Spin, heureMT, useMenuContextuel, type ElementMenu } from './ui';
+import { demanderNom } from '../modeles';
 
 type Onglet = 'symboles' | 'details' | 'trading' | 'ticks';
 
@@ -32,6 +33,27 @@ export function ObservationMarche() {
       { libelle: 'Masquer', raccourci: 'Suppr', action: () => masquer(nom) },
       { libelle: 'Afficher tout', action: () => maj((e) => ({ ...e, observation: SYMBOLES.map((x) => x.nom) })) },
       { libelle: 'Symboles', raccourci: 'Ctrl+U', action: () => ouvrir({ type: 'symboles' }) },
+      {
+        libelle: 'Ensembles',
+        sousMenu: [
+          ...ENSEMBLES_FIXES.map(([n, f]) => ({ libelle: n, action: () => maj((e) => ({ ...e, observation: SYMBOLES.filter(f).map((x) => x.nom) })) })),
+          ...(etat.ensembles.length ? [{ separateur: true } as ElementMenu] : []),
+          ...etat.ensembles.map((x) => ({ libelle: x.nom, action: () => maj((e) => ({ ...e, observation: x.symboles.filter((n) => SYMBOLES.some((s) => s.nom === n)) })) })),
+          { separateur: true },
+          {
+            libelle: 'Enregistrer sous…',
+            action: () => {
+              const n = demanderNom(`Nom de l'ensemble (${etat.observation.length} symboles)`, 'Mon ensemble');
+              if (n) maj((e) => ({ ...e, ensembles: [...e.ensembles.filter((x) => x.nom !== n), { nom: n, symboles: [...e.observation] }].sort((a, b) => a.nom.localeCompare(b.nom)) }));
+            },
+          },
+          {
+            libelle: 'Supprimer',
+            desactive: !etat.ensembles.length,
+            sousMenu: etat.ensembles.map((x) => ({ libelle: x.nom, action: () => window.confirm(`Supprimer l'ensemble « ${x.nom} » ?`) && maj((e) => ({ ...e, ensembles: e.ensembles.filter((k) => k.nom !== x.nom) })) })),
+          },
+        ],
+      },
       { libelle: 'Spécification', action: () => ouvrir({ type: 'specification', symbole: nom }) },
       { separateur: true },
       {
@@ -330,3 +352,12 @@ export function GraphiqueTicks({ nom, changer, hauteur, niveaux = [] }: { nom: s
     </div>
   );
 }
+
+/** Ensembles prêts à l'emploi, par famille d'instruments. */
+export const ENSEMBLES_FIXES: [string, (s: (typeof SYMBOLES)[number]) => boolean][] = [
+  ['Forex', (s) => s.categorie === 'forex'],
+  ['Métaux et énergie', (s) => s.categorie === 'metaux' || s.categorie === 'energie'],
+  ['Indices', (s) => s.categorie === 'indices'],
+  ['Actions', (s) => s.categorie === 'actions-us' || s.categorie === 'actions-fr'],
+  ['Crypto', (s) => s.categorie === 'crypto'],
+];
