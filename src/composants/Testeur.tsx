@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CandlestickSeries, ColorType, createChart, createSeriesMarkers, type IChartApi, type ISeriesApi, type ISeriesMarkersPluginApi, type Time, type UTCTimestamp } from 'lightweight-charts';
 import { useTerminal } from '../contexte';
 import { tousExperts, EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
-import { combinaisons, lancerTest, optimiser, type Modelisation, type Passe, type PlageOptimisation, type ResultatTest } from '../algo/testeur';
+import { combinaisons, lancerTest, nombreCombinaisons, optimiser, optimiserGenetique, type Modelisation, type Passe, type PlageOptimisation, type ResultatTest } from '../algo/testeur';
 import { chargerHistoriqueLong, PERIODES, type Bougie, type Periode } from '../marche/bougies';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { conversion } from '../compte/moteur';
@@ -27,6 +27,8 @@ interface Reglages {
   critere: 'profit' | 'facteur' | 'recouvrement' | 'sharpe' | 'dd';
   /** Avant-test (forward) : dernière fraction de l'historique gardée hors du test (0 = aucun, 2 = 1/2, 3 = 1/3, 4 = 1/4). */
   avant?: 0 | 2 | 3 | 4;
+  /** Optimisation : toutes les combinaisons, ou algorithme génétique (indispensable au-delà de 2 000 combinaisons). */
+  algorithme?: 'complet' | 'genetique';
 }
 
 const CLE = 'parnassa-trader:testeur';
@@ -125,6 +127,17 @@ export function Testeur() {
   const plagesActives = Object.fromEntries(Object.entries(r.optimiser).filter(([, v]) => v.actif)) as Record<string, PlageOptimisation>;
   const jeux = useMemo(() => combinaisons(r.p, plagesActives), [r.p, JSON.stringify(plagesActives)]); // eslint-disable-line react-hooks/exhaustive-deps
   const optimisation = Object.keys(plagesActives).length > 0;
+  const totalCombinaisons = useMemo(() => nombreCombinaisons(plagesActives), [JSON.stringify(plagesActives)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const genetique = r.algorithme === 'genetique' || totalCombinaisons > 2000;
+  /** Note d'une passe selon le critère choisi (une passe sans trade est la pire). */
+  const noter_passe = (p: Passe) => {
+    if (!p.trades) return -Infinity;
+    if (r.critere === 'facteur') return p.facteur ?? 0;
+    if (r.critere === 'recouvrement') return p.recouvrement ?? -Infinity;
+    if (r.critere === 'sharpe') return p.sharpe ?? -Infinity;
+    if (r.critere === 'dd') return -p.ddPct;
+    return p.profit;
+  };
 
   const demarrer = async () => {
     annuler.current = false;
@@ -156,10 +169,27 @@ export function Testeur() {
         for (const j of res.journal.slice(0, 50)) noter(`${dateMT(j.t)} ${j.message}`);
         setOnglet('backtest');
       } else {
-        noter(`optimisation de ${def.nom} : ${jeux.length} passes sur ${Object.keys(plagesActives).join(', ')}`);
         setPasses([]);
         setOnglet('optimisation');
         const debut = performance.now();
+        if (genetique) {
+          noter(`optimisation génétique de ${def.nom} : ${totalCombinaisons.toLocaleString('fr-FR')} combinaisons possibles sur ${Object.keys(plagesActives).join(', ')}`);
+          const res = await optimiserGenetique(
+            base(passe),
+            plagesActives,
+            noter_passe,
+            (fait, total, ps) => {
+              setEnCours({ texte: `Optimisation génétique : ${fait} passes`, fait, total });
+              setPasses([...ps]);
+            },
+            () => annuler.current,
+            baseAvant,
+          );
+          setPasses(res);
+          noter(`optimisation génétique terminée : ${res.length} passes testées en ${((performance.now() - debut) / 1000).toFixed(1)} s${annuler.current ? ' (interrompue)' : ''}`);
+          return;
+        }
+        noter(`optimisation de ${def.nom} : ${jeux.length} passes sur ${Object.keys(plagesActives).join(', ')}`);
         const res = await optimiser(
           base(passe),
           jeux,
@@ -295,8 +325,19 @@ export function Testeur() {
                 </label>
                 <label>
                   <span>Optimisation :</span>
-                  <span className="testeur-info">{optimisation ? `${jeux.length} passes (onglet Entrées)` : 'désactivée — cochez des entrées à optimiser'}</span>
+                  <span className="testeur-info">
+                    {optimisation ? `${totalCombinaisons.toLocaleString('fr-FR')} combinaisons (onglet Entrées)` : 'désactivée — cochez des entrées à optimiser'}
+                  </span>
                 </label>
+                {optimisation && (
+                  <label>
+                    <span>Algorithme :</span>
+                    <select value={genetique ? 'genetique' : 'complet'} disabled={totalCombinaisons > 2000} onChange={(e) => changer({ algorithme: e.target.value as Reglages['algorithme'] })} title={totalCombinaisons > 2000 ? 'Au-delà de 2 000 combinaisons, seul l’algorithme génétique est possible' : undefined}>
+                      <option value="complet">Complet (toutes les combinaisons)</option>
+                      <option value="genetique">Génétique rapide</option>
+                    </select>
+                  </label>
+                )}
                 <label>
                   <span>Avant-test :</span>
                   <select value={r.avant ?? 0} onChange={(e) => changer({ avant: Number(e.target.value) as Reglages['avant'] })} title="Garde la fin de l'historique hors du test pour vérifier l'expert sur des données qu'il n'a pas vues">

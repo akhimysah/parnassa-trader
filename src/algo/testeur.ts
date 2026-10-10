@@ -279,3 +279,97 @@ export async function optimiser(
   }
   return passes;
 }
+
+// ---------- Optimisation génétique (comme l'« algorithme génétique rapide » de MT5) ----------
+
+/** Nombre total de combinaisons des plages (sans les énumérer). */
+export function nombreCombinaisons(plages: Record<string, PlageOptimisation>): number {
+  return Object.values(plages).reduce((n, pl) => n * (pl.pas > 0 && pl.fin >= pl.debut ? Math.floor((pl.fin - pl.debut) / pl.pas + 1e-9) + 1 : 1), 1);
+}
+
+/**
+ * Population de jeux d'entrées tirés dans les plages, gardant les meilleurs (critère `note`), croisant et mutant les
+ * autres génération après génération ; chaque jeu n'est testé qu'une fois. S'arrête après `generations` ou quand
+ * le meilleur ne progresse plus depuis 5 générations.
+ */
+export async function optimiserGenetique(
+  base: Omit<ParametresTest, 'expert'> & { expert: Expert },
+  plages: Record<string, PlageOptimisation>,
+  note: (p: Passe) => number,
+  progression: (fait: number, total: number, passes: Passe[]) => void,
+  annule: () => boolean,
+  avant?: Omit<ParametresTest, 'expert'> & { expert: Expert },
+  taille = 32,
+  generations = 30,
+): Promise<Passe[]> {
+  const cles = Object.keys(plages).filter((k) => plages[k].pas > 0 && plages[k].fin >= plages[k].debut);
+  const valeurs = (k: string) => Math.floor((plages[k].fin - plages[k].debut) / plages[k].pas + 1e-9) + 1;
+  const val = (k: string, i: number) => Number((plages[k].debut + i * plages[k].pas).toFixed(6));
+  const cle = (g: number[]) => g.join(',');
+  const vu = new Map<string, Passe>();
+  const passes: Passe[] = [];
+  const tester = (g: number[]): Passe => {
+    const deja = vu.get(cle(g));
+    if (deja) return deja;
+    const p = { ...base.expert.p, ...Object.fromEntries(cles.map((k, i) => [k, val(k, g[i])])) };
+    const r = lancerTest({ ...base, expert: { ...base.expert, p } });
+    const passe: Passe = {
+      numero: passes.length + 1,
+      p,
+      profit: r.stats.net,
+      trades: r.stats.trades,
+      facteur: r.stats.facteur,
+      esperance: r.stats.esperance,
+      ddPct: r.stats.ddMaxPct,
+      recouvrement: r.stats.recouvrement,
+      sharpe: r.stats.sharpe,
+      ...(avant
+        ? (() => {
+            const f = lancerTest({ ...avant, expert: { ...avant.expert, p } }).stats;
+            return { avant: { profit: f.net, facteur: f.facteur, ddPct: f.ddMaxPct, trades: f.trades } };
+          })()
+        : {}),
+    };
+    vu.set(cle(g), passe);
+    passes.push(passe);
+    return passe;
+  };
+  const hasard = () => cles.map((k) => Math.floor(Math.random() * valeurs(k)));
+  let population = Array.from({ length: taille }, hasard);
+  let meilleure = -Infinity;
+  let stagnation = 0;
+  const total = taille * generations;
+  for (let gen = 0; gen < generations && !annule(); gen++) {
+    const notes = population.map((g) => ({ g, n: note(tester(g)) }));
+    progression(passes.length, total, passes);
+    await new Promise((ok) => setTimeout(ok, 0));
+    notes.sort((a, b) => b.n - a.n);
+    if (notes[0].n > meilleure + 1e-9) {
+      meilleure = notes[0].n;
+      stagnation = 0;
+    } else if (++stagnation >= 5) break;
+    // Élitisme : les 4 meilleurs passent tels quels ; le reste naît de tournois, croisement et mutation.
+    const tournoi = () => {
+      const a = notes[Math.floor(Math.random() * notes.length)];
+      const b = notes[Math.floor(Math.random() * notes.length)];
+      return (a.n >= b.n ? a : b).g;
+    };
+    const suivante = notes.slice(0, 4).map((x) => x.g);
+    while (suivante.length < taille) {
+      const pere = tournoi();
+      const mere = tournoi();
+      const enfant = pere.map((v, i) => (Math.random() < 0.5 ? v : mere[i]));
+      for (let i = 0; i < enfant.length; i++) {
+        if (Math.random() < 0.15) {
+          const n = valeurs(cles[i]);
+          // Mutation surtout locale (± quelques pas), parfois un saut n'importe où dans la plage.
+          enfant[i] = Math.random() < 0.7 ? Math.min(n - 1, Math.max(0, enfant[i] + Math.round((Math.random() - 0.5) * Math.max(2, n / 5)))) : Math.floor(Math.random() * n);
+        }
+      }
+      suivante.push(enfant);
+    }
+    population = suivante;
+  }
+  progression(passes.length, passes.length, passes);
+  return passes;
+}
