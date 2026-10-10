@@ -172,3 +172,30 @@ describe('scanner', () => {
     expect(vraies).toBeGreaterThan(10);
   });
 });
+
+describe('indicateurs MT5 complémentaires', () => {
+  it('calcule AMA, FrAMA, VIDYA, TRIX, A/D, Chaikin, Gator et BW MFI', () => {
+    const b = serie(300);
+    const types: [Indicateur['type'], Record<string, number>][] = [
+      ['ama', { periode: 9, rapide: 2, lente: 30 }],
+      ['frama', { periode: 14 }],
+      ['vidya', { cmo: 9, ema: 12 }],
+      ['trix', { periode: 14 }],
+      ['ad', {}],
+      ['chaikin', { rapide: 3, lente: 10 }],
+      ['gator', { machoire: 13, dents: 8, levres: 5 }],
+      ['bwmfi', {}],
+    ];
+    for (const [t, p] of types) {
+      const v = calculer(ind(t, p), b).traces[0].valeurs;
+      expect(v[250], t).not.toBeNull();
+      expect(Number.isFinite(v[250]!), t).toBe(true);
+    }
+    // Les moyennes adaptatives restent dans la fourchette des prix.
+    for (const t of ['ama', 'frama', 'vidya'] as const) {
+      const x = calculer(ind(t, types.find(([k]) => k === t)![1]), b).traces[0].valeurs[250]!;
+      expect(x).toBeGreaterThan(77000);
+      expect(x).toBeLessThan(83000);
+    }
+  });
+});

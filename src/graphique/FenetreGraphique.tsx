@@ -32,7 +32,7 @@ import { heikin, heikinSuivante } from './heikin';
 import { chargerCalendrier, devisesSymbole, valeurEvenement, type Evenement } from '../marche/calendrier';
 
 /** Indicateurs en sous-fenêtre exprimés en prix : même nombre de décimales que le symbole (l'échelle reste aussi large). */
-const EN_PRIX = ['atr', 'stddev', 'bears', 'bulls', 'ao', 'ac'];
+const EN_PRIX = ['atr', 'stddev', 'bears', 'bulls', 'ao', 'ac', 'gator'];
 import { menuModeles } from '../composants/Barres';
 import { registreGraphiques } from './registre';
 import { decider, definitionExpert } from '../algo/experts';
@@ -469,7 +469,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         const se =
           tr.style === 'histogramme'
             ? chart.addSeries(HistogramSeries, { ...commun, color: tr.couleur, priceFormat: def.type === 'volumes' ? { type: 'volume' } : { type: 'price', precision: s.chiffres, minMove: point(s) } }, index)
-            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: Math.min(4, Math.max(1, ind.epaisseur ?? 1)) as 1 | 2 | 3 | 4, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: estSuperpose(ind) || EN_PRIX.includes(def.type) || def.type === 'formule' ? { type: 'price', precision: s.chiffres, minMove: point(s) } : def.type === 'demarker' || def.type === 'rvi' ? { type: 'price', precision: 3, minMove: 0.001 } : def.type === 'obv' || def.type === 'force' ? { type: 'volume' } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
+            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: Math.min(4, Math.max(1, ind.epaisseur ?? 1)) as 1 | 2 | 3 | 4, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: estSuperpose(ind) || EN_PRIX.includes(def.type) || def.type === 'formule' ? { type: 'price', precision: s.chiffres, minMove: point(s) } : def.type === 'demarker' || def.type === 'rvi' ? { type: 'price', precision: 3, minMove: 0.001 } : def.type === 'obv' || def.type === 'force' || def.type === 'ad' || def.type === 'chaikin' ? { type: 'volume' } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
         if (r.bornes) se.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: r.bornes![0], maxValue: r.bornes![1] } }) });
         return se;
       });

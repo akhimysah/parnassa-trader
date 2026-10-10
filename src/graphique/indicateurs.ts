@@ -5,7 +5,8 @@ export type TypeIndicateur =
   | 'ma' | 'bb' | 'env' | 'sar' | 'ichimoku' | 'dema' | 'tema' | 'adx' | 'stddev'
   | 'rsi' | 'macd' | 'stoch' | 'atr' | 'cci' | 'mom' | 'wpr' | 'demarker' | 'force' | 'osma' | 'bears' | 'bulls' | 'rvi'
   | 'alligator' | 'fractals' | 'ao' | 'ac'
-  | 'volumes' | 'obv' | 'mfi'
+  | 'volumes' | 'obv' | 'mfi' | 'ad' | 'chaikin'
+  | 'ama' | 'frama' | 'vidya' | 'trix' | 'gator' | 'bwmfi'
   | 'formule';
 export type MethodeMA = 'sma' | 'ema' | 'smma' | 'lwma';
 
@@ -141,6 +142,14 @@ export const DEFINITIONS: DefinitionIndicateur[] = [
   { type: 'fractals', nom: 'Fractals', groupe: 'Bill Williams', superpose: true, defaut: {}, libelles: {}, couleur: '#808080' },
   { type: 'ao', nom: 'Awesome Oscillator', groupe: 'Bill Williams', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
   { type: 'ac', nom: 'Accelerator Oscillator', groupe: 'Bill Williams', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
+  { type: 'ama', nom: 'Adaptive Moving Average', groupe: 'Tendance', superpose: true, defaut: { periode: 9, rapide: 2, lente: 30 }, libelles: { periode: 'Période', rapide: 'EMA rapide', lente: 'EMA lente' }, couleur: '#ff1493' },
+  { type: 'frama', nom: 'Fractal Adaptive Moving Average', groupe: 'Tendance', superpose: true, defaut: { periode: 14 }, libelles: { periode: 'Période (paire)' }, couleur: '#9932cc' },
+  { type: 'vidya', nom: 'Variable Index Dynamic Average', groupe: 'Tendance', superpose: true, defaut: { cmo: 9, ema: 12 }, libelles: { cmo: 'Période CMO', ema: 'Période EMA' }, couleur: '#00bfff' },
+  { type: 'trix', nom: 'Triple Exponential Average (TRIX)', groupe: 'Oscillateurs', superpose: false, defaut: { periode: 14 }, libelles: { periode: 'Période' }, couleur: '#ff4500' },
+  { type: 'ad', nom: 'Accumulation/Distribution', groupe: 'Volumes', superpose: false, defaut: {}, libelles: {}, couleur: '#20b2aa' },
+  { type: 'chaikin', nom: 'Chaikin Oscillator', groupe: 'Oscillateurs', superpose: false, defaut: { rapide: 3, lente: 10 }, libelles: { rapide: 'EMA rapide', lente: 'EMA lente' }, couleur: '#ff8c00' },
+  { type: 'gator', nom: 'Gator Oscillator', groupe: 'Bill Williams', superpose: false, defaut: { machoire: 13, dents: 8, levres: 5 }, libelles: { machoire: 'Mâchoire', dents: 'Dents', levres: 'Lèvres' }, couleur: '#32cd32' },
+  { type: 'bwmfi', nom: 'Market Facilitation Index', groupe: 'Bill Williams', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
   { type: 'formule', nom: 'Formule personnalisée', groupe: 'Personnalisés', superpose: false, defaut: {}, libelles: {}, couleur: '#ff8c00' },
 ];
 
@@ -209,6 +218,22 @@ export function nomCourt(i: Indicateur): string {
       return 'AO';
     case 'ac':
       return 'AC';
+    case 'ama':
+      return `AMA(${p.periode}, ${p.rapide}, ${p.lente})`;
+    case 'frama':
+      return `FrAMA(${p.periode})`;
+    case 'vidya':
+      return `VIDYA(${p.cmo}, ${p.ema})`;
+    case 'trix':
+      return `TRIX(${p.periode})`;
+    case 'ad':
+      return 'A/D';
+    case 'chaikin':
+      return `Chaikin(${p.rapide}, ${p.lente})`;
+    case 'gator':
+      return `Gator(${p.machoire}, ${p.dents}, ${p.levres})`;
+    case 'bwmfi':
+      return 'BW MFI';
     case 'formule':
       return (i.formule ?? 'Formule').length > 40 ? `${(i.formule ?? '').slice(0, 38)}…` : (i.formule ?? 'Formule');
   }
@@ -650,6 +675,109 @@ export function calculer(ind: Indicateur, b: Bougie[], donnees?: Valeurs): Resul
         traces: [{ nom: nomCourt(ind), valeurs: v, couleur: ind.couleur, style: 'histogramme', couleurs: v.map((x, i) => (i > 0 && x !== null && v[i - 1] !== null && x < v[i - 1]! ? '#ff3b30' : '#32cd32')) }],
         niveaux: [0],
       };
+    }
+    case 'ama': {
+      // Kaufman : lissage d'autant plus rapide que le marché est directionnel (rendement d'efficacité).
+      const r: Valeurs = new Array(b.length).fill(null);
+      const rapide = 2 / (p.rapide + 1);
+      const lente = 2 / (p.lente + 1);
+      let prec: number | null = null;
+      for (let i = p.periode; i < b.length; i++) {
+        let bruit = 0;
+        for (let k = i - p.periode + 1; k <= i; k++) bruit += Math.abs(b[k].close - b[k - 1].close);
+        const er = bruit ? Math.abs(b[i].close - b[i - p.periode].close) / bruit : 0;
+        const sc = (er * (rapide - lente) + lente) ** 2;
+        prec = prec === null ? b[i - 1].close : prec;
+        prec = prec + sc * (b[i].close - prec);
+        r[i] = prec;
+      }
+      return { traces: [{ nom: nomCourt(ind), valeurs: r, couleur: ind.couleur }] };
+    }
+    case 'frama': {
+      // Ehlers : dimension fractale des deux moitiés de la fenêtre, puis lissage exponentiel adaptatif.
+      const n = Math.max(4, Math.round(p.periode / 2) * 2);
+      const moitie = n / 2;
+      const r: Valeurs = new Array(b.length).fill(null);
+      let prec: number | null = null;
+      const etendue = (de: number, a: number) => {
+        let h = -Infinity;
+        let l = Infinity;
+        for (let k = de; k <= a; k++) {
+          h = Math.max(h, b[k].high);
+          l = Math.min(l, b[k].low);
+        }
+        return h - l;
+      };
+      for (let i = n - 1; i < b.length; i++) {
+        const n1 = etendue(i - n + 1, i - moitie) / moitie;
+        const n2 = etendue(i - moitie + 1, i) / moitie;
+        const n3 = etendue(i - n + 1, i) / n;
+        const d = n1 + n2 > 0 && n3 > 0 ? (Math.log(n1 + n2) - Math.log(n3)) / Math.LN2 : 1;
+        const alpha = Math.min(1, Math.max(0.01, Math.exp(-4.6 * (d - 1))));
+        prec = prec === null ? b[i].close : alpha * b[i].close + (1 - alpha) * prec;
+        r[i] = prec;
+      }
+      return { traces: [{ nom: nomCourt(ind), valeurs: r, couleur: ind.couleur }] };
+    }
+    case 'vidya': {
+      // Chande : EMA dont le coefficient est pondéré par la valeur absolue du CMO.
+      const r: Valeurs = new Array(b.length).fill(null);
+      const alpha = 2 / (p.ema + 1);
+      let prec: number | null = null;
+      for (let i = p.cmo; i < b.length; i++) {
+        let haut = 0;
+        let bas = 0;
+        for (let k = i - p.cmo + 1; k <= i; k++) {
+          const d = b[k].close - b[k - 1].close;
+          if (d > 0) haut += d;
+          else bas -= d;
+        }
+        const cmo = haut + bas ? Math.abs((haut - bas) / (haut + bas)) : 0;
+        prec = prec === null ? b[i].close : alpha * cmo * b[i].close + (1 - alpha * cmo) * prec;
+        r[i] = prec;
+      }
+      return { traces: [{ nom: nomCourt(ind), valeurs: r, couleur: ind.couleur }] };
+    }
+    case 'trix': {
+      const e3 = ema(ema(ema(c, p.periode), p.periode), p.periode);
+      return { traces: [{ nom: nomCourt(ind), valeurs: e3.map((x, i) => (x === null || !e3[i - 1] ? null : ((x - e3[i - 1]!) / e3[i - 1]!) * 100)), couleur: ind.couleur }], niveaux: [0] };
+    }
+    case 'ad':
+    case 'chaikin': {
+      let total = 0;
+      const ad: Valeurs = b.map((x) => (total += x.high > x.low ? (((x.close - x.low) - (x.high - x.close)) / (x.high - x.low)) * x.volume : 0));
+      if (ind.type === 'ad') return { traces: [{ nom: 'A/D', valeurs: ad, couleur: ind.couleur }] };
+      const r = ema(ad, p.rapide);
+      const l = ema(ad, p.lente);
+      return { traces: [{ nom: nomCourt(ind), valeurs: r.map((x, i) => (x === null || l[i] === null ? null : x - l[i]!)), couleur: ind.couleur }], niveaux: [0] };
+    }
+    case 'gator': {
+      // Écarts de l'Alligator : mâchoire-dents au-dessus de zéro, dents-lèvres en dessous ; vert si l'écart grandit.
+      const median: Valeurs = b.map((x) => (x.high + x.low) / 2);
+      const m = decaler(moyenne(median, p.machoire, 'smma'), 8);
+      const d = decaler(moyenne(median, p.dents, 'smma'), 5);
+      const l = decaler(moyenne(median, p.levres, 'smma'), 3);
+      const haut = m.map((x, i) => (x === null || d[i] === null ? null : Math.abs(x - d[i]!)));
+      const bas = d.map((x, i) => (x === null || l[i] === null ? null : -Math.abs(x - l[i]!)));
+      const couleurs = (v: Valeurs) => v.map((x, i) => (i > 0 && x !== null && v[i - 1] !== null && Math.abs(x) < Math.abs(v[i - 1]!) ? '#ff3b30' : '#32cd32'));
+      return {
+        traces: [
+          { nom: 'Haut', valeurs: haut, couleur: '#32cd32', style: 'histogramme', couleurs: couleurs(haut) },
+          { nom: 'Bas', valeurs: bas, couleur: '#32cd32', style: 'histogramme', couleurs: couleurs(bas) },
+        ],
+        niveaux: [0],
+      };
+    }
+    case 'bwmfi': {
+      // Bill Williams : (haut - bas) / volume ; vert MFI↑ volume↑, brun MFI↓ volume↓, bleu MFI↑ volume↓, rose MFI↓ volume↑.
+      const v: Valeurs = b.map((x) => (x.volume ? (x.high - x.low) / x.volume : null));
+      const couleurs = b.map((x, i) => {
+        if (i === 0 || v[i] === null || v[i - 1] === null) return '#808080';
+        const mfiHausse = v[i]! > v[i - 1]!;
+        const volHausse = x.volume > b[i - 1].volume;
+        return mfiHausse && volHausse ? '#32cd32' : !mfiHausse && !volHausse ? '#8b4513' : mfiHausse ? '#1e90ff' : '#ff69b4';
+      });
+      return { traces: [{ nom: 'BW MFI', valeurs: v, couleur: ind.couleur, style: 'histogramme', couleurs }] };
     }
     case 'formule': {
       const couleurs = [ind.couleur, '#1e90ff', '#e0393e', '#20b2aa'];
