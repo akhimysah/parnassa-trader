@@ -27,6 +27,12 @@ export interface Stats {
   seriesPertes: { n: number; montant: number };
   parSymbole: { symbole: string; trades: number; net: number; gagnants: number }[];
   courbe: { t: number; v: number }[];
+  /** Résultat des trades selon l'heure (0-23, heure locale) et le jour (0 = lundi) de leur ouverture. */
+  parHeure: { trades: number; net: number }[];
+  parJour: { trades: number; net: number }[];
+  /** Durée moyenne de détention (ms) des trades gagnants et perdants. */
+  dureeGains: number;
+  dureePertes: number;
 }
 
 /** Statistiques façon rapport MT5, à partir des transactions (compte réel ou testeur de stratégie). */
@@ -94,6 +100,22 @@ export function calculerStats(transactions: Transaction[]): Stats {
     if (resultat(d) > 0) x.gagnants++;
     parSymboleMap.set(d.symbole, x);
   }
+  // Répartition par heure et jour d'ouverture, et durées de détention (comme le rapport de MT5).
+  const parHeure = Array.from({ length: 24 }, () => ({ trades: 0, net: 0 }));
+  const parJour = Array.from({ length: 7 }, () => ({ trades: 0, net: 0 }));
+  const durees = { gains: [] as number[], pertes: [] as number[] };
+  for (const d of sorties) {
+    const ouverture = d.heureOuverture ?? d.heure;
+    const date = new Date(ouverture);
+    const r = resultat(d);
+    parHeure[date.getHours()].trades++;
+    parHeure[date.getHours()].net += r;
+    const jour = (date.getDay() + 6) % 7;
+    parJour[jour].trades++;
+    parJour[jour].net += r;
+    if (d.heureOuverture) (r > 0 ? durees.gains : durees.pertes).push(d.heure - d.heureOuverture);
+  }
+  const moyenneDe = (v: number[]) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0);
   // Le deal de sortie est en sens inverse de la position : une sortie « sell » ferme un achat (long).
   const longs = sorties.filter((d) => d.type === 'sell');
   const courts = sorties.filter((d) => d.type === 'buy');
@@ -124,6 +146,10 @@ export function calculerStats(transactions: Transaction[]): Stats {
     seriesPertes: series(-1),
     parSymbole: [...parSymboleMap.entries()].map(([symbole, x]) => ({ symbole, ...x })).sort((a, b) => b.net - a.net),
     courbe,
+    parHeure,
+    parJour,
+    dureeGains: moyenneDe(durees.gains),
+    dureePertes: moyenneDe(durees.pertes),
   };
 }
 

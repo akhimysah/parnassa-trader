@@ -2286,3 +2286,62 @@ kbd {
   margin: 3px 0;
   line-height: 1.4;
 }
+/* Rapport : répartition par jour et par heure */
+.rapport-repartition {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 4px 16px;
+  margin: 8px 0;
+}
+.rapport-repartition .aide {
+  grid-column: 1 / -1;
+}
+.rapport-barres h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+}
+.barres-zone {
+  display: flex;
+  gap: 2px;
+  height: 110px;
+  border-bottom: 1px solid var(--bordure);
+}
+.barre-colonne {
+  flex: 1;
+  display: grid;
+  grid-template-rows: 1fr 1fr auto;
+  min-width: 0;
+}
+.barre-haut,
+.barre-bas {
+  display: flex;
+  position: relative;
+}
+.barre-haut {
+  align-items: flex-end;
+  border-bottom: 1px solid var(--bordure);
+}
+.barre-bas {
+  align-items: flex-start;
+}
+.barre-colonne i {
+  display: block;
+  width: 100%;
+}
+.barre-colonne i.positif {
+  background: #1e9e3a;
+}
+.barre-colonne i.negatif {
+  background: var(--negatif);
+}
+.barre-colonne small {
+  font-size: 9px;
+  color: var(--muet);
+  text-align: center;
+  white-space: nowrap;
+}
+@media (max-width: 820px) {
+  .rapport-repartition {
+    grid-template-columns: 1fr;
+  }
+}

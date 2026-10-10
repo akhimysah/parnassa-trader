@@ -210,6 +210,16 @@ export function DialogueRapport() {
           </tbody>
         </table>
       )}
+      {s.trades > 0 && (
+        <div className="rapport-repartition">
+          <Barres titre="Par jour d'ouverture" valeurs={s.parJour} libelles={['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']} />
+          <Barres titre="Par heure d'ouverture" valeurs={s.parHeure} libelles={s.parHeure.map((_, h) => (h % 3 === 0 ? `${h}h` : ''))} />
+          <p className="aide">
+            Durée moyenne : <b>{duree(s.dureeGains)}</b> pour les gagnants, <b>{duree(s.dureePertes)}</b> pour les perdants
+            {s.dureePertes > s.dureeGains * 1.5 && s.dureeGains > 0 ? ' — les pertes sont gardées plus longtemps que les gains.' : '.'}
+          </p>
+        </div>
+      )}
       <div className="boutons">
         <button onClick={() => void enregistrerRapport(`ReportHistory-${compte.login}.html`, rapportHtml(enteteCompte(compte), compte.transactions))}>Enregistrer comme rapport (HTML)</button>
         <button className="principal" onClick={fermer}>
@@ -217,5 +227,34 @@ export function DialogueRapport() {
         </button>
       </div>
     </Fenetre>
+  );
+}
+
+/** Durée lisible : « 3 h 12 min », « 2 j 4 h ». */
+function duree(ms: number): string {
+  if (!ms) return '—';
+  const min = Math.round(ms / 60000);
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ${min % 60} min`;
+  return `${Math.floor(h / 24)} j ${h % 24} h`;
+}
+
+/** Histogramme des résultats nets (vert au-dessus de zéro, rouge en dessous), avec le nombre de trades au survol. */
+function Barres({ titre, valeurs, libelles }: { titre: string; valeurs: { trades: number; net: number }[]; libelles: string[] }) {
+  const max = Math.max(1, ...valeurs.map((v) => Math.abs(v.net)));
+  return (
+    <div className="rapport-barres">
+      <h4>{titre}</h4>
+      <div className="barres-zone">
+        {valeurs.map((v, i) => (
+          <div key={i} className="barre-colonne" title={`${libelles[i] || i + ' h'} : ${v.trades} trade${v.trades > 1 ? 's' : ''}, ${argent(v.net)} USD`}>
+            <div className="barre-haut">{v.net > 0 && <i className="positif" style={{ height: `${(v.net / max) * 100}%` }} />}</div>
+            <div className="barre-bas">{v.net < 0 && <i className="negatif" style={{ height: `${(-v.net / max) * 100}%` }} />}</div>
+            <small>{libelles[i]}</small>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

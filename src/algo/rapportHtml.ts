@@ -90,6 +90,7 @@ th{background:#f2f4f8;font-weight:600}.n{text-align:right;font-variant-numeric:t
     .join('')}</table></div>
 <h2>Courbe de solde</h2>
 ${courbeSvg(s.courbe)}
+${s.trades ? `<h2>Par jour d'ouverture</h2><table><tr>${['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((j) => `<th class="n">${j}</th>`).join('')}</tr><tr>${s.parJour.map((x) => `<td class="n ${signe(x.net)}">${x.trades ? argent(x.net) : '—'}</td>`).join('')}</tr><tr>${s.parJour.map((x) => `<td class="n muet">${x.trades} trades</td>`).join('')}</tr></table>` : ''}
 ${parSymbole ? `<h2>Par symbole</h2><table><tr><th>Symbole</th><th class="n">Trades</th><th class="n">Gagnants</th><th class="n">Net</th></tr>${parSymbole}</table>` : ''}
 <h2>Transactions (${deals.length})</h2>
 <div class="defile"><table><tr><th>Heure</th><th>Transaction</th><th>Symbole</th><th>Type</th><th>Sens</th><th class="n">Volume</th><th class="n">Prix</th><th class="n">Commission</th><th class="n">Swap</th><th class="n">Profit</th><th class="n">Solde</th><th>Commentaire</th></tr>
