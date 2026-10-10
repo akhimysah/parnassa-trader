@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTerminal } from '../contexte';
-import { etatCompte, fermerPosition, LIBELLES_TYPE, profitPosition, prixFermeture, supprimerOrdre, definirSuiveur, conversion, type Transaction } from '../compte/moteur';
+import { etatCompte, fermerPosition, LIBELLES_TYPE, profitPosition, prixFermeture, supprimerOrdre, definirEquilibre, definirSuiveur, conversion, type Transaction } from '../compte/moteur';
 import { formaterPrix, point, symbole } from '../marche/symboles';
 import { RELAIS } from '../marche/bougies';
 import { argent, dateMT, useMenuContextuel, type ElementMenu } from './ui';
@@ -89,6 +89,19 @@ export function OngletTrading() {
             })),
             { separateur: true },
             { libelle: 'Personnalisé…', action: () => ouvrir({ type: 'suiveur', ticket: p.ticket }) },
+          ],
+        },
+        {
+          libelle: 'Break-even',
+          sousMenu: [
+            { libelle: "Stop-loss au prix d'ouverture maintenant", action: () => operer((c) => definirEquilibre(c, p.ticket, -1, cotations)) },
+            { separateur: true },
+            { libelle: 'Aucun automatique', coche: !p.equilibre, action: () => operer((c) => definirEquilibre(c, p.ticket, 0, cotations), { silencieux: true }) },
+            ...[50, 100, 200, 300, 500, 1000].map((n) => ({
+              libelle: `Après ${n} points de gain`,
+              coche: p.equilibre === n,
+              action: () => operer((c) => definirEquilibre(c, p.ticket, n, cotations), { silencieux: true }),
+            })),
           ],
         },
       );

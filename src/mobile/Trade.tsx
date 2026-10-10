@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTerminal } from '../contexte';
 import { formaterPrix, point, symbole } from '../marche/symboles';
-import { LIBELLES_TYPE, definirSuiveur, etatCompte, fermerPar, fermerPosition, prixFermeture, profitPosition, supprimerOrdre, type Position } from '../compte/moteur';
+import { LIBELLES_TYPE, definirEquilibre, definirSuiveur, etatCompte, fermerPar, fermerPosition, prixFermeture, profitPosition, supprimerOrdre, type Position } from '../compte/moteur';
 import { argent, dateMT } from '../composants/ui';
 import { CourbeSolde } from '../composants/Courbe';
 import { calculerStats } from '../algo/statistiques';
@@ -202,6 +202,15 @@ function LignePosition({ p, voirGraphique }: { p: Position; voirGraphique: (s: s
             { libelle: `Aucun${p.suiveur === 0 ? ' ✓' : ''}`, action: suiveur(0) },
             ...[50, 100, 200, 300, 500, 1000].map((n) => ({ libelle: `${n} points${p.suiveur === n ? ' ✓' : ''}`, action: suiveur(n) })),
             { libelle: 'Personnalisé…', action: () => pousser({ type: 'suiveur', ticket: p.ticket }) },
+          ]),
+      },
+      {
+        libelle: `Break-even${p.equilibre ? ` (après ${p.equilibre} pts)` : ''}`,
+        action: () =>
+          feuille('Break-even', [
+            { libelle: "Stop-loss au prix d'ouverture maintenant", action: () => operer((c) => definirEquilibre(c, p.ticket, -1, cotations)) },
+            { libelle: `Aucun automatique${!p.equilibre ? ' ✓' : ''}`, action: () => operer((c) => definirEquilibre(c, p.ticket, 0, cotations), { silencieux: true }) },
+            ...[50, 100, 200, 300, 500, 1000].map((n) => ({ libelle: `Après ${n} points de gain${p.equilibre === n ? ' ✓' : ''}`, action: () => operer((c) => definirEquilibre(c, p.ticket, n, cotations), { silencieux: true }) })),
           ]),
       },
       { libelle: 'Nouvel ordre', action: () => pousser({ type: 'ordre', symbole: p.symbole }) },

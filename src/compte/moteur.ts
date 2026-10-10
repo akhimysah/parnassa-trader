@@ -513,6 +513,23 @@ export function modifierPosition(c: Compte, ticket: number, sl: number, tp: numb
   return { compte: journaliser({ ...c, positions }, 'Trades', `'${c.login}' : ${demande} — effectuée`), erreur: null };
 }
 
+/**
+ * Break-even d'une position : `points` = 0 retire la règle ; -1 place tout de suite le stop-loss au prix d'ouverture
+ * (refusé si la position n'est pas en gain) ; sinon le stop y passera dès que le gain atteindra ce nombre de points.
+ */
+export function definirEquilibre(c: Compte, ticket: number, points: number, cot: Cotations): Resultat {
+  const p = c.positions.find((x) => x.ticket === ticket);
+  if (!p) return { compte: c, erreur: 'Position introuvable' };
+  if (points === -1) {
+    const q = cot[p.symbole];
+    const prix = q ? prixFermeture(p.type, q) : null;
+    if (prix === null || (p.type === 'buy' ? prix <= p.prixOuverture : prix >= p.prixOuverture)) return { compte: c, erreur: "La position n'est pas en gain : le stop-loss ne peut pas aller au prix d'ouverture" };
+    return modifierPosition(c, ticket, p.prixOuverture, p.tp, cot);
+  }
+  const positions = c.positions.map((x) => (x.ticket === ticket ? { ...x, equilibre: points || undefined } : x));
+  return { compte: journaliser({ ...c, positions }, 'Trades', `'${c.login}' : break-even ${points > 0 ? `après ${points} points` : 'désactivé'} sur la position #${ticket}`), erreur: null };
+}
+
 export function definirSuiveur(c: Compte, ticket: number, points: number): Compte {
   const positions = c.positions.map((x) => (x.ticket === ticket ? { ...x, suiveur: points } : x));
   return journaliser({ ...c, positions }, 'Trades', `'${c.login}' : stop suiveur ${points > 0 ? `de ${points} points` : 'désactivé'} sur la position #${ticket}`);
