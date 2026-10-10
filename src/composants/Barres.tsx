@@ -179,7 +179,7 @@ export function BarreMenus() {
         </div>
       ))}
       <span className="barre-menus-compte">
-        {a.etat.comptes.find((c) => c.login === a.etat.actif)?.login} : {a.etat.comptes.find((c) => c.login === a.etat.actif)?.nom} — {a.etat.comptes.find((c) => c.login === a.etat.actif)?.serveur} : Démo {a.etat.comptes.find((c) => c.login === a.etat.actif)?.type === 'raw' ? 'Raw' : 'Standard'}
+        {a.etat.comptes.find((c) => c.login === a.etat.actif)?.login} : {a.etat.comptes.find((c) => c.login === a.etat.actif)?.nom} — {a.etat.comptes.find((c) => c.login === a.etat.actif)?.serveur} : Démo {a.etat.comptes.find((c) => c.login === a.etat.actif)?.type === 'raw' ? 'Raw' : 'Standard'}{a.etat.comptes.find((c) => c.login === a.etat.actif)?.mode === 'netting' ? ' (netting)' : ''}
       </span>
     </div>
   );

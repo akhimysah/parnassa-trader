@@ -99,3 +99,32 @@ describe('gestion du risque', () => {
     expect(appliquerLimiteJour(c, regles, cot(80000)).compte.positions).toHaveLength(1);
   });
 });
+
+describe('compte en compensation (netting)', () => {
+  const compte = () => nouveauCompte('n', 100000, 100, 'standard', false, 'netting');
+  const ordre = (c: Compte, type: 'buy' | 'sell', volume: number, prix: number) => ouvrirMarche(c, { symbole: 'BTCUSD', type, volume, sl: 0, tp: 0, commentaire: '' }, cot(prix));
+  it('ajoute au même sens avec un prix moyen', () => {
+    let c = ordre(compte(), 'buy', 0.1, 80000).compte;
+    c = ordre(c, 'buy', 0.1, 81000).compte;
+    expect(c.positions).toHaveLength(1);
+    expect(c.positions[0].volume).toBe(0.2);
+    expect(c.positions[0].prixOuverture).toBeCloseTo(80510, 2);
+  });
+  it('réduit, ferme puis retourne la position', () => {
+    let c = ordre(compte(), 'buy', 0.3, 80000).compte;
+    c = ordre(c, 'sell', 0.1, 80000).compte;
+    expect(c.positions[0].volume).toBeCloseTo(0.2, 6);
+    c = ordre(c, 'sell', 0.2, 80000).compte;
+    expect(c.positions).toHaveLength(0);
+    c = ordre(c, 'buy', 0.1, 80000).compte;
+    c = ordre(c, 'sell', 0.25, 80000).compte;
+    expect(c.positions).toHaveLength(1);
+    expect(c.positions[0].type).toBe('sell');
+    expect(c.positions[0].volume).toBeCloseTo(0.15, 6);
+  });
+  it('reste en couverture par défaut', () => {
+    let c = acheter(nouveauCompte('h', 100000, 100)).compte;
+    c = acheter(c).compte;
+    expect(c.positions).toHaveLength(2);
+  });
+});

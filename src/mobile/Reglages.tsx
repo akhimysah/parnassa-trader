@@ -393,13 +393,14 @@ export function OuvrirCompte() {
   const [levier, setLevier] = useState(100);
   const [type, setType] = useState<TypeCompte>('standard');
   const [sansSwap, setSansSwap] = useState(false);
+  const [mode, setMode] = useState<'couverture' | 'netting'>('couverture');
   const [surServeur, setSurServeur] = useState(true);
   const [attente, setAttente] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const valider = async () => {
     const n = nom.trim() || 'Compte démo';
     if (!surServeur) {
-      const c = nouveauCompte(n, depot, levier, type, sansSwap);
+      const c = nouveauCompte(n, depot, levier, type, sansSwap, mode);
       maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
       signaler(`Compte ${c.login} ouvert`);
       vibrer(20);
@@ -409,7 +410,7 @@ export function OuvrirCompte() {
     setAttente(true);
     setErreur(null);
     try {
-      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap });
+      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap, mode });
       maj((e) => ({ ...e, actif: acces.login }));
       vibrer(20);
       pousser({ type: 'acces', acces });
@@ -456,6 +457,19 @@ export function OuvrirCompte() {
             </select>
           </label>
           <div className="mm-aide-ligne">{TYPES_COMPTE[type].description}</div>
+          <div className="mm-ligne-champ">
+            <span>Mode</span>
+            <span style={{ justifySelf: 'end' }}>
+              <Segments
+                valeur={mode}
+                options={[
+                  ['couverture', 'Couverture'],
+                  ['netting', 'Netting'],
+                ]}
+                changer={(v) => setMode(v as 'couverture' | 'netting')}
+              />
+            </span>
+          </div>
           <div className="mm-ligne-champ">
             <span>Sans swap</span>
             <span style={{ justifySelf: 'end' }}>

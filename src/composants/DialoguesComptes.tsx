@@ -19,13 +19,14 @@ export function DialogueCompte() {
   const [levier, setLevier] = useState(100);
   const [type, setType] = useState<TypeCompte>('standard');
   const [sansSwap, setSansSwap] = useState(false);
+  const [mode, setMode] = useState<'couverture' | 'netting'>('couverture');
   const [surServeur, setSurServeur] = useState(true);
   const [attente, setAttente] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const valider = async () => {
     const n = nom.trim() || 'Compte démo';
     if (!surServeur) {
-      const c = nouveauCompte(n, depot, levier, type, sansSwap);
+      const c = nouveauCompte(n, depot, levier, type, sansSwap, mode);
       maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
       signaler(`Compte ${TYPES_COMPTE[type].nom} ${c.login} ouvert sur ${SERVEUR}`);
       fermer();
@@ -34,7 +35,7 @@ export function DialogueCompte() {
     setAttente(true);
     setErreur(null);
     try {
-      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap });
+      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap, mode });
       maj((e) => ({ ...e, actif: acces.login }));
       ouvrir({ type: 'acces', acces });
     } catch (err) {
@@ -73,6 +74,13 @@ export function DialogueCompte() {
                 {TYPES_COMPTE[t].nom} — {TYPES_COMPTE[t].description}
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          <span>Mode :</span>
+          <select value={mode} onChange={(e) => setMode(e.target.value as 'couverture' | 'netting')}>
+            <option value="couverture">Couverture (hedging) — plusieurs positions par symbole</option>
+            <option value="netting">Compensation (netting) — une position par symbole</option>
           </select>
         </label>
         <label className="case">

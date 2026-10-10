@@ -108,6 +108,11 @@ export interface Compte {
   type?: TypeCompte;
   /** Compte sans swap (« islamique ») : aucun swap n'est débité ni crédité. */
   sansSwap?: boolean;
+  /**
+   * Mode de comptabilisation des positions, comme MT5 : couverture (hedging, plusieurs positions par symbole, par
+   * défaut) ou compensation (netting, une seule position par symbole que les ordres augmentent, réduisent ou retournent).
+   */
+  mode?: 'couverture' | 'netting';
   serveur: string;
   devise: 'USD';
   levier: number;
@@ -227,7 +232,7 @@ export function etatCompte(c: Compte, cot: Cotations): EtatCompte {
 
 // ---------- Création ----------
 
-export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard', sansSwap = false): Compte {
+export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard', sansSwap = false, mode: Compte['mode'] = 'couverture'): Compte {
   // Comptes locaux de 50000000 à 89999999 : les numéros en 9 sont ceux des comptes en ligne.
   const login = 50000000 + Math.floor(Math.random() * 39999999);
   const maintenant = Date.now();
@@ -237,6 +242,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number, type: 
     nom,
     type,
     sansSwap: sansSwap || undefined,
+    mode: mode === 'netting' ? 'netting' : undefined,
     serveur: SERVEUR,
     devise: 'USD',
     levier,
@@ -248,7 +254,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number, type: 
       { ticket, ordre: 0, position: 0, heure: maintenant, symbole: '', type: 'balance', entree: '', volume: 0, prix: 0, commission: 0, swap: 0, profit: depot, solde: depot, commentaire: 'Dépôt de démonstration' },
     ],
     ordresHisto: [],
-    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} USD, levier 1:${levier}, compte ${type === 'raw' ? 'Raw' : 'Standard'}${sansSwap ? ' sans swap' : ''}` }],
+    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} USD, levier 1:${levier}, compte ${type === 'raw' ? 'Raw' : 'Standard'}${sansSwap ? ' sans swap' : ''}, ${mode === 'netting' ? 'compensation (netting)' : 'couverture (hedging)'}` }],
     ticketSuivant: ticket + 1,
     creeLe: maintenant,
     appelMarge: false,
@@ -323,7 +329,35 @@ function decrireDemande(d: { type: string; volume: number; symbole: string; sl: 
 }
 
 /** Ouvre une position au marché (achat à l'Ask, vente au Bid). */
+/**
+ * Ordre au marché. En compensation (netting), l'ordre s'ajoute à la position du symbole (prix moyen pondéré), la
+ * réduit, la ferme ou la retourne, comme sur un compte MT5 en netting.
+ */
 export function ouvrirMarche(c: Compte, d: DemandeMarche, cot: Cotations, origine?: { ordre: number; heureOrdre: number; type: TypeEnAttente }): Resultat {
+  const p = c.mode === 'netting' ? c.positions.find((x) => x.symbole === d.symbole) : undefined;
+  if (!p) return ouvrirPosition(c, d, cot, origine);
+  const s = symbole(d.symbole);
+  if (p.type === d.type) {
+    const r = ouvrirPosition(c, { ...d, sl: d.sl || p.sl, tp: d.tp || p.tp }, cot, origine);
+    if (r.erreur || r.ticket === undefined) return r;
+    const ajout = r.compte.positions.find((x) => x.ticket === r.ticket)!;
+    const volume = Number((p.volume + ajout.volume).toFixed(2));
+    const prix = Number(((p.prixOuverture * p.volume + ajout.prixOuverture * ajout.volume) / volume).toFixed(s?.chiffres ?? 5));
+    const positions = r.compte.positions
+      .filter((x) => x.ticket !== ajout.ticket)
+      .map((x) => (x.ticket === p.ticket ? { ...x, volume, prixOuverture: prix, sl: ajout.sl, tp: ajout.tp, commission: arrondir(x.commission + ajout.commission) } : x));
+    // Le deal d'entrée appartient à la position existante.
+    const transactions = r.compte.transactions.map((t, i, l) => (i === l.length - 1 ? { ...t, position: p.ticket } : t));
+    return { ...r, compte: journaliser({ ...r.compte, positions, transactions }, 'Trades', `'${c.login}' : position #${p.ticket} portée à ${fmtVolume(volume)} ${p.symbole}, prix moyen ${formaterPrix(s, prix)}`), ticket: p.ticket };
+  }
+  // Sens contraire : réduction, fermeture, ou retournement (fermeture puis position inverse pour le reste).
+  if (d.volume <= p.volume + 1e-9) return fermerPosition(c, p.ticket, cot, d.volume);
+  const f = fermerPosition(c, p.ticket, cot);
+  if (f.erreur) return f;
+  return ouvrirPosition(f.compte, { ...d, volume: Number((d.volume - p.volume).toFixed(2)) }, cot, origine);
+}
+
+function ouvrirPosition(c: Compte, d: DemandeMarche, cot: Cotations, origine?: { ordre: number; heureOrdre: number; type: TypeEnAttente }): Resultat {
   const s = symbole(d.symbole);
   const q = cot[d.symbole];
   const demande = origine ? `déclenchement de l'ordre #${origine.ordre} ${decrireDemande({ ...d, type: LIBELLES_TYPE[origine.type] }, s)}` : `${d.type === 'buy' ? 'achat' : 'vente'} au marché ${decrireDemande(d, s)}`;
@@ -615,6 +649,7 @@ export function fermerPosition(c: Compte, ticket: number, cot: Cotations, volume
  * La position `ticket` est fermée au prix d'ouverture de `contre`, qui est fermée à son propre prix (profit nul).
  */
 export function fermerPar(c: Compte, ticket: number, contre: number, cot: Cotations): Resultat {
+  if (c.mode === 'netting') return { compte: c, erreur: 'Fermer par : impossible sur un compte en compensation (une seule position par symbole)' };
   const a = c.positions.find((x) => x.ticket === ticket);
   const b = c.positions.find((x) => x.ticket === contre);
   if (!a || !b) return { compte: c, erreur: 'Position introuvable' };
