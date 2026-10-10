@@ -302,6 +302,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     dessinsRef.current?.definirSeparateurs(unite, coul.texte);
   }, [g.separateurs, g.periode, coul, versionSerie]);
 
+  // Séances de marché, en intrajournalier seulement (au-delà de H1 une barre couvre plusieurs séances).
+  useEffect(() => {
+    dessinsRef.current?.definirSeances(Boolean(g.seances) && ['M1', 'M5', 'M15', 'M30', 'H1'].includes(g.periode));
+  }, [g.seances, g.periode, versionSerie]);
+
   // Annonces du calendrier économique des devises du symbole (moyenne et haute importance).
   const [annonce, setAnnonce] = useState<{ x: number; y: number; evenements: Evenement[] } | null>(null);
   const calendrierVisible = g.calendrier !== false;
@@ -932,6 +937,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         ],
       },
       { libelle: 'Séparateurs de périodes', raccourci: 'Ctrl+Y', coche: Boolean(g.separateurs), action: () => majGraphique(g.id, { separateurs: !g.separateurs }) },
+      { libelle: 'Séances Tokyo / Londres / New York', coche: Boolean(g.seances), desactive: !['M1', 'M5', 'M15', 'M30', 'H1'].includes(g.periode), action: () => majGraphique(g.id, { seances: !g.seances }) },
       { libelle: 'Calendrier économique sur le graphique', coche: g.calendrier !== false, action: () => majGraphique(g.id, { calendrier: g.calendrier === false }) },
       { libelle: 'Modèle', sousMenu: menuModeles(etat, t.maj, g) },
       {

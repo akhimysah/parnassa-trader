@@ -26,6 +26,8 @@ export class Dessins implements ISeriesPrimitive<Time> {
   /** Séparateurs de périodes : jour, semaine, mois ou année selon la période du graphique (0 = masqués). */
   private separateurs: 'jour' | 'semaine' | 'mois' | 'annee' | null = null;
   private couleurSeparateur = '#8a8a8a';
+  /** Bandeau des séances (Tokyo, Londres, New York) au bas du graphique, en périodes intrajournalières. */
+  private seances = false;
   private temps: number[] = [];
   private readonly vue: IPrimitivePaneView;
 
@@ -58,6 +60,11 @@ export class Dessins implements ISeriesPrimitive<Time> {
 
   definirTrajets(t: { t1: number; p1: number; t2: number; p2: number; gagnant: boolean }[]) {
     this.trajets = t;
+    this.demander?.();
+  }
+
+  definirSeances(actives: boolean) {
+    this.seances = actives;
     this.demander?.();
   }
 
@@ -316,6 +323,36 @@ export class Dessins implements ISeriesPrimitive<Time> {
         }
         ctx.restore();
       }
+      // Séances : une rangée par place, colorée pendant ses heures d'ouverture (heure locale de la place).
+      if (this.seances && this.temps.length > 1) {
+        const ech = this.chart?.timeScale();
+        const visibles = ech?.getVisibleLogicalRange();
+        const debut = Math.max(0, Math.floor(visibles?.from ?? 0));
+        const fin = Math.min(this.temps.length - 1, Math.ceil(visibles?.to ?? this.temps.length - 1));
+        const largeur = Math.max(1, (ech?.options().barSpacing ?? 6));
+        ctx.save();
+        SEANCES.forEach((se, rang) => {
+          ctx.fillStyle = se.couleur;
+          ctx.globalAlpha = 0.55;
+          for (let i = debut; i <= fin; i++) {
+            if (!ouverte(se, this.temps[i])) continue;
+            const x = ech?.logicalToCoordinate(i as never);
+            if (x === null || x === undefined) continue;
+            ctx.fillRect(x - largeur / 2, mediaSize.height - 40 + rang * 5, largeur + 0.5, 4);
+          }
+        });
+        // Légende à gauche, juste au-dessus du bandeau (le haut du graphique porte la légende des indicateurs).
+        ctx.globalAlpha = 0.9;
+        ctx.font = '9px -apple-system, "Segoe UI", Roboto, sans-serif';
+        ctx.textBaseline = 'bottom';
+        let xl = 4;
+        for (const se of SEANCES) {
+          ctx.fillStyle = se.couleur;
+          ctx.fillText(se.nom, xl, mediaSize.height - 42);
+          xl += ctx.measureText(se.nom).width + 8;
+        }
+        ctx.restore();
+      }
       // Annonces économiques : pastille à la date, couleur selon l'importance.
       for (const e of this.evenements) {
         const x = this.x(e.date / 1000);
@@ -362,3 +399,36 @@ export const OBJETS: Record<ObjetGraphique['type'], { points: number; couleur: s
   rectangle: { points: 2, couleur: '#20b2aa', nom: 'Rectangle' },
   texte: { points: 1, couleur: '#ffa500', nom: 'Texte' },
 };
+
+/** Séances des grandes places, en heure locale de chacune (l'heure d'été est donc prise en compte). */
+const SEANCES = [
+  { nom: 'Tokyo', zone: 'Asia/Tokyo', ouverture: 9, fermeture: 18, couleur: '#e0a000' },
+  { nom: 'Londres', zone: 'Europe/London', ouverture: 8, fermeture: 17, couleur: '#1e6fd9' },
+  { nom: 'New York', zone: 'America/New_York', ouverture: 8, fermeture: 17, couleur: '#1e9e3a' },
+];
+const formats = new Map<string, Intl.DateTimeFormat>();
+function heureLocale(zone: string, t: number): { heure: number; jour: number } {
+  let f = formats.get(zone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: 'numeric', hourCycle: 'h23', weekday: 'short' });
+    formats.set(zone, f);
+  }
+  const parts = f.formatToParts(new Date(t * 1000));
+  const heure = Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+  const jour = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.find((p) => p.type === 'weekday')?.value ?? 'Mon');
+  return { heure, jour };
+}
+// Le dessin repasse à chaque mouvement de souris : le résultat est gardé par (place, heure).
+const memo = new Map<string, boolean>();
+function ouverte(se: (typeof SEANCES)[number], t: number): boolean {
+  const heurePile = Math.floor(t / 3600) * 3600;
+  const cle = `${se.zone}|${heurePile}`;
+  let r = memo.get(cle);
+  if (r === undefined) {
+    const { heure, jour } = heureLocale(se.zone, heurePile);
+    r = jour >= 1 && jour <= 5 && heure >= se.ouverture && heure < se.fermeture;
+    if (memo.size > 50000) memo.clear();
+    memo.set(cle, r);
+  }
+  return r;
+}

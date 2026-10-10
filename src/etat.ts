@@ -41,6 +41,8 @@ export interface Graphique {
   calendrier?: boolean;
   /** Séparateurs de périodes (jour, semaine, mois ou année selon la période). */
   separateurs?: boolean;
+  /** Bandeau des séances Tokyo / Londres / New York (périodes jusqu'à H1). */
+  seances?: boolean;
 }
 
 export interface Alerte {
