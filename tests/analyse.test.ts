@@ -159,3 +159,16 @@ describe('formules dans les conditions', () => {
     expect(vraie({ a: { type: 'formule', formule: 'pas une formule (' }, op: 'superieur', b: { type: 'valeur', valeur: -1 } })).toBe(false);
   });
 });
+
+describe('scanner', () => {
+  it('évalue toutes les recherches prêtes sans erreur, et certaines sont vraies', async () => {
+    const { MODELES } = await import('../src/composants/Scanner');
+    const b = serie(600);
+    let vraies = 0;
+    for (let i = 300; i < 600; i += 7) {
+      const v = evaluateur(b.slice(0, i));
+      for (const [, c] of MODELES) if (v(c)) vraies++;
+    }
+    expect(vraies).toBeGreaterThan(10);
+  });
+});

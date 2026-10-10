@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTerminal } from '../contexte';
+import { identifiant } from '../etat';
 import { OPERATEURS, evaluateur, libelleOperande, type Condition, type Operateur } from '../algo/assistant';
 import { calculer } from '../graphique/indicateurs';
 import { calculerFormule } from '../graphique/formule';
@@ -7,6 +8,21 @@ import { chargerBougies, debutBougie, PERIODES, type Bougie, type Periode } from
 import { symbole } from '../marche/symboles';
 import { EditeurOperande } from './Assistant';
 import { Fenetre } from './ui';
+
+const ma = (periode: number): Condition['a'] => ({ type: 'indicateur', indicateur: 'ma', p: { periode, decalage: 0 }, trace: 0 });
+const rsi: Condition['a'] = { type: 'indicateur', indicateur: 'rsi', p: { periode: 14 }, trace: 0 };
+/** Recherches toutes prêtes. */
+export const MODELES: [string, Condition][] = [
+  ['RSI en survente (< 30)', { a: rsi, op: 'inferieur', b: { type: 'valeur', valeur: 30 } }],
+  ['RSI en surachat (> 70)', { a: rsi, op: 'superieur', b: { type: 'valeur', valeur: 70 } }],
+  ['Clôture passe au-dessus de MA(200)', { a: { type: 'prix', champ: 'close' }, op: 'croise-dessus', b: ma(200) }],
+  ['Clôture passe sous MA(200)', { a: { type: 'prix', champ: 'close' }, op: 'croise-dessous', b: ma(200) }],
+  ['MA(50) au-dessus de MA(200) (tendance haussière)', { a: ma(50), op: 'superieur', b: ma(200) }],
+  ['MACD croise son signal vers le haut', { a: { type: 'indicateur', indicateur: 'macd', p: { rapide: 12, lente: 26, signal: 9 }, trace: 0 }, op: 'croise-dessus', b: { type: 'indicateur', indicateur: 'macd', p: { rapide: 12, lente: 26, signal: 9 }, trace: 1 } }],
+  ['Prix étiré sous sa moyenne (−2 ATR)', { a: { type: 'formule', formule: '(close - sma(close, 20)) / atr(14)' }, op: 'inferieur', b: { type: 'valeur', valeur: -2 } }],
+  ['Clôture au plus haut sur 20 barres', { a: { type: 'prix', champ: 'close' }, op: 'superieur', b: { type: 'formule', formule: 'shift(highest(high, 20), 1)' } }],
+];
+const CLE = 'parnassa-trader:scanner';
 
 interface Resultat {
   nom: string;
@@ -34,13 +50,25 @@ function valeurA(o: Condition['a'], b: Bougie[]): number | null {
  * l'Observation du marché, à la dernière barre fermée de la période choisie. Un clic ouvre le graphique.
  */
 export function DialogueScanner() {
-  const { etat, fermer, ouvrirGraphique } = useTerminal();
-  const [periode, setPeriode] = useState<Periode>('H1');
-  const [regle, setRegle] = useState<Condition>({ a: { type: 'indicateur', indicateur: 'rsi', p: { periode: 14 }, trace: 0 }, op: 'inferieur', b: { type: 'valeur', valeur: 30 } });
+  const { etat, maj, fermer, ouvrirGraphique, signaler } = useTerminal();
+  const memo = (() => {
+    try {
+      return JSON.parse(localStorage.getItem(CLE) ?? 'null') as { periode: Periode; regle: Condition } | null;
+    } catch {
+      return null;
+    }
+  })();
+  const [periode, setPeriode] = useState<Periode>(memo?.periode ?? 'H1');
+  const [regle, setRegle] = useState<Condition>(memo?.regle ?? MODELES[0][1]);
   const [resultats, setResultats] = useState<Resultat[] | null>(null);
   const [enCours, setEnCours] = useState<{ fait: number; total: number } | null>(null);
   const [tous, setTous] = useState(false);
   const lancer = async () => {
+    try {
+      localStorage.setItem(CLE, JSON.stringify({ periode, regle }));
+    } catch {
+      // stockage indisponible
+    }
     const liste = etat.observation;
     setResultats([]);
     setEnCours({ fait: 0, total: liste.length });
@@ -70,6 +98,17 @@ export function DialogueScanner() {
   return (
     <Fenetre titre="Scanner de marché" fermer={fermer} largeur={720} className="fenetre-assistant">
       <div className="formulaire">
+        <label>
+          <span>Recherche prête :</span>
+          <select value="" onChange={(e) => e.target.value && setRegle(structuredClone(MODELES[Number(e.target.value)][1]))}>
+            <option value="">— choisir —</option>
+            {MODELES.map(([nom], i) => (
+              <option key={nom} value={i}>
+                {nom}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           <span>Période :</span>
           <select value={periode} onChange={(e) => setPeriode(e.target.value as Periode)}>
@@ -113,6 +152,7 @@ export function DialogueScanner() {
                 <th>Condition</th>
                 <th className="d">{libelleOperande(regle.a)}</th>
                 <th className="d">{libelleOperande(regle.b)}</th>
+                <th />
               </tr>
             </thead>
             <tbody>
@@ -132,11 +172,24 @@ export function DialogueScanner() {
                   <td className={r.vraie ? 'positif' : ''}>{r.erreur ?? (r.vraie ? '✔ remplie' : 'non')}</td>
                   <td className="d">{f(r.a)}</td>
                   <td className="d">{f(r.b)}</td>
+                  <td>
+                    <button
+                      className="lien"
+                      title="Créer une alerte sur indicateur avec cette condition pour ce symbole"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        maj((x) => ({ ...x, alertes: [...x.alertes, { id: identifiant(), symbole: r.nom, condition: 'indicateur', valeur: 0, active: true, commentaire: 'scanner', regle: structuredClone(regle), periode, max: 1 }] }));
+                        signaler(`Alerte créée : ${r.nom} ${periode}`);
+                      }}
+                    >
+                      🔔
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!enCours && affiches.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="muet">
+                  <td colSpan={5} className="muet">
                     Aucun symbole ne remplit la condition.
                   </td>
                 </tr>
