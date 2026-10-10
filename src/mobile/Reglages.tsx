@@ -9,7 +9,7 @@ import { actionsProprietaire, BlocAcces, DEPOTS, LEVIERS, LIBELLE_STATUT } from 
 import { SERVEUR_EN_LIGNE, type Acces } from '../compte/enLigne';
 import { argent, dateMT } from '../composants/ui';
 import { choisirInterface } from '../interface';
-import { demanderPermission, notificationsDisponibles } from '../notifications';
+import { demanderPermission, notificationsDisponibles, testerPush } from '../notifications';
 import { useInstallation } from '../installation';
 import { BoutonIcone, BoutonRetour, ChampPas, EnTete, IconePlus, Interrupteur, Segments, useAppuiLong, useNav, vibrer } from './commun';
 import { libelleAlerte } from '../alertes';
@@ -109,6 +109,11 @@ export function Reglages() {
             <li>
               <span className="mm-ico rouge">🔔</span>Notifications
               <Interrupteur actif={etat.notifications} libelle="Notifications" changer={(v) => void notifications(v)} />
+            </li>
+          )}
+          {notificationsDisponibles() && etat.notifications && (
+            <li className="fleche" onClick={() => void testerPush().then(signaler)}>
+              <span className="mm-ico bleu">📡</span>Tester la notification push (serveur)
             </li>
           )}
         </ul>

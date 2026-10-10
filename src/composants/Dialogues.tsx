@@ -22,6 +22,7 @@ import { OPERATEURS, type Condition, type Operateur } from '../algo/assistant';
 import { PERIODES, type Periode } from '../marche/bougies';
 import { perteJour, RISQUE_DEFAUT } from '../compte/risque';
 import { erreurFormule, FONCTIONS } from '../graphique/formule';
+import { demanderPermission, notificationsDisponibles, testerPush } from '../notifications';
 
 export function Dialogues() {
   const { dialogue } = useTerminal();
@@ -628,6 +629,35 @@ function DialogueProprietes({ graphique }: { graphique: string }) {
   );
 }
 
+/** Notifications du navigateur et push du serveur Parnassa-Trader, comme l'onglet Notifications des options de MT5. */
+function BlocNotifications() {
+  const { etat, maj, signaler } = useTerminal();
+  if (!notificationsDisponibles()) return <p className="aide">Ce navigateur ne gère pas les notifications.</p>;
+  const changer = async () => {
+    if (etat.notifications) return maj((e) => ({ ...e, notifications: false }));
+    if (await demanderPermission()) {
+      maj((e) => ({ ...e, notifications: true }));
+      signaler('Notifications activées : exécutions, SL/TP, stop-out et alertes, même terminal fermé');
+    } else signaler('Notifications refusées par le navigateur : autorisez-les dans les réglages du site');
+  };
+  return (
+    <>
+      <label className="case">
+        <input type="checkbox" checked={etat.notifications} onChange={() => void changer()} />
+        Notifications (exécutions, SL/TP, stop-out, alertes)
+      </label>
+      <p className="aide">
+        Pour les comptes en ligne, le serveur Parnassa-Trader exécute stop-loss, take-profit et ordres en attente même terminal fermé, et vous prévient par notification push. Les alertes Bid/Ask sont aussi surveillées par le serveur.
+      </p>
+      {etat.notifications && (
+        <div className="boutons gauche">
+          <button onClick={() => void testerPush().then(signaler)}>Tester la notification push</button>
+        </div>
+      )}
+    </>
+  );
+}
+
 function DialogueOptions() {
   const { etat, maj, fermer } = useTerminal();
   return (
@@ -657,6 +687,10 @@ function DialogueOptions() {
           <input type="checkbox" checked={etat.son} onChange={() => maj((e) => ({ ...e, son: !e.son }))} />
           Sons (exécutions, alertes, stop-out)
         </label>
+      </fieldset>
+      <fieldset>
+        <legend>Notifications</legend>
+        <BlocNotifications />
       </fieldset>
       <fieldset>
         <legend>Compte Parnassa · synchronisation</legend>

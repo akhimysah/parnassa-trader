@@ -1,0 +1,18 @@
+{
+  "$schema": "../../modele-whop/node_modules/wrangler/config-schema.json",
+  "name": "parnassa-trader-serveur",
+  "main": "index.ts",
+  "compatibility_date": "2026-07-25",
+  "observability": { "enabled": true },
+  // Clé publique VAPID des notifications push ; la clé privée est un secret (wrangler secret put VAPID_PRIVEE).
+  "vars": { "VAPID_PUBLIQUE": "BNY4ADyvUrro3eAzDBSHy3Cd37Ch8-hHNuOERr1AEyOUDOqxa433aCp_nqUIJlXo4M1c_2KQwvzeDy8f7-pHsfA" },
+  // Base de la néobanque : lecture des comptes « terminal » et de leurs sessions, écriture de leur état seulement.
+  "d1_databases": [{ "binding": "DB", "database_name": "parnassa", "database_id": "d0a7e3f1-ccbf-438b-b610-6957580b431c" }],
+  // Abonnements push par compte et alertes de prix des appareils.
+  "kv_namespaces": [{ "binding": "TRADER", "id": "ca1baa64ddf64f1494629ccf5db6750a" }],
+  // Chaque minute, comme le serveur d'un courtier qui surveille les stops et les ordres en attente : une alarme
+  // Durable Object réarmée à chaque passage (plus de déclencheur planifié libre sur le compte gratuit).
+  "durable_objects": { "bindings": [{ "name": "HORLOGE", "class_name": "Horloge" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Horloge"] }],
+  "triggers": { "crons": [] }
+}

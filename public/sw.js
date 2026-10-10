@@ -1,5 +1,5 @@
 /* Service worker de Parnassa Trader : application installable, démarrage hors ligne, notifications. */
-const VERSION = 'parnassa-trader-v2';
+const VERSION = 'parnassa-trader-v3';
 const COQUILLE = ['./', './index.html', './manifest.webmanifest', './icone.svg', './icone-192.png', './icone-512.png'];
 const RELAIS = 'parnassa-actualites.neobank.workers.dev';
 
@@ -77,6 +77,29 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   // Le reste (cotations Binance, Yahoo, scanner) passe directement au réseau.
+});
+
+// Push du serveur Parnassa-Trader (exécutions, SL/TP, alertes) : affichée sauf si le terminal est à l'écran,
+// car il prévient alors lui-même.
+self.addEventListener('push', (e) => {
+  let m = {};
+  try {
+    m = e.data ? e.data.json() : {};
+  } catch {
+    m = { titre: 'Parnassa Trader', corps: e.data ? e.data.text() : '' };
+  }
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((fenetres) => {
+      if (m.tag !== 'test' && fenetres.some((f) => f.visibilityState === 'visible')) return undefined;
+      return self.registration.showNotification(m.titre || 'Parnassa Trader', {
+        body: m.corps || '',
+        tag: m.tag,
+        icon: './icone-192.png',
+        badge: './icone-192.png',
+        data: { url: m.url || './' },
+      });
+    }),
+  );
 });
 
 self.addEventListener('notificationclick', (e) => {

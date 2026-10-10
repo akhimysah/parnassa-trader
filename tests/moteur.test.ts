@@ -142,3 +142,27 @@ describe('compte en euros', () => {
     expect(f.compte.solde).toBeCloseTo(10080, 2);
   });
 });
+
+describe('exécution côté serveur', () => {
+  it('déclenche un stop-loss touché par une mèche pendant que le terminal était fermé', async () => {
+    const { executerHorsLigne } = await import('../src/compte/serveur');
+    const c = acheter(nouveauCompte('s', 10000, 100), 80000, 79500, 0).compte;
+    const t0 = Date.now() - 180000;
+    const barres = [
+      { t: t0, o: 80000, h: 80100, l: 79900, c: 80050 },
+      { t: t0 + 60000, o: 80050, h: 80060, l: 79400, c: 80400 },
+    ];
+    const r = executerHorsLigne(c, { BTCUSD: { milieu: 80500, barres, ecart: 10 } }, t0 + 30000);
+    expect(r.modifie).toBe(true);
+    expect(r.compte.positions).toHaveLength(0);
+    expect(r.evenements.some((e) => e.type === 'sl')).toBe(true);
+  });
+  it("ignore les bougies antérieures et n'enregistre rien sans événement", async () => {
+    const { executerHorsLigne } = await import('../src/compte/serveur');
+    const o = placerOrdre(nouveauCompte('s', 10000, 100), { symbole: 'BTCUSD', type: 'buy_limit', volume: 0.1, prix: 79000, prixLimite: 0, sl: 0, tp: 0, expiration: 'gtc', echeance: 0, commentaire: '' }, cot(80000)).compte;
+    const t0 = Date.now() - 180000;
+    const r = executerHorsLigne(o, { BTCUSD: { milieu: 80000, barres: [{ t: t0, o: 80000, h: 80000, l: 78000, c: 80000 }], ecart: 10 } }, t0 + 1);
+    expect(r.modifie).toBe(false);
+    expect(r.compte.ordres).toHaveLength(1);
+  });
+});

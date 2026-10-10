@@ -22,7 +22,7 @@ import { useSynchro } from './synchro';
 import { refusTrading, useComptesEnLigne } from './compte/enLigne';
 import { appliquerLimiteJour, refusRisque, RISQUE_DEFAUT } from './compte/risque';
 import { useInterface } from './interface';
-import { notifier } from './notifications';
+import { notifier, synchroniserPush, type AlertePush } from './notifications';
 
 export function App() {
   const [etat, setEtat] = useState<EtatTerminal>(chargerEtat);
@@ -81,6 +81,18 @@ export function App() {
   const enLigne = useComptesEnLigne(etat, maj, signaler);
   const refEnLigne = useRef(enLigne);
   refEnLigne.current = enLigne;
+  // Push du serveur (terminal fermé) : exécutions des comptes en ligne et alertes Bid/Ask, réabonné à chaque changement.
+  const clePush = useMemo(() => {
+    const alertes: AlertePush[] = etat.alertes
+      .filter((a) => a.active && (a.condition === 'bid>' || a.condition === 'bid<' || a.condition === 'ask>' || a.condition === 'ask<') && !(a.expiration && a.expiration < Date.now()))
+      .map((a) => ({ id: a.id, symbole: a.symbole, condition: a.condition as AlertePush['condition'], valeur: a.valeur, commentaire: a.commentaire || undefined }));
+    return JSON.stringify({ actif: etat.notifications, alertes, type: typeActif, comptes: etat.comptes.filter((c) => c.enLigne).map((c) => c.login) });
+  }, [etat.notifications, etat.alertes, etat.comptes, typeActif]);
+  useEffect(() => {
+    const p = JSON.parse(clePush) as { actif: boolean; alertes: AlertePush[]; type: 'standard' | 'raw' };
+    const t = window.setTimeout(() => void synchroniserPush(p.actif, p.alertes, p.type).catch(() => undefined), 2000);
+    return () => window.clearTimeout(t);
+  }, [clePush]);
   useEffect(() => {
     if (!toast) return;
     const t = window.setTimeout(() => setToast(null), 4000);
