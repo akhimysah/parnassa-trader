@@ -2211,3 +2211,47 @@ kbd {
 .bulle-glisse.negatif div + div {
   color: var(--negatif);
 }
+/* Carte 2D de l'optimisation */
+.vue-optimisation {
+  display: flex;
+  gap: 4px;
+  padding: 3px 6px;
+}
+.vue-optimisation button.actif {
+  background: var(--selection);
+  border-color: #0078d7;
+}
+.carte-optimisation {
+  padding: 4px 8px 8px;
+  font-size: 11px;
+}
+.carte-info {
+  margin-bottom: 4px;
+  min-height: 16px;
+}
+.carte-grille {
+  display: grid;
+  gap: 1px;
+  grid-auto-rows: minmax(8px, 1fr);
+  max-height: 260px;
+}
+.carte-case {
+  min-height: 8px;
+  cursor: pointer;
+  border-radius: 1px;
+}
+.carte-case:hover {
+  outline: 1px solid var(--texte);
+}
+.carte-axe {
+  font-size: 9px;
+  color: var(--muet);
+  text-align: right;
+  padding-right: 3px;
+  line-height: 8px;
+  white-space: nowrap;
+}
+.carte-axe.bas {
+  text-align: left;
+  padding-top: 2px;
+}

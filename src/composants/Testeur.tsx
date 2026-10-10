@@ -73,6 +73,7 @@ export function Testeur() {
   const [passes, setPasses] = useState<Passe[]>([]);
   const [journal, setJournal] = useState<string[]>([]);
   const annuler = useRef(false);
+  const [vueOpti, setVueOpti] = useState<'tableau' | 'carte'>('tableau');
   const historique = useRef<{ cle: string; bougies: Bougie[] } | null>(null);
   const def = definitionExpert(r.expert);
   const s = symbole(r.symbole)!;
@@ -444,7 +445,29 @@ export function Testeur() {
             ))}
           {onglet === 'visualisation' && (resultat ? <Visualisation res={resultat} /> : <div className="vide-boite">Aucun résultat.</div>)}
           {onglet === 'trades' && (resultat ? <Trades res={resultat} /> : <div className="vide-boite">Aucun résultat.</div>)}
-          {onglet === 'optimisation' && (
+          {onglet === 'optimisation' && Object.keys(plagesActives).length >= 2 && passes.length > 0 && (
+            <div className="vue-optimisation">
+              <button className={vueOpti === 'tableau' ? 'actif' : ''} onClick={() => setVueOpti('tableau')}>
+                Tableau
+              </button>
+              <button className={vueOpti === 'carte' ? 'actif' : ''} onClick={() => setVueOpti('carte')}>
+                Carte 2D
+              </button>
+            </div>
+          )}
+          {onglet === 'optimisation' && vueOpti === 'carte' && Object.keys(plagesActives).length >= 2 && passes.length > 0 && (
+            <CarteOptimisation
+              passes={passes}
+              plages={plagesActives}
+              note={noter_passe}
+              choisir={(p) => {
+                setR((x) => ({ ...x, p: p.p, optimiser: Object.fromEntries(Object.entries(x.optimiser).map(([k, v]) => [k, { ...v, actif: false }])) }));
+                setOnglet('parametres');
+                signaler('Entrées de la passe appliquées : cliquez sur Démarrer pour la rejouer');
+              }}
+            />
+          )}
+          {onglet === 'optimisation' && !(vueOpti === 'carte' && Object.keys(plagesActives).length >= 2 && passes.length > 0) && (
             <table className="table boite-table">
               <thead>
                 <tr>
@@ -803,5 +826,72 @@ function ComparaisonAvant({ test, avant }: { test: ResultatTest & { bougies: Bou
         ))}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * Carte 2D de l'optimisation (comme le « graphique d'optimisation » de MT5) : les deux premières entrées optimisées en
+ * axes, chaque case colorée selon le critère (vert = meilleur, rouge = pire, gris = non testée). Clic : rejouer la passe.
+ */
+function CarteOptimisation({ passes, plages, note, choisir }: { passes: Passe[]; plages: Record<string, PlageOptimisation>; note: (p: Passe) => number; choisir: (p: Passe) => void }) {
+  const [kx, ky] = Object.keys(plages);
+  const axe = (k: string) => {
+    const pl = plages[k];
+    const n = Math.min(60, Math.floor((pl.fin - pl.debut) / pl.pas + 1e-9) + 1);
+    const pas = ((pl.fin - pl.debut) / Math.max(1, n - 1)) || pl.pas;
+    return { n, val: (i: number) => pl.debut + i * pas, idx: (v: number) => Math.round((v - pl.debut) / pas) };
+  };
+  const X = axe(kx);
+  const Y = axe(ky);
+  // Meilleure passe de chaque case (les autres entrées optimisées peuvent varier).
+  const cases = new Map<string, Passe>();
+  for (const p of passes) {
+    const k = `${X.idx(p.p[kx])},${Y.idx(p.p[ky])}`;
+    const actuelle = cases.get(k);
+    if (!actuelle || note(p) > note(actuelle)) cases.set(k, p);
+  }
+  const notes = [...cases.values()].map(note).filter(Number.isFinite);
+  const min = Math.min(...notes);
+  const max = Math.max(...notes);
+  const couleur = (v: number) => {
+    if (!Number.isFinite(v)) return '#9a9a9a55';
+    const t = max > min ? (v - min) / (max - min) : 0.5;
+    return `hsl(${Math.round(t * 120)}, 70%, 45%)`;
+  };
+  const [survol, setSurvol] = useState<Passe | null>(null);
+  return (
+    <div className="carte-optimisation">
+      <div className="carte-info">
+        {survol ? (
+          <>
+            {kx} = <b>{survol.p[kx]}</b>, {ky} = <b>{survol.p[ky]}</b> · bénéfice <b className={survol.profit >= 0 ? 'positif' : 'negatif'}>{argent(survol.profit)}</b> · {survol.trades} trades · PF {survol.facteur === null ? '—' : survol.facteur.toFixed(2)} · DD {survol.ddPct.toFixed(2)} %
+          </>
+        ) : (
+          <>
+            Axe horizontal : <b>{kx}</b> · axe vertical : <b>{ky}</b> · couleur : critère d'optimisation (vert = meilleur). Cliquez une case pour rejouer la passe.
+          </>
+        )}
+      </div>
+      <div className="carte-grille" style={{ gridTemplateColumns: `40px repeat(${X.n}, 1fr)` }} onMouseLeave={() => setSurvol(null)}>
+        {Array.from({ length: Y.n }, (_, jj) => {
+          const j = Y.n - 1 - jj;
+          return [
+            <div key={`y${j}`} className="carte-axe">
+              {jj % Math.ceil(Y.n / 8) === 0 ? Number(Y.val(j).toFixed(4)) : ''}
+            </div>,
+            ...Array.from({ length: X.n }, (_, i) => {
+              const p = cases.get(`${i},${j}`);
+              return <div key={`${i},${j}`} className="carte-case" style={{ background: p ? couleur(note(p)) : 'transparent' }} onMouseEnter={() => setSurvol(p ?? null)} onClick={() => p && choisir(p)} />;
+            }),
+          ];
+        })}
+        <div />
+        {Array.from({ length: X.n }, (_, i) => (
+          <div key={`x${i}`} className="carte-axe bas">
+            {i % Math.ceil(X.n / 8) === 0 ? Number(X.val(i).toFixed(4)) : ''}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
