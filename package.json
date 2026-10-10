@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 5210",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ui": "node scripts/ui.mjs"
   },
   "engines": {
     "node": ">=22"
@@ -23,6 +24,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "playwright-core": "1.63.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.0",
     "vitest": "3.2.4"
