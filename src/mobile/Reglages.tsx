@@ -13,6 +13,7 @@ import { demanderPermission, notificationsDisponibles, testerPush } from '../not
 import { useInstallation } from '../installation';
 import { BoutonIcone, BoutonRetour, ChampPas, EnTete, IconePlus, Interrupteur, Segments, useAppuiLong, useNav, vibrer } from './commun';
 import { libelleAlerte } from '../alertes';
+import { changerLangue, langueChoisie, type Langue } from '../i18n/traduire';
 
 /** Onglet Paramètres : compte, messagerie, outils et réglages, comme le menu de MT5 mobile. */
 export function Reglages() {
@@ -120,6 +121,19 @@ export function Reglages() {
 
         <div className="mm-section">Affichage</div>
         <ul className="mm-liste">
+          <li className="mm-li-colonne" data-sans-traduction>
+            <span className="mm-li-titre">
+              <span className="mm-ico bleu">🌐</span>Langue / Language
+            </span>
+            <Segments<Langue>
+              valeur={langueChoisie()}
+              changer={changerLangue}
+              options={[
+                ['fr', 'Français'],
+                ['en', 'English'],
+              ]}
+            />
+          </li>
           <li className="mm-li-colonne">
             <span className="mm-li-titre">
               <span className="mm-ico gris">🌙</span>Thème

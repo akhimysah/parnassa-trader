@@ -266,3 +266,28 @@ describe('MQL Parnassa', () => {
     definirExpertsPerso([]);
   });
 });
+
+describe('interface en anglais', () => {
+  it('traduit les textes exacts, les libellés « Nom : valeur » et les messages du moteur', async () => {
+    const { definirDictionnaire, traduireTexte } = await import('../src/i18n/traduire');
+    definirDictionnaire({ 'Nouvel ordre': 'New Order', Solde: 'Balance' });
+    expect(traduireTexte('Nouvel ordre')).toBe('New Order');
+    expect(traduireTexte('Solde : 10 000.00')).toBe('Balance: 10 000.00');
+    expect(traduireTexte('EURUSD')).toBeNull();
+    expect(traduireTexte('Ordre #12 exécuté : achat au marché buy 0.10 BTCUSD')).toBe('Order #12 filled: market buy 0.10 BTCUSD');
+    expect(traduireTexte('5 000 dernières barres')).toBe('Last 5 000 bars');
+  });
+});
+
+describe('interface en anglais : textes composés', () => {
+  it('traduit segments, parenthèses et numéros', async () => {
+    const { definirDictionnaire, traduireTexte } = await import('../src/i18n/traduire');
+    definirDictionnaire({ 'Compte démo': 'Demo account', Actuel: 'Current', 'Euro vs Dollar US': 'Euro vs US Dollar', précédent: 'previous' });
+    expect(traduireTexte('64234045 : Compte démo')).toBe('64234045: Demo account');
+    expect(traduireTexte('Actuel (12 points)')).toBe('Current (12 points)');
+    expect(traduireTexte('EURUSD, Euro vs Dollar US')).toBe('EURUSD, Euro vs US Dollar');
+    expect(traduireTexte('MA(9) SMA (précédent)')).toBe('MA(9) SMA (previous)');
+    expect(traduireTexte('Connecté — 246 ms')).toBe('Connected — 246 ms');
+    expect(traduireTexte('sell 0.10 BTCUSD à 83087.49')).toBe('sell 0.10 BTCUSD at 83087.49');
+  });
+});

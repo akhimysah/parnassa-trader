@@ -23,6 +23,7 @@ import { PERIODES, type Periode } from '../marche/bougies';
 import { perteJour, RISQUE_DEFAUT } from '../compte/risque';
 import { erreurFormule, FONCTIONS } from '../graphique/formule';
 import { DialogueMetaEditeur } from './MetaEditeur';
+import { changerLangue, langueChoisie, type Langue } from '../i18n/traduire';
 import { demanderPermission, notificationsDisponibles, testerPush } from '../notifications';
 
 export function Dialogues() {
@@ -691,6 +692,13 @@ function DialogueOptions() {
         <label className="case">
           <input type="checkbox" checked={etat.son} onChange={() => maj((e) => ({ ...e, son: !e.son }))} />
           Sons (exécutions, alertes, stop-out)
+        </label>
+        <label data-sans-traduction>
+          Langue / Language :{' '}
+          <select value={langueChoisie()} onChange={(e) => changerLangue(e.target.value as Langue)}>
+            <option value="fr">Français</option>
+            <option value="en">English</option>
+          </select>
         </label>
       </fieldset>
       <fieldset>
