@@ -4,7 +4,8 @@ import { useTerminal } from '../contexte';
 import { DEFINITIONS, GROUPES } from '../graphique/indicateurs';
 import { tousExperts } from '../algo/experts';
 import { preparerTest } from './Testeur';
-import { fermerPosition, profitPosition, supprimerOrdre, type Compte } from '../compte/moteur';
+import { fermerPosition, modifierPosition, ouvrirMarche, profitPosition, supprimerOrdre, type Compte } from '../compte/moteur';
+import { point, symbole } from '../marche/symboles';
 import { useMenuContextuel } from './ui';
 
 function Noeud({
@@ -54,6 +55,34 @@ const SCRIPTS: { nom: string; executer: (c: Compte, cot: Parameters<typeof ferme
   { nom: 'Fermer les positions gagnantes', executer: (c, cot) => c.positions.filter((p) => profitPosition(p, cot) > 0).reduce((acc, p) => fermerPosition(acc, p.ticket, cot).compte, c) },
   { nom: 'Fermer les positions perdantes', executer: (c, cot) => c.positions.filter((p) => profitPosition(p, cot) < 0).reduce((acc, p) => fermerPosition(acc, p.ticket, cot).compte, c) },
   { nom: 'Supprimer tous les ordres en attente', executer: (c) => c.ordres.reduce((acc, o) => supprimerOrdre(acc, o.ticket).compte, c) },
+  {
+    nom: 'Stops au break-even (positions gagnantes)',
+    executer: (c, cot) => c.positions.filter((p) => profitPosition(p, cot) > 0).reduce((acc, p) => modifierPosition(acc, p.ticket, p.prixOuverture, p.tp, cot).compte, c),
+  },
+  {
+    nom: 'Poser S/L et T/P sur toutes les positions…',
+    executer: (c, cot) => {
+      const sl = Number(window.prompt('Stop Loss en points (0 = ne pas changer)', '300'));
+      const tp = Number(window.prompt('Take Profit en points (0 = ne pas changer)', '600'));
+      if (!Number.isFinite(sl) || !Number.isFinite(tp)) return c;
+      return c.positions.reduce((acc, p) => {
+        const s = symbole(p.symbole);
+        if (!s) return acc;
+        const sens = p.type === 'buy' ? 1 : -1;
+        const f = (v: number) => Number(v.toFixed(s.chiffres));
+        return modifierPosition(acc, p.ticket, sl > 0 ? f(p.prixOuverture - sens * sl * point(s)) : p.sl, tp > 0 ? f(p.prixOuverture + sens * tp * point(s)) : p.tp, cot).compte;
+      }, c);
+    },
+  },
+  {
+    nom: 'Retourner toutes les positions',
+    executer: (c, cot) =>
+      c.positions.reduce((acc, p) => {
+        const f = fermerPosition(acc, p.ticket, cot);
+        if (f.erreur) return acc;
+        return ouvrirMarche(f.compte, { symbole: p.symbole, type: p.type === 'buy' ? 'sell' : 'buy', volume: p.volume, sl: 0, tp: 0, commentaire: 'retournement' }, cot).compte;
+      }, c),
+  },
 ];
 
 export function Navigateur() {
