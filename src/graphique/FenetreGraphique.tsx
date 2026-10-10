@@ -214,7 +214,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         return ajouter({ id: identifiant(), type: o, points, couleur: def.couleur, texte: texte.slice(0, 80) });
       }
       // Les deux premiers points sont rangés dans l'ordre du temps (le troisième du canal reste à part).
-      const tries = points.length >= 2 && points[0].t > points[1].t ? [points[1], points[0], ...points.slice(2)] : points;
+      const ordonne = o === 'tendance' || o === 'canal' || o === 'fibo' || o === 'rectangle' || o === 'regression';
+      const tries = ordonne && points.length >= 2 && points[0].t > points[1].t ? [points[1], points[0], ...points.slice(2)] : points;
       ajouter({ id: identifiant(), type: o, points: tries, couleur: def.couleur });
     };
     chart.subscribeClick(surClic);
@@ -293,7 +294,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   // Objets dessinés sur le canevas (verticales, rectangles, canaux, textes), recalés à chaque nouvelle barre.
   const nbBarres = bougiesRef.current.length;
   useEffect(() => {
-    dessinsRef.current?.definir(g.objets, bougiesRef.current.map((b) => b.time));
+    dessinsRef.current?.definir(
+      g.objets,
+      bougiesRef.current.map((b) => b.time),
+      bougiesRef.current.map((b) => b.close),
+    );
   }, [g.objets, version, versionSerie, nbBarres]);
 
   // Séparateurs de périodes, comme MT5 : jour jusqu'en H1, semaine en H4, mois en D1, année au-delà.

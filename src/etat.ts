@@ -10,7 +10,10 @@ export type Schema = 'vert-noir' | 'noir-blanc' | 'couleurs';
 
 export interface ObjetGraphique {
   id: string;
-  type: 'horizontale' | 'tendance' | 'fibo' | 'verticale' | 'rectangle' | 'canal' | 'texte';
+  type:
+    | 'horizontale' | 'tendance' | 'fibo' | 'verticale' | 'rectangle' | 'canal' | 'texte'
+    | 'fourchette' | 'regression' | 'fiboExtension' | 'fiboEventail' | 'fiboTemps' | 'gann' | 'elliott'
+    | 'flecheHaut' | 'flecheBas' | 'triangle' | 'ellipse' | 'cycles';
   /** Points d'ancrage (temps en secondes, prix). La ligne horizontale n'utilise que le prix du premier. */
   points: { t: number; prix: number }[];
   couleur: string;
