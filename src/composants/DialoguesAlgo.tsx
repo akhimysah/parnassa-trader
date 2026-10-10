@@ -219,6 +219,12 @@ export function DialogueRapport() {
             {s.dureePertes > s.dureeGains * 1.5 && s.dureeGains > 0 ? ' — les pertes sont gardées plus longtemps que les gains.' : '.'}
           </p>
           {s.mfeMoyen !== null && (
+            <div className="nuages-excursion">
+              <Nuage titre="Gain latent max. (MFE) et résultat" transactions={compte.transactions} axe="mfe" />
+              <Nuage titre="Perte latente max. (MAE) et résultat" transactions={compte.transactions} axe="mae" />
+            </div>
+          )}
+          {s.mfeMoyen !== null && (
             <p className="aide">
               Gain latent maximal moyen (MFE) <b>{s.mfeMoyen.toFixed(0)} points</b>, perte latente maximale moyenne (MAE) <b>{s.maeMoyen!.toFixed(0)} points</b>
               {s.efficacite !== null && (
@@ -267,6 +273,36 @@ function Barres({ titre, valeurs, libelles }: { titre: string; valeurs: { trades
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Nuage de points façon rapport MT5 : chaque trade fermé placé selon son excursion (MFE ou MAE, en points) et son
+ * résultat. Des gains loin sous la diagonale du MFE signalent des sorties trop tôt ; de gros MAE suivis de pertes, des
+ * stops trop larges.
+ */
+function Nuage({ titre, transactions, axe }: { titre: string; transactions: import('../compte/moteur').Transaction[]; axe: 'mfe' | 'mae' }) {
+  const pts = transactions.filter((d) => d.entree === 'out' && d[axe] !== undefined).map((d) => ({ x: d[axe]!, y: d.profit + d.swap + d.commission }));
+  if (pts.length < 2) return null;
+  const l = 280;
+  const h = 150;
+  const [x0, x1] = [Math.min(0, ...pts.map((p) => p.x)), Math.max(0, ...pts.map((p) => p.x))];
+  const [y0, y1] = [Math.min(0, ...pts.map((p) => p.y)), Math.max(0, ...pts.map((p) => p.y))];
+  const X = (v: number) => 6 + ((v - x0) / (x1 - x0 || 1)) * (l - 12);
+  const Y = (v: number) => h - 6 - ((v - y0) / (y1 - y0 || 1)) * (h - 12);
+  return (
+    <div className="nuage">
+      <h4>{titre}</h4>
+      <svg viewBox={`0 0 ${l} ${h}`} role="img" aria-label={titre}>
+        <line x1={X(x0)} x2={X(x1)} y1={Y(0)} y2={Y(0)} className="nuage-axe" />
+        <line x1={X(0)} x2={X(0)} y1={Y(y0)} y2={Y(y1)} className="nuage-axe" />
+        {pts.map((p, i) => (
+          <circle key={i} cx={X(p.x)} cy={Y(p.y)} r={3} className={p.y >= 0 ? 'positif' : 'negatif'}>
+            <title>{`${axe.toUpperCase()} ${p.x.toFixed(0)} points · résultat ${argent(p.y)} USD`}</title>
+          </circle>
+        ))}
+      </svg>
     </div>
   );
 }

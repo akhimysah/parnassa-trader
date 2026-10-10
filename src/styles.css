@@ -2345,3 +2345,36 @@ kbd {
     grid-template-columns: 1fr;
   }
 }
+.nuages-excursion {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.nuage h4 {
+  margin: 0 0 4px;
+  font-size: 11px;
+}
+.nuage svg {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--bordure);
+  background: var(--fond);
+}
+.nuage-axe {
+  stroke: var(--bordure-forte);
+  stroke-width: 1;
+}
+.nuage circle.positif {
+  fill: #1e9e3a;
+  fill-opacity: 0.75;
+}
+.nuage circle.negatif {
+  fill: #e0393e;
+  fill-opacity: 0.75;
+}
+@media (max-width: 820px) {
+  .nuages-excursion {
+    grid-template-columns: 1fr;
+  }
+}
