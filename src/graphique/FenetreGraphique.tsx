@@ -35,7 +35,7 @@ const EN_PRIX = ['atr', 'stddev', 'bears', 'bulls', 'ao', 'ac'];
 import { menuModeles } from '../composants/Barres';
 import { registreGraphiques } from './registre';
 import { decider, definitionExpert } from '../algo/experts';
-import { journaliser, LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
+import { conversion, journaliser, LIBELLES_TYPE, modifierOrdre, modifierPosition, ouvrirMarche, sensDe, supprimerOrdre, fermerPosition, type TypeEnAttente } from '../compte/moteur';
 import { PrixGros, VolumeRapide, dateMT, useMenuContextuel, type ElementMenu } from '../composants/ui';
 
 interface Props {
@@ -107,6 +107,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   const [etape, setEtape] = useState(0);
   const dessinsRef = useRef<Dessins | null>(null);
   /** Point d'objet tiré (index), ou objet entier (index -1) avec ses points et le point de départ du pointeur. */
+  const [infoGlisse, setInfoGlisse] = useState<{ y: number; lignes: string[]; signe: number } | null>(null);
   const glisseObjet = useRef<{ id: string; index: number; depart?: { t: number; prix: number }; points?: { t: number; prix: number }[] } | null>(null);
   // Nouvel outil (ou Échap) : les points déjà posés sont oubliés.
   useEffect(() => {
@@ -646,6 +647,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           if (!gl) return;
           gl.d.ligne.applyOptions({ price: gl.d.prix });
           glisse.current = null;
+          setInfoGlisse(null);
           chartRef.current?.applyOptions({ handleScroll: true, handleScale: true });
           refEtat.current.appuiLigne?.(gl.d.genre === 'ordre' ? 'ordre' : 'position', gl.d.ticket);
         }, 600);
@@ -697,6 +699,28 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       const sy = symbole(refEtat.current.g.symbole)!;
       gl.prix = Number(prix.toFixed(sy.chiffres));
       gl.d.ligne.applyOptions({ price: gl.prix });
+      setInfoGlisse(texteGlisse(gl.d, gl.prix, yDe(e)));
+    };
+    // Bulle pendant le glisser, comme MT5 : prix, distance en points et résultat en USD si le niveau est touché.
+    const texteGlisse = (d: Deplacable, prix: number, y: number): { y: number; lignes: string[]; signe: number } | null => {
+      const { compte: c, cotations: cot, g: gr } = refEtat.current;
+      const sy = symbole(gr.symbole)!;
+      const f = (v: number) => v.toFixed(sy.chiffres);
+      const pts = (a: number, b: number) => Math.round(Math.abs(a - b) / point(sy));
+      const usd = (sens: 'buy' | 'sell', volume: number, de: number) => (sens === 'buy' ? prix - de : de - prix) * volume * sy.contrat * conversion(sy, cot);
+      if (d.genre === 'objet') return { y, lignes: [f(prix)], signe: 0 };
+      if (d.genre === 'ordre') {
+        const o = c.ordres.find((x) => x.ticket === d.ticket);
+        const q = cot[gr.symbole];
+        if (!o || !q) return null;
+        const marche = sensDe(o.type) === 'buy' ? q.ask : q.bid;
+        return { y, lignes: [`#${o.ticket} ${LIBELLES_TYPE[o.type]} à ${f(prix)}`, `${pts(prix, marche)} points du marché`], signe: 0 };
+      }
+      const p = c.positions.find((x) => x.ticket === d.ticket);
+      if (!p) return null;
+      const r = usd(p.type, p.volume, p.prixOuverture);
+      const role = d.genre === 'sl' ? 'S/L' : d.genre === 'tp' ? 'T/P' : r >= 0 ? 'T/P' : 'S/L';
+      return { y, lignes: [`#${p.ticket} ${role} ${f(prix)}`, `${pts(prix, p.prixOuverture)} points · ${r >= 0 ? '+' : ''}${r.toFixed(2)} USD`], signe: r };
     };
     const haut = (e: PointerEvent) => {
       appui.current = null;
@@ -709,6 +733,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         return;
       }
       const gl = glisse.current;
+      setInfoGlisse(null);
       if (!gl) return;
       e.stopPropagation();
       glisse.current = null;
@@ -903,6 +928,13 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   return (
     <div className={`graphique${actif ? ' actif' : ''}`} onMouseDown={activer} style={{ background: coul.fond, color: coul.texte }}>
       <div ref={conteneur} className="graphique-zone" onContextMenu={menuGraphique} onMouseLeave={() => setAnnonce(null)} />
+      {infoGlisse && (
+        <div className={`bulle-glisse ${infoGlisse.signe > 0 ? 'positif' : infoGlisse.signe < 0 ? 'negatif' : ''}`} style={{ top: Math.max(0, infoGlisse.y - 40) }}>
+          {infoGlisse.lignes.map((l) => (
+            <div key={l}>{l}</div>
+          ))}
+        </div>
+      )}
       {annonce && (
         <div className="bulle-annonce" style={{ left: Math.max(4, annonce.x - 120), bottom: 30 }}>
           {annonce.evenements.slice(0, 4).map((e) => (
