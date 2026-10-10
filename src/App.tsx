@@ -263,6 +263,7 @@ export function App() {
         if (e.code === 'Digit1') return faire(() => majGraphique(g.id, { type: 'barres' }));
         if (e.code === 'Digit2') return faire(() => majGraphique(g.id, { type: 'bougies' }));
         if (e.code === 'Digit3') return faire(() => majGraphique(g.id, { type: 'ligne' }));
+        if (e.code === 'Digit4') return faire(() => majGraphique(g.id, { type: 'heikin' }));
         if (e.code === 'KeyT') return faire(() => majGraphique(g.id, { unClic: !g.unClic }));
         if (e.code === 'KeyB') return faire(() => setDialogue({ type: 'profondeur', symbole: g.symbole }));
         if (e.code === 'KeyR') return faire(() => maj((x) => ({ ...x, disposition: x.disposition === 'mosaique' ? 'onglets' : 'mosaique' })));

@@ -75,6 +75,7 @@ export function GraphiqueMobile() {
       { libelle: `Bougies${g.type === 'bougies' ? ' ✓' : ''}`, action: () => majGraphique(g.id, { type: 'bougies' }) },
       { libelle: `Barres${g.type === 'barres' ? ' ✓' : ''}`, action: () => majGraphique(g.id, { type: 'barres' }) },
       { libelle: `Ligne${g.type === 'ligne' ? ' ✓' : ''}`, action: () => majGraphique(g.id, { type: 'ligne' }) },
+      { libelle: `Heikin Ashi${g.type === 'heikin' ? ' ✓' : ''}`, action: () => majGraphique(g.id, { type: 'heikin' }) },
       { libelle: `${g.unClic ? 'Masquer' : 'Afficher'} le trading en un clic`, action: () => majGraphique(g.id, { unClic: !g.unClic }) },
       { libelle: `${g.niveauxTrading ? 'Masquer' : 'Afficher'} les niveaux de trading`, action: () => majGraphique(g.id, { niveauxTrading: !g.niveauxTrading }) },
       { libelle: `${g.separateurs ? 'Masquer' : 'Afficher'} les séparateurs de périodes`, action: () => majGraphique(g.id, { separateurs: !g.separateurs }) },

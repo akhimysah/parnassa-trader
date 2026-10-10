@@ -98,6 +98,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Barres', raccourci: 'Alt+1', coche: g?.type === 'barres', action: () => majActif({ type: 'barres' }) },
         { libelle: 'Bougies japonaises', raccourci: 'Alt+2', coche: g?.type === 'bougies', action: () => majActif({ type: 'bougies' }) },
         { libelle: 'Ligne', raccourci: 'Alt+3', coche: g?.type === 'ligne', action: () => majActif({ type: 'ligne' }) },
+        { libelle: 'Heikin Ashi', raccourci: 'Alt+4', coche: g?.type === 'heikin', action: () => majActif({ type: 'heikin' }) },
         { libelle: 'Période', sousMenu: PERIODES.map((p) => ({ libelle: p.libelle, raccourci: p.id, coche: g?.periode === p.id, action: () => majActif({ periode: p.id }) })) },
         { separateur: true },
         { libelle: 'Défilement automatique', coche: g?.defilement, action: () => majActif((x) => ({ defilement: !x.defilement })) },

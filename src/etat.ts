@@ -5,7 +5,7 @@ import type { Indicateur } from './graphique/indicateurs';
 import type { Expert } from './algo/experts';
 import { OBSERVATION_DEFAUT, symbole } from './marche/symboles';
 
-export type TypeGraphique = 'barres' | 'bougies' | 'ligne';
+export type TypeGraphique = 'barres' | 'bougies' | 'ligne' | 'heikin';
 export type Schema = 'vert-noir' | 'noir-blanc' | 'couleurs';
 
 export interface ObjetGraphique {

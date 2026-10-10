@@ -875,7 +875,7 @@ const RACCOURCIS: [string, string][] = [
   ['Ctrl+D', 'Fenêtre de données'],
   ['Ctrl+Y', 'Séparateurs de périodes'],
   ['Taper un symbole ou une période', 'Navigation rapide (ex. GBPUSD,H4 puis Entrée)'],
-  ['Alt+1 / Alt+2 / Alt+3', 'Barres / bougies / ligne'],
+  ['Alt+1 / Alt+2 / Alt+3 / Alt+4', 'Barres / bougies / ligne / Heikin Ashi'],
   ['Alt+T', 'Trading en un clic sur le graphique'],
   ['Ctrl+E', 'Activer / désactiver l\'Algo Trading'],
   ['Ctrl+R', 'Testeur de stratégie'],

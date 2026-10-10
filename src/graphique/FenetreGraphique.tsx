@@ -28,6 +28,7 @@ import { formaterPrix, point, symbole } from '../marche/symboles';
 import { calculerTous, definition, nomCourt, panneauxIndicateurs } from './indicateurs';
 import { couleursSchema } from './couleurs';
 import { Dessins, OBJETS } from './dessins';
+import { heikin, heikinSuivante } from './heikin';
 import { chargerCalendrier, devisesSymbole, valeurEvenement, type Evenement } from '../marche/calendrier';
 
 /** Indicateurs en sous-fenêtre exprimés en prix : même nombre de décimales que le symbole (l'échelle reste aussi large). */
@@ -128,6 +129,21 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     if (g.type === 'ligne') return { time: b.time as UTCTimestamp, value: b.close };
     return { time: b.time as UTCTimestamp, open: b.open, high: b.high, low: b.low, close: b.close };
   };
+  // Heikin Ashi : bougies recalculées, gardées pour mettre à jour la dernière à chaque tick.
+  const heikinRef = useRef<Bougie[]>([]);
+  const donneesSerie = (b: Bougie[]) => {
+    if (g.type !== 'heikin') return b.map(versBougie);
+    heikinRef.current = heikin(b);
+    return heikinRef.current.map(versBougie);
+  };
+  const derniereSerie = (b: Bougie[]) => {
+    if (g.type !== 'heikin') return versBougie(b[b.length - 1]);
+    const h = heikinRef.current;
+    const der = b[b.length - 1];
+    if (h.length && h[h.length - 1].time === der.time) h[h.length - 1] = heikinSuivante(h[h.length - 2], der);
+    else h.push(heikinSuivante(h[h.length - 1], der));
+    return versBougie(h[h.length - 1]);
+  };
 
   // ---------- Création du graphique ----------
   useEffect(() => {
@@ -150,12 +166,13 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       const b = bougiesRef.current.find((x) => x.time === p.time);
       const c = d.close ?? d.value ?? 0;
       const valeur = (se: ISeriesApi<SeriesType>) => (p.seriesData.get(se) as { value?: number } | undefined)?.value ?? null;
+      // Prix réels de la bougie (même en Heikin Ashi, la fenêtre de données montre les vrais prix).
       survol({
         temps: Number(p.time) * 1000,
-        o: d.open ?? c,
-        h: d.high ?? c,
-        l: d.low ?? c,
-        c,
+        o: b?.open ?? d.open ?? c,
+        h: b?.high ?? d.high ?? c,
+        l: b?.low ?? d.low ?? c,
+        c: b?.close ?? c,
         v: b?.volume ?? 0,
         chiffres: symbole(refEtat.current.g.symbole)?.chiffres ?? 5,
         symbole: refEtat.current.g.symbole,
@@ -253,7 +270,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     else if (g.type === 'barres') serie = chart.addSeries(BarSeries, { ...commun, upColor: coul.hausse, downColor: coul.baisse, thinBars: true });
     else serie = chart.addSeries(CandlestickSeries, { ...commun, upColor: coul.corpsHausse, downColor: coul.corpsBaisse, borderUpColor: coul.hausse, borderDownColor: coul.baisse, wickUpColor: coul.hausse, wickDownColor: coul.baisse });
     serieRef.current = serie;
-    serie.setData(bougiesRef.current.map(versBougie));
+    serie.setData(donneesSerie(bougiesRef.current));
     marqueursRef.current = createSeriesMarkers(serie, []);
     dessinsRef.current = new Dessins();
     serie.attachPrimitive(dessinsRef.current);
@@ -316,7 +333,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         if (annule) return;
         bougiesRef.current = b;
         derniereTraitee.current = b[b.length - 2]?.time ?? 0;
-        serieRef.current?.setData(b.map(versBougie));
+        serieRef.current?.setData(donneesSerie(b));
         chartRef.current?.timeScale().applyOptions({ barSpacing: 7 });
         chartRef.current?.timeScale().scrollToRealTime();
         setChargement(b.length ? 'ok' : 'vide');
@@ -416,7 +433,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       if (chargement === 'vide' && b.length === 1) setChargement('ok');
       executerExpert();
     } else return;
-    serie.update(versBougie(b[b.length - 1]));
+    serie.update(derniereSerie(b));
     // Les indicateurs sont recalculés au plus une fois par seconde.
     if (!majIndicateurs.current) {
       majIndicateurs.current = window.setTimeout(() => {
@@ -536,9 +553,25 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     if (!ligneAsk.current) ligneAsk.current = serie.createPriceLine({ price: cot.ask, color: coul.ask, lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: '' });
     else ligneAsk.current.applyOptions({ price: cot.ask });
   }, [cot?.ask, g.ligneAsk, coul, versionSerie]); // eslint-disable-line react-hooks/exhaustive-deps
+  // En Heikin Ashi, la dernière valeur de la série n'est pas le prix : une ligne Bid à part la remplace.
+  const ligneBid = useRef<IPriceLine | null>(null);
+  useEffect(() => {
+    const serie = serieRef.current;
+    if (!serie) return;
+    if (g.type !== 'heikin' || !cot) {
+      const l = ligneBid.current;
+      if (l) sansErreur(() => serie.removePriceLine(l));
+      ligneBid.current = null;
+      return;
+    }
+    serie.applyOptions({ priceLineVisible: false, lastValueVisible: false });
+    if (!ligneBid.current) ligneBid.current = serie.createPriceLine({ price: cot.bid, color: coul.bid, lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: true, title: '' });
+    else ligneBid.current.applyOptions({ price: cot.bid });
+  }, [cot?.bid, g.type, coul, versionSerie]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(
     () => () => {
       ligneAsk.current = null;
+      ligneBid.current = null;
     },
     [versionSerie],
   );
@@ -880,6 +913,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
           { libelle: 'Barres', raccourci: 'Alt+1', coche: g.type === 'barres', action: () => majGraphique(g.id, { type: 'barres' }) },
           { libelle: 'Bougies japonaises', raccourci: 'Alt+2', coche: g.type === 'bougies', action: () => majGraphique(g.id, { type: 'bougies' }) },
           { libelle: 'Ligne', raccourci: 'Alt+3', coche: g.type === 'ligne', action: () => majGraphique(g.id, { type: 'ligne' }) },
+          { libelle: 'Heikin Ashi', raccourci: 'Alt+4', coche: g.type === 'heikin', action: () => majGraphique(g.id, { type: 'heikin' }) },
         ],
       },
       { libelle: 'Séparateurs de périodes', raccourci: 'Ctrl+Y', coche: Boolean(g.separateurs), action: () => majGraphique(g.id, { separateurs: !g.separateurs }) },
