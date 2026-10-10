@@ -109,6 +109,8 @@ export interface EtatTerminal {
   ensembles: { nom: string; symboles: string[] }[];
   /** Garde-fous de risque appliqués à tous les comptes. */
   risque: import('./compte/risque').ReglesRisque;
+  /** Rappel avant les annonces économiques importantes (minutes avant, 0 = désactivé). */
+  rappelAnnonces: number;
 }
 
 export function identifiant(): string {
@@ -168,6 +170,7 @@ function etatInitial(): EtatTerminal {
     expertsPerso: [],
     ensembles: [],
     risque: { perteJourPct: 0, maxPositions: 0, maxVolume: 0, fermerAuSeuil: false },
+    rappelAnnonces: 0,
   };
 }
 

@@ -29,7 +29,7 @@ const SECTIONS: { titre: string; points: string[] }[] = [
       'Types : barres (Alt+1), bougies (Alt+2), ligne (Alt+3), Heikin Ashi (Alt+4). Périodes M1 à MN.',
       'Navigation rapide : tapez « GBPUSD », « H4 » ou « XAUUSD,M15 » sur un graphique puis Entrée.',
       'Objets : lignes horizontale, verticale, de tendance, Fibonacci, rectangle, canal équidistant, texte. Tirez les poignées ou le tracé ; double-clic pour leurs propriétés. Ctrl+Z annule le dernier changement des objets ou indicateurs.',
-      'Séparateurs de périodes (Ctrl+Y), calendrier économique (triangles en bas, détail au survol), trajets des trades fermés.',
+      'Séparateurs de périodes (Ctrl+Y), séances Tokyo / Londres / New York, calendrier économique (triangles en bas, détail au survol ; rappel 5 à 60 min avant les annonces importantes depuis l’onglet Calendrier), trajets des trades fermés.',
       'Fenêtre de données (Ctrl+D) : OHLC et valeur de chaque indicateur sous le réticule.',
       'Modèles (Graphiques → Modèle) et profils (Fichier → Profils) : enregistrer une présentation ou un ensemble de graphiques.',
     ],

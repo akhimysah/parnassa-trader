@@ -2413,3 +2413,9 @@ kbd {
 .scanner-resultats tr {
   cursor: pointer;
 }
+.sep-barre {
+  width: 1px;
+  height: 14px;
+  background: var(--bordure);
+  margin: 0 4px;
+}

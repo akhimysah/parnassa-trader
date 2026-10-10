@@ -580,6 +580,7 @@ interface Evenement {
 }
 
 export function OngletCalendrier() {
+  const { etat, maj } = useTerminal();
   const [evenements, setEvenements] = useState<Evenement[] | null>(null);
   const [importance, setImportance] = useState(0);
   useEffect(() => {
@@ -604,6 +605,16 @@ export function OngletCalendrier() {
             {l}
           </button>
         ))}
+        <span className="sep-barre" />
+        <span>Me prévenir :</span>
+        <select value={etat.rappelAnnonces} onChange={(e) => maj((x) => ({ ...x, rappelAnnonces: Number(e.target.value) }))} title="Rappel avant les annonces importantes sur les devises de l'Observation du marché">
+          <option value={0}>non</option>
+          {[5, 15, 30, 60].map((m) => (
+            <option key={m} value={m}>
+              {m} min avant les annonces importantes
+            </option>
+          ))}
+        </select>
       </div>
       <table className="table boite-table">
         <thead>

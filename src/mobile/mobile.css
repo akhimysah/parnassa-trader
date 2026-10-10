@@ -1708,3 +1708,6 @@
   color: inherit;
   resize: vertical;
 }
+.mm-rappel {
+  margin: 4px 16px;
+}

@@ -661,6 +661,7 @@ interface Evenement {
 const DEVISES_CAL = ['USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'NZD', 'CNY'];
 
 function Calendrier() {
+  const { etat, maj } = useTerminal();
   const [liste, setListe] = useState<Evenement[] | null>(null);
   const [importance, setImportance] = useState<'toutes' | 'moyenne' | 'haute'>('moyenne');
   const [devises, setDevises] = useState<string[]>([]);
@@ -697,6 +698,17 @@ function Calendrier() {
             ['haute', 'Haute'],
           ]}
         />
+      </div>
+      <div className="mm-ligne-champ mm-rappel">
+        <span>Me prévenir avant les annonces importantes</span>
+        <select value={etat.rappelAnnonces} onChange={(e) => maj((x) => ({ ...x, rappelAnnonces: Number(e.target.value) }))}>
+          <option value={0}>Non</option>
+          {[5, 15, 30, 60].map((m) => (
+            <option key={m} value={m}>
+              {m} min avant
+            </option>
+          ))}
+        </select>
       </div>
       <div className="mm-puces">
         {DEVISES_CAL.map((d) => (

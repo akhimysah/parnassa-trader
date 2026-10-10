@@ -7,6 +7,8 @@ const Dialogues = lazy(() => import('./composants/Dialogues').then((m) => ({ def
 import { ContexteTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
 import { reglagesModele } from './modeles';
 import { evaluerAlertes, evaluerAlertesIndicateurs } from './alertes';
+import { chargerCalendrier, devisesSymbole, valeurEvenement } from './marche/calendrier';
+import { symbole } from './marche/symboles';
 import { definirExpertsPerso } from './algo/experts';
 import { chargerEtat, nouveauGraphique, sauverEtat, type EtatTerminal, type Graphique } from './etat';
 import { definirAbonnements, definirTypeCompte, useCotations } from './marche/cotations';
@@ -153,6 +155,33 @@ export function App() {
       window.clearInterval(t);
     };
   }, [maj, signaler]);
+
+  // Rappel avant les annonces économiques à fort impact sur les devises des symboles suivis.
+  const rappelees = useRef(new Set<string>());
+  useEffect(() => {
+    if (!etat.rappelAnnonces) return;
+    const verifier = async () => {
+      const e = refEtat.current;
+      const devises = new Set(e.observation.flatMap((n) => {
+        const s = symbole(n);
+        return s ? devisesSymbole(s) : [];
+      }));
+      const liste = await chargerCalendrier();
+      const maintenant = Date.now();
+      for (const ev of liste) {
+        const avant = ev.date - maintenant;
+        if (ev.importance < 1 || !devises.has(ev.devise) || avant <= 0 || avant > e.rappelAnnonces * 60_000 || rappelees.current.has(ev.id)) continue;
+        rappelees.current.add(ev.id);
+        const message = `Dans ${Math.max(1, Math.round(avant / 60_000))} min : ${ev.devise} — ${ev.titreFr ?? ev.titre} (prévision ${valeurEvenement(ev.prevision, ev)})`;
+        signaler(message);
+        if (e.son) jouer('alerte');
+        notifier('Annonce économique importante', message, true);
+      }
+    };
+    void verifier();
+    const t = window.setInterval(() => void verifier(), 60_000);
+    return () => window.clearInterval(t);
+  }, [etat.rappelAnnonces, signaler]);
 
   // Sauvegarde différée (au plus une écriture par seconde).
   useEffect(() => {
