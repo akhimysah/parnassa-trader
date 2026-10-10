@@ -22,6 +22,7 @@ import { OPERATEURS, type Condition, type Operateur } from '../algo/assistant';
 import { PERIODES, type Periode } from '../marche/bougies';
 import { perteJour, RISQUE_DEFAUT } from '../compte/risque';
 import { erreurFormule, FONCTIONS } from '../graphique/formule';
+import { DialogueMetaEditeur } from './MetaEditeur';
 import { demanderPermission, notificationsDisponibles, testerPush } from '../notifications';
 
 export function Dialogues() {
@@ -31,6 +32,7 @@ export function Dialogues() {
 }
 
 function Contenu({ d }: { d: Dialogue }) {
+  const { etat } = useTerminal();
   switch (d.type) {
     case 'ordre':
       return <DialogueOrdre symboleInitial={d.symbole} sens={d.sens} attente={d.attente} prixInitial={d.prix} volumeInitial={d.volume} />;
@@ -85,7 +87,10 @@ function Contenu({ d }: { d: Dialogue }) {
     case 'acces':
       return <DialogueAcces acces={d.acces} />;
     case 'assistant':
-      return <DialogueAssistant id={d.id} />;
+      // Un expert écrit en code s'ouvre dans le MetaEditor.
+      return etat.expertsPerso.find((e) => e.id === d.id)?.script !== undefined ? <DialogueMetaEditeur id={d.id} /> : <DialogueAssistant id={d.id} />;
+    case 'metaediteur':
+      return <DialogueMetaEditeur id={d.id} />;
     case 'risque':
       return <DialogueRisque />;
     case 'scanner':
@@ -970,6 +975,8 @@ function DialogueAPropos() {
 }
 
 const RACCOURCIS: [string, string][] = [
+  ['F4', 'MetaEditor (experts MQL Parnassa)'],
+  ['F7', 'Compiler (dans le MetaEditor)'],
   ['F9', 'Nouvel ordre'],
   ['F8', 'Propriétés du graphique'],
   ['F11', 'Plein écran'],

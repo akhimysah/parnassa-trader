@@ -2526,3 +2526,28 @@ kbd {
   flex-wrap: wrap;
   gap: 2px 8px;
 }
+
+/* ---------- MetaEditor ---------- */
+.fenetre-metaediteur { max-width: calc(100vw - 24px); }
+.metaediteur-entete { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.metaediteur-entete .boutons { margin: 0; }
+.metaediteur { display: grid; grid-template-columns: 1fr 260px; gap: 8px; height: min(58vh, 520px); }
+.metaediteur-code { display: flex; border: 1px solid var(--bordure-forte); background: var(--panneau); min-width: 0; }
+.metaediteur-gouttiere {
+  overflow: hidden; padding: 6px 6px 6px 4px; text-align: right; color: var(--muet); background: var(--entete);
+  border-right: 1px solid var(--bordure); font: 12px/18px Consolas, 'SF Mono', Menlo, monospace; user-select: none; min-width: 34px;
+}
+.metaediteur-gouttiere .erreur { background: var(--negatif); color: #fff; }
+.metaediteur-code textarea {
+  flex: 1; resize: none; border: 0; outline: 0; padding: 6px 8px; background: transparent; color: var(--texte);
+  font: 12px/18px Consolas, 'SF Mono', Menlo, monospace; white-space: pre; overflow: auto; tab-size: 2;
+}
+.metaediteur-aide { overflow: auto; border: 1px solid var(--bordure); background: var(--panneau); padding: 6px 8px; font-size: 11px; }
+.metaediteur-aide dl { margin: 4px 0 10px; }
+.metaediteur-aide dt { font-family: Consolas, 'SF Mono', Menlo, monospace; color: var(--selection-forte); }
+.metaediteur-aide dd { margin: 0 0 5px; color: var(--muet); }
+.metaediteur-sortie { margin-top: 8px; padding: 6px 8px; border: 1px solid var(--bordure); background: var(--panneau); font: 12px Consolas, 'SF Mono', Menlo, monospace; cursor: default; }
+.metaediteur-sortie.negatif { cursor: pointer; }
+@media (max-width: 760px) {
+  .metaediteur { grid-template-columns: 1fr; grid-template-rows: 1fr 140px; height: 62vh; }
+}

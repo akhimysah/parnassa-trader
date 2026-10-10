@@ -6,6 +6,7 @@ import type { Bougie } from '../marche/bougies';
 import { calculer, moyenne } from '../graphique/indicateurs';
 import type { Sens } from '../compte/moteur';
 import { decrireExpert, deciderPerso, type ExpertPerso } from './assistant';
+import { compiler, type EntreeScript } from './script';
 
 /** Experts intégrés, ou créés avec l'assistant (« perso:<id> »). */
 export type TypeExpert = 'croisement-ma' | 'rsi' | 'bollinger' | 'cassure' | 'macd' | 'stochastique' | 'sar' | 'alligator' | `perso:${string}`;
@@ -110,6 +111,22 @@ export function tousExperts(): DefinitionExpert[] {
 export function definitionExpert(t: TypeExpert): DefinitionExpert {
   if (t.startsWith('perso:')) {
     const e = expertPerso(t);
+    if (e?.script !== undefined) {
+      // Expert MQL Parnassa : ses entrées deviennent des paramètres, modifiables et optimisables.
+      let entrees: EntreeScript[] = [];
+      try {
+        entrees = compiler(e.script).entrees;
+      } catch {
+        // script en erreur : seulement les paramètres communs
+      }
+      return {
+        type: t,
+        nom: e.nom,
+        description: decrireExpert(e),
+        defaut: { ...Object.fromEntries(entrees.map((x) => [x.nom, x.defaut])), ...COMMUNS },
+        libelles: { ...Object.fromEntries(entrees.map((x) => [x.nom, x.libelle])), ...LIBELLES_COMMUNS },
+      };
+    }
     return { type: t, nom: e ? e.nom : 'Expert supprimé', description: e ? decrireExpert(e) : "Cet expert de l'assistant a été supprimé : il ne trade plus.", defaut: { ...COMMUNS }, libelles: { ...LIBELLES_COMMUNS } };
   }
   return EXPERTS.find((e) => e.type === t) ?? EXPERTS[0];
@@ -134,7 +151,7 @@ export function decider(e: Expert, b: Bougie[], sensActuel: Sens | null): Decisi
   if (n < 3) return RIEN;
   if (e.type.startsWith('perso:')) {
     const perso = expertPerso(e.type);
-    return perso ? deciderPerso(perso, b, sensActuel) : RIEN;
+    return perso ? deciderPerso(perso, b, sensActuel, e.p) : RIEN;
   }
   const p = e.p;
   const c = b.map((x) => x.close);

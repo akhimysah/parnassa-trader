@@ -379,6 +379,7 @@ export function App() {
       };
       if (e.key === 'Escape' && outil) return faire(() => setOutil(null));
       if (e.key === 'F9') return faire(() => setDialogue({ type: 'ordre' }));
+      if (e.key === 'F4') return faire(() => setDialogue({ type: 'metaediteur' }));
       if (e.key === 'F8' && g) return faire(() => setDialogue({ type: 'proprietes', graphique: g.id }));
       if (e.key === 'F11') return faire(() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => undefined));
       if (e.key === 'F1') return faire(() => setDialogue({ type: 'raccourcis' }));

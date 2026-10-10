@@ -179,13 +179,19 @@ export function Navigateur() {
                         },
                       },
                       { separateur: true },
-                      ...(x.type.startsWith('perso:') ? [{ libelle: "Modifier dans l'assistant…", action: () => ouvrir({ type: 'assistant', id: x.type.slice(6) }) }] : []),
+                      ...(x.type.startsWith('perso:')
+                        ? etat.expertsPerso.find((k) => `perso:${k.id}` === x.type)?.script !== undefined
+                          ? [{ libelle: 'Modifier dans le MetaEditor…', raccourci: 'F4', action: () => ouvrir({ type: 'metaediteur', id: x.type.slice(6) }) }]
+                          : [{ libelle: "Modifier dans l'assistant…", action: () => ouvrir({ type: 'assistant', id: x.type.slice(6) }) }]
+                        : []),
                       { libelle: "Créer un expert (assistant)…", action: () => ouvrir({ type: 'assistant' }) },
+                      { libelle: 'Nouvel expert MQL Parnassa (MetaEditor)…', action: () => ouvrir({ type: 'metaediteur' }) },
                     ]);
                   }}
                 />
               ))}
               <Noeud libelle="Créer un expert…" icone="✚" onDoubleClick={() => ouvrir({ type: 'assistant' })} />
+              <Noeud libelle="Nouvel expert MQL (MetaEditor)…" icone="⌨" onDoubleClick={() => ouvrir({ type: 'metaediteur' })} />
             </Noeud>
             <Noeud libelle="Scripts" icone="📜" ouvertParDefaut>
               {SCRIPTS.map((sc) => (

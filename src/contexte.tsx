@@ -34,6 +34,7 @@ export type Dialogue =
   | { type: 'rapport' }
   | { type: 'synchro' }
   | { type: 'assistant'; id?: string }
+  | { type: 'metaediteur'; id?: string }
   | { type: 'risque' }
   | { type: 'scanner' }
   | { type: 'acces'; acces: Acces };

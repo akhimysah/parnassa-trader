@@ -11,7 +11,7 @@ import { moyenne, type Valeurs } from './indicateurs';
 type Valeur = Valeurs | number;
 
 interface Jeton {
-  type: 'nombre' | 'nom' | 'op' | '(' | ')' | ',';
+  type: 'nombre' | 'nom' | 'op' | 'cmp' | '(' | ')' | ',';
   v: string;
 }
 
@@ -38,6 +38,18 @@ function decouper(source: string): Jeton[] {
       i = j;
       continue;
     }
+    if ('<>=!'.includes(c)) {
+      const deux = source.slice(i, i + 2);
+      if (['<=', '>=', '==', '!='].includes(deux)) {
+        jetons.push({ type: 'cmp', v: deux });
+        i += 2;
+        continue;
+      }
+      if (c === '<' || c === '>') jetons.push({ type: 'cmp', v: c });
+      else throw new Error(`Caractère inattendu « ${c} » (comparaisons : < > <= >= == !=)`);
+      i++;
+      continue;
+    }
     if ('+-*/'.includes(c)) jetons.push({ type: 'op', v: c });
     else if (c === '(' || c === ')' || c === ',') jetons.push({ type: c, v: c });
     else throw new Error(`Caractère inattendu « ${c} »`);
@@ -57,6 +69,9 @@ export const FONCTIONS: Record<string, string> = {
   highest: 'highest(x, n) — plus haut sur n barres',
   lowest: 'lowest(x, n) — plus bas sur n barres',
   shift: 'shift(x, n) — valeur n barres avant',
+  crossover: 'crossover(a, b) — 1 quand a passe au-dessus de b sur la barre',
+  crossunder: 'crossunder(a, b) — 1 quand a passe en dessous de b sur la barre',
+  iff: 'iff(condition, a, b) — a si la condition est vraie, sinon b',
   abs: 'abs(x)',
   max: 'max(a, b)',
   min: 'min(a, b)',
@@ -87,7 +102,12 @@ export function erreurFormule(source: string): string | null {
   }
 }
 
-function evaluer(source: string, b: Bougie[]): Valeur {
+/** Évalue une expression ; `variables` : séries ou nombres déjà calculés (scripts). Vrai = 1, faux = 0. */
+export function evaluerExpression(source: string, b: Bougie[], variables: Record<string, Valeurs | number> = {}): Valeurs | number {
+  return evaluer(source, b, variables);
+}
+
+function evaluer(source: string, b: Bougie[], variables: Record<string, Valeurs | number> = {}): Valeur {
   const jetons = decouper(source);
   let k = 0;
   const voir = () => jetons[k];
@@ -172,6 +192,21 @@ function evaluer(source: string, b: Bougie[]): Valeur {
         const p = Math.max(0, Math.round(typeof c === 'number' ? c : 1));
         return x.map((_, i) => (i - p >= 0 ? x[i - p] : null));
       }
+      case 'crossover':
+      case 'crossunder': {
+        const x = serie(a);
+        const y = serie(c);
+        return x.map((_, i) => {
+          if (i === 0 || x[i] === null || y[i] === null || x[i - 1] === null || y[i - 1] === null) return null;
+          return nom === 'crossover' ? Number(x[i - 1]! <= y[i - 1]! && x[i]! > y[i]!) : Number(x[i - 1]! >= y[i - 1]! && x[i]! < y[i]!);
+        });
+      }
+      case 'iff': {
+        const cond = serie(a);
+        const vrai = serie(c);
+        const faux = serie(args[2] ?? 0);
+        return cond.map((v, i) => (v === null ? null : v !== 0 ? vrai[i] : faux[i]));
+      }
       case 'abs':
         return parBarre(a, 0, (x) => Math.abs(x));
       case 'max':
@@ -183,8 +218,46 @@ function evaluer(source: string, b: Bougie[]): Valeur {
     }
   };
 
-  // Grammaire : expression = terme (± terme)* ; terme = facteur (×÷ facteur)* ; facteur = nombre | série | appel | (expr) | -facteur
-  const expression = (): Valeur => {
+  // Grammaire : ou = et (or et)* ; et = non (and non)* ; non = not non | comparaison ;
+  // comparaison = somme (< > <= >= == != somme)? ; somme = terme (± terme)* ; terme = facteur (×÷ facteur)* ;
+  // facteur = nombre | série | variable | appel | (ou) | -facteur
+  const motCle = (m: string) => voir()?.type === 'nom' && voir().v === m;
+  const ou = (): Valeur => {
+    let v = et();
+    while (motCle('or')) {
+      prendre();
+      v = parBarre(v, et(), (x, y) => Number(x !== 0 || y !== 0));
+    }
+    return v;
+  };
+  const et = (): Valeur => {
+    let v = non();
+    while (motCle('and')) {
+      prendre();
+      v = parBarre(v, non(), (x, y) => Number(x !== 0 && y !== 0));
+    }
+    return v;
+  };
+  const non = (): Valeur => {
+    if (motCle('not')) {
+      prendre();
+      return parBarre(non(), 0, (x) => Number(x === 0));
+    }
+    const v = somme();
+    if (voir()?.type !== 'cmp') return v;
+    const op = prendre().v;
+    const d = somme();
+    const f: Record<string, (x: number, y: number) => number> = {
+      '<': (x, y) => Number(x < y),
+      '>': (x, y) => Number(x > y),
+      '<=': (x, y) => Number(x <= y),
+      '>=': (x, y) => Number(x >= y),
+      '==': (x, y) => Number(x === y),
+      '!=': (x, y) => Number(x !== y),
+    };
+    return parBarre(v, d, f[op]);
+  };
+  const somme = (): Valeur => {
     let v = terme();
     while (voir()?.type === 'op' && (voir().v === '+' || voir().v === '-')) {
       const op = prendre().v;
@@ -193,6 +266,7 @@ function evaluer(source: string, b: Bougie[]): Valeur {
     }
     return v;
   };
+  const expression = ou;
   const terme = (): Valeur => {
     let v = facteur();
     while (voir()?.type === 'op' && (voir().v === '*' || voir().v === '/')) {
@@ -230,6 +304,7 @@ function evaluer(source: string, b: Bougie[]): Valeur {
         attendre(')');
         return appel(j.v, args);
       }
+      if (j.v in variables) return variables[j.v];
       if ((SERIES as readonly string[]).includes(j.v)) {
         if (j.v === 'median') return b.map((x) => (x.high + x.low) / 2);
         if (j.v === 'typical') return b.map((x) => (x.high + x.low + x.close) / 3);

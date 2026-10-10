@@ -232,3 +232,37 @@ describe('modélisation du testeur', () => {
     for (let i = 1; i < ticks.length; i++) expect(Math.abs(ticks[i] - ticks[i - 1])).toBeLessThanOrEqual(0.0095 / 12 + 0.00001);
   });
 });
+
+describe('MQL Parnassa', () => {
+  const barres = (closes: number[]) => closes.map((c, k) => ({ time: 1_700_000_000 + k * 3600, open: c, high: c + 0.5, low: c - 0.5, close: c, volume: 1 }));
+  it('compile les entrées et signale les erreurs avec la ligne', async () => {
+    const { compiler, verifierScript, EXEMPLE_SCRIPT } = await import('../src/algo/script');
+    expect(compiler(EXEMPLE_SCRIPT).entrees.map((e) => e.nom)).toEqual(['rapide', 'lente', 'filtre']);
+    expect(compiler(EXEMPLE_SCRIPT).entrees[0].libelle).toBe('Période de la moyenne rapide');
+    expect(verifierScript(EXEMPLE_SCRIPT)).toBeNull();
+    expect(verifierScript('x = sma(close, 5)\nif x > then buy')).toMatch(/^ligne 2/);
+    expect(verifierScript('if close > 1 then acheter')).toMatch(/action inconnue/);
+    expect(verifierScript('x = 1')).toMatch(/aucune instruction/);
+  });
+  it('décide sur la dernière barre avec les entrées choisies', async () => {
+    const { executerScript } = await import('../src/algo/script');
+    const src = 'input seuil = 10\nif close > seuil and not (position > 0) then close sell; buy\nif position > 0 and close < seuil then close buy';
+    const b = barres([5, 6, 12]);
+    expect(executerScript(src, b, null)).toMatchObject({ ouvrir: 'buy', fermer: ['sell'] });
+    expect(executerScript(src, b, 'buy').ouvrir).toBeNull();
+    expect(executerScript(src, b, null, { seuil: 20 }).ouvrir).toBeNull();
+    expect(executerScript(src, barres([12, 11, 8]), 'buy').fermer).toEqual(['buy']);
+    const croise = 'if crossover(close, 10) then buy';
+    expect(executerScript(croise, barres([9, 9.5, 11]), null).ouvrir).toBe('buy');
+    expect(executerScript(croise, barres([9, 11, 12]), null).ouvrir).toBeNull();
+  });
+  it('rend les entrées optimisables comme paramètres de l’expert', async () => {
+    const { definirExpertsPerso, definitionExpert } = await import('../src/algo/experts');
+    const { EXEMPLE_SCRIPT } = await import('../src/algo/script');
+    definirExpertsPerso([{ id: 's1', nom: 'Script', achat: [], vente: [], sortieAchat: [], sortieVente: [], script: EXEMPLE_SCRIPT }]);
+    const d = definitionExpert('perso:s1');
+    expect(d.defaut).toMatchObject({ rapide: 10, lente: 30, filtre: 50, volume: 0.1 });
+    expect(d.libelles.lente).toBe('Période de la moyenne lente');
+    definirExpertsPerso([]);
+  });
+});

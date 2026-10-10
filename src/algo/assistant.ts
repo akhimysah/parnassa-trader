@@ -7,6 +7,7 @@ import type { Bougie } from '../marche/bougies';
 import type { Sens } from '../compte/moteur';
 import { calculer, definition, nomCourt, type MethodeMA, type TypeIndicateur, type Valeurs } from '../graphique/indicateurs';
 import { calculerFormule } from '../graphique/formule';
+import { executerScript } from './script';
 
 export type ChampPrix = 'close' | 'open' | 'high' | 'low';
 export type Operande =
@@ -34,6 +35,8 @@ export interface ExpertPerso {
   sens?: 'deux' | 'achat' | 'vente';
   heures?: [number, number];
   jours?: number[];
+  /** Expert écrit en MQL Parnassa (MetaEditor) : remplace les conditions. */
+  script?: string;
 }
 
 export const CHAMPS_PRIX: Record<ChampPrix, string> = { close: 'Clôture', open: 'Ouverture', high: 'Plus haut', low: 'Plus bas' };
@@ -64,6 +67,11 @@ export function libelleCondition(c: Condition): string {
 
 /** Description lisible de l'expert, affichée comme celle des experts intégrés. */
 export function decrireExpert(e: ExpertPerso): string {
+  if (e.script !== undefined) {
+    const lignes = e.script.split('\n').filter((l) => l.trim() && !l.trim().startsWith('//')).length;
+    const premier = e.script.split('\n').find((l) => l.trim().startsWith('//'))?.replace(/^\s*\/\/\s*/, '');
+    return `Expert MQL Parnassa (${lignes} instructions)${premier ? ` : ${premier}` : ''}. Modifiable dans le MetaEditor (F4).`;
+  }
   const bloc = (titre: string, cs: Condition[]) => (cs.length ? `${titre} : ${cs.map(libelleCondition).join(' et ')}.` : '');
   return [bloc('Achat', e.achat), bloc('Vente', e.vente), bloc('Sortie des achats', e.sortieAchat), bloc('Sortie des ventes', e.sortieVente)].filter(Boolean).join(' ') || 'Aucune condition.';
 }
@@ -127,9 +135,17 @@ export function evaluateur(b: Bougie[]): (c: Condition) => boolean {
 }
 
 /** Décision à la clôture de la dernière barre de `b`, comme `decider` pour les experts intégrés. */
-export function deciderPerso(e: ExpertPerso, b: Bougie[], sensActuel: Sens | null): { fermer: Sens[]; ouvrir: Sens | null; raison: string } {
+export function deciderPerso(e: ExpertPerso, b: Bougie[], sensActuel: Sens | null, p: Record<string, number> = {}): { fermer: Sens[]; ouvrir: Sens | null; raison: string } {
   const rien = { fermer: [] as Sens[], ouvrir: null, raison: '' };
   if (b.length < 3) return rien;
+  if (e.script !== undefined) {
+    try {
+      return executerScript(e.script, b, sensActuel, p);
+    } catch {
+      // script en erreur : l'expert ne trade pas (l'erreur est affichée dans le MetaEditor)
+      return rien;
+    }
+  }
   const vraie = evaluateur(b);
   const tout = (cs: Condition[]) => cs.length > 0 && cs.every(vraie);
   // Filtres : en dehors des heures ou jours choisis, l'expert ne fait que gérer ses sorties.
