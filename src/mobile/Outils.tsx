@@ -3,7 +3,7 @@ import { useTerminal } from '../contexte';
 import { identifiant, type Alerte } from '../etat';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
-import { APPLICABLES, SOURCES, type Source, DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
+import { APPLICABLES, SOURCES, calculer, type Source, DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
 import { tousExperts, definitionExpert, type TypeExpert } from '../algo/experts';
 import { calculerStats } from '../algo/statistiques';
 import { definirSuiveur, operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
@@ -202,7 +202,15 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
   const [methode, setMethode] = useState<MethodeMA>(actuel?.methode ?? 'sma');
   const [couleur, setCouleur] = useState(actuel?.couleur ?? def.couleur);
   const [source, setSource] = useState<Source>(actuel?.source ?? 'close');
+  const niveauxDefaut = calculer({ id: '', type, p: def.defaut, couleur: '' }, []).niveaux ?? [];
+  const [niveaux, setNiveaux] = useState(((actuel?.niveaux ?? niveauxDefaut) as number[]).join(' ; '));
+  const [epaisseur, setEpaisseur] = useState(actuel?.epaisseur ?? 1);
   if (!g) return null;
+  const liste = niveaux
+    .split(/[;\s]+/)
+    .filter((x) => x.trim() !== '')
+    .map((x) => Number(x.replace(',', '.')))
+    .filter(Number.isFinite);
   const position = actuel ? g.indicateurs.findIndex((i) => i.id === actuel.id) : g.indicateurs.length;
   const applicable = APPLICABLES.includes(type);
   const pas = (k: string) => (k === 'pas' || k === 'max' ? 0.01 : k === 'ecart' ? 0.05 : k === 'ecarts' ? 0.5 : 1);
@@ -229,6 +237,16 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
               </select>
             </label>
           )}
+          {!def.superpose && (
+            <label className="mm-ligne-champ">
+              <span>Niveaux</span>
+              <input value={niveaux} inputMode="decimal" placeholder="ex. 20 ; 80" onChange={(e) => setNiveaux(e.target.value)} />
+            </label>
+          )}
+          <div className="mm-ligne-champ">
+            <span>Épaisseur</span>
+            <Segments valeur={String(epaisseur)} options={[['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]} changer={(v) => setEpaisseur(Number(v))} />
+          </div>
           {applicable && (
             <label className="mm-ligne-champ">
               <span>Appliquer à</span>
@@ -271,7 +289,7 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
         <button
           className="mm-bouton principal"
           onClick={() => {
-            const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur, source: applicable && source !== 'close' ? source : undefined };
+            const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur, source: applicable && source !== 'close' ? source : undefined, niveaux: JSON.stringify(liste) === JSON.stringify(niveauxDefaut) ? undefined : liste, epaisseur: epaisseur > 1 ? epaisseur : undefined };
             majGraphique(g.id, (gr) => ({ indicateurs: actuel ? gr.indicateurs.map((i) => (i.id === actuel.id ? ind : i)) : [...gr.indicateurs, ind] }));
             vibrer(15);
             retour();

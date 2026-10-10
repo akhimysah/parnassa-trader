@@ -16,6 +16,10 @@ export interface Indicateur {
   couleur: string;
   /** « Appliquer à » de MT5 : prix utilisé, ou données d'un autre indicateur du graphique. */
   source?: Source;
+  /** Niveaux horizontaux choisis (onglet « Niveaux » de MT5) ; à défaut, ceux de l'indicateur. */
+  niveaux?: number[];
+  /** Épaisseur des lignes (1 à 4). */
+  epaisseur?: number;
 }
 
 export type Source = 'close' | 'open' | 'high' | 'low' | 'median' | 'typique' | 'pondere' | 'precedent' | 'premier';

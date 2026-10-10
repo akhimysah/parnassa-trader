@@ -447,11 +447,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
         const se =
           tr.style === 'histogramme'
             ? chart.addSeries(HistogramSeries, { ...commun, color: tr.couleur, priceFormat: def.type === 'volumes' ? { type: 'volume' } : { type: 'price', precision: s.chiffres, minMove: point(s) } }, index)
-            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: 1, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: def.superpose || EN_PRIX.includes(def.type) ? { type: 'price', precision: s.chiffres, minMove: point(s) } : def.type === 'demarker' || def.type === 'rvi' ? { type: 'price', precision: 3, minMove: 0.001 } : def.type === 'obv' || def.type === 'force' ? { type: 'volume' } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
+            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: Math.min(4, Math.max(1, ind.epaisseur ?? 1)) as 1 | 2 | 3 | 4, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: def.superpose || EN_PRIX.includes(def.type) ? { type: 'price', precision: s.chiffres, minMove: point(s) } : def.type === 'demarker' || def.type === 'rvi' ? { type: 'price', precision: 3, minMove: 0.001 } : def.type === 'obv' || def.type === 'force' ? { type: 'volume' } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
         if (r.bornes) se.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: r.bornes![0], maxValue: r.bornes![1] } }) });
         return se;
       });
-      for (const n of r.niveaux ?? []) series[0]?.createPriceLine({ price: n, color: '#a0a0a0', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: false, title: '' });
+      for (const n of ind.niveaux ?? r.niveaux ?? []) series[0]?.createPriceLine({ price: n, color: '#a0a0a0', lineStyle: LineStyle.Dashed, lineWidth: 1, axisLabelVisible: false, title: '' });
       seriesIndicateurs.current.push({ id: ind.id, nom: nomCourt(ind), traces: r.traces.map((tr) => ({ nom: tr.nom, couleur: tr.couleur })), series });
     }
     chart.panes().forEach((p, i) => p.setStretchFactor(i === 0 ? 3 : 1));

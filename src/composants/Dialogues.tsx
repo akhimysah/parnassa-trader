@@ -4,7 +4,7 @@ import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
 import { HEURE_ROLLOVER_UTC, SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, point, spreadPoints, swapPoints, symbole, type Categorie } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { sourceDirecte } from '../marche/cotations';
-import { definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA, APPLICABLES, SOURCES, type Source } from '../graphique/indicateurs';
+import { calculer, definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA, APPLICABLES, SOURCES, type Source } from '../graphique/indicateurs';
 import { SCHEMAS } from '../graphique/couleurs';
 import { definirSuiveur, fermerPosition, levierEffectif, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
 import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
@@ -353,12 +353,31 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
   const [methode, setMethode] = useState<MethodeMA>(actuel?.methode ?? 'sma');
   const [couleur, setCouleur] = useState(actuel?.couleur ?? def.couleur);
   const [source, setSource] = useState<Source>(actuel?.source ?? 'close');
+  const niveauxDefaut = calculer({ id: '', type, p: def.defaut, couleur: '' }, []).niveaux ?? [];
+  const [niveaux, setNiveaux] = useState(((actuel?.niveaux ?? niveauxDefaut) as number[]).join(' ; '));
+  const [epaisseur, setEpaisseur] = useState(actuel?.epaisseur ?? 1);
   if (!g) return null;
+  const lireNiveaux = () =>
+    niveaux
+      .split(/[;\s]+/)
+      .filter((x) => x.trim() !== '')
+      .map((x) => Number(x.replace(',', '.')))
+      .filter(Number.isFinite);
   // Position de l'indicateur dans la liste : « précédent » et « premier » n'ont de sens qu'après un autre indicateur.
   const position = actuel ? g.indicateurs.findIndex((i) => i.id === actuel.id) : g.indicateurs.length;
   const applicable = APPLICABLES.includes(type);
   const valider = () => {
-    const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur, source: applicable && source !== 'close' ? source : undefined };
+    const liste = lireNiveaux();
+    const ind: Indicateur = {
+      id: actuel?.id ?? identifiant(),
+      type,
+      p,
+      methode: type === 'ma' || type === 'env' ? methode : undefined,
+      couleur,
+      source: applicable && source !== 'close' ? source : undefined,
+      niveaux: JSON.stringify(liste) === JSON.stringify(niveauxDefaut) ? undefined : liste,
+      epaisseur: epaisseur > 1 ? epaisseur : undefined,
+    };
     majGraphique(g.id, (gr) => ({ indicateurs: actuel ? gr.indicateurs.map((i) => (i.id === actuel.id ? ind : i)) : [...gr.indicateurs, ind] }));
     fermer();
   };
@@ -392,6 +411,22 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
             </span>
           </label>
         )}
+        {!def.superpose && (
+          <label>
+            <span>Niveaux :</span>
+            <input value={niveaux} onChange={(e) => setNiveaux(e.target.value)} placeholder="ex. 20 ; 50 ; 80" title="Lignes horizontales de la fenêtre de l'indicateur, séparées par des points-virgules" />
+          </label>
+        )}
+        <label>
+          <span>Épaisseur :</span>
+          <select value={epaisseur} onChange={(e) => setEpaisseur(Number(e.target.value))}>
+            {[1, 2, 3, 4].map((n) => (
+              <option key={n} value={n}>
+                {n} px
+              </option>
+            ))}
+          </select>
+        </label>
         {applicable ? (
           <label>
             <span>Appliquer à :</span>
