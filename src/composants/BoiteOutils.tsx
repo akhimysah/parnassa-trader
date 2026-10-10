@@ -188,7 +188,7 @@ export function OngletTrading() {
           })}
           <tr className="ligne-solde">
             <td colSpan={10}>
-              <span className="puce solde" /> Solde : <b>{argent(e.solde)} USD</b>&nbsp;&nbsp; Fonds propres : <b>{argent(e.fondsPropres)}</b>&nbsp;&nbsp; Marge : <b>{argent(e.marge)}</b>&nbsp;&nbsp; Marge libre : <b>{argent(e.margeLibre)}</b>&nbsp;&nbsp; Niveau de marge : <b>{e.niveauMarge === null ? '' : `${argent(e.niveauMarge)} %`}</b>
+              <span className="puce solde" /> Solde : <b>{argent(e.solde)} {compte.devise}</b>&nbsp;&nbsp; Fonds propres : <b>{argent(e.fondsPropres)}</b>&nbsp;&nbsp; Marge : <b>{argent(e.marge)}</b>&nbsp;&nbsp; Marge libre : <b>{argent(e.margeLibre)}</b>&nbsp;&nbsp; Niveau de marge : <b>{e.niveauMarge === null ? '' : `${argent(e.niveauMarge)} %`}</b>
             </td>
             <td className={`d gras ${e.profit >= 0 ? 'positif' : 'negatif'}`}>{argent(e.profit)}</td>
             <td colSpan={2} />

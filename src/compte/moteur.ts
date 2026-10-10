@@ -28,6 +28,8 @@ export interface Position {
   suiveur: number;
   /** Seuil de mise à break-even, en points de gain : le stop-loss passe au prix d'ouverture (0 = aucun). */
   equilibre?: number;
+  /** Devise de dépôt du compte (profit de la position converti dans cette devise ; USD si absent). */
+  devise?: DeviseDepot;
   /** Plus grand gain (MFE) et plus grande perte (MAE) latents atteints depuis l'ouverture, en points. */
   mfe?: number;
   mae?: number;
@@ -114,7 +116,8 @@ export interface Compte {
    */
   mode?: 'couverture' | 'netting';
   serveur: string;
-  devise: 'USD';
+  /** Devise du dépôt : profits, marges, commissions et swaps sont convertis dans cette devise. */
+  devise: DeviseDepot;
   levier: number;
   solde: number;
   credit: number;
@@ -171,18 +174,27 @@ function milieuDe(cot: Cotations) {
   };
 }
 
-/** Valeur en USD d'une unité de la devise de profit du symbole. */
-export function conversion(s: SymboleMT, cot: Cotations): number {
-  return versUsd(s.profit, milieuDe(cot));
+export type DeviseDepot = 'USD' | 'EUR';
+
+/** Valeur d'un USD dans la devise de dépôt (EUR : au milieu d'EURUSD). */
+export function usdVersDepot(devise: DeviseDepot | undefined, cot: Cotations): number {
+  if (devise !== 'EUR') return 1;
+  const q = cot.EURUSD;
+  return q ? 2 / (q.bid + q.ask) : 1 / 1.1;
+}
+
+/** Valeur, dans la devise de dépôt (USD par défaut), d'une unité de la devise de profit du symbole. */
+export function conversion(s: SymboleMT, cot: Cotations, devise?: DeviseDepot): number {
+  return versUsd(s.profit, milieuDe(cot)) * usdVersDepot(devise, cot);
 }
 
 export function levierEffectif(s: SymboleMT, levierCompte: number): number {
   return Math.max(1, Math.min(levierCompte, s.levierMax));
 }
 
-/** Marge requise (USD) pour `volume` lots au prix `prix`. */
-export function margeRequise(s: SymboleMT, volume: number, prix: number, levierCompte: number, cot: Cotations): number {
-  return (volume * s.contrat * prix * conversion(s, cot)) / levierEffectif(s, levierCompte);
+/** Marge requise (devise de dépôt) pour `volume` lots au prix `prix`. */
+export function margeRequise(s: SymboleMT, volume: number, prix: number, levierCompte: number, cot: Cotations, devise?: DeviseDepot): number {
+  return (volume * s.contrat * prix * conversion(s, cot, devise)) / levierEffectif(s, levierCompte);
 }
 
 /** Prix de clôture d'une position : Bid pour un achat, Ask pour une vente. */
@@ -195,7 +207,7 @@ export function profitPosition(p: Position, cot: Cotations): number {
   const c = cot[p.symbole];
   if (!s || !c) return 0;
   const ecart = p.type === 'buy' ? c.bid - p.prixOuverture : p.prixOuverture - c.ask;
-  return ecart * p.volume * s.contrat * conversion(s, cot);
+  return ecart * p.volume * s.contrat * conversion(s, cot, p.devise);
 }
 
 export interface EtatCompte {
@@ -216,7 +228,7 @@ export function etatCompte(c: Compte, cot: Cotations): EtatCompte {
     const s = symbole(p.symbole);
     if (!s) continue;
     profit += profitPosition(p, cot) + p.swap;
-    marge += margeRequise(s, p.volume, p.prixOuverture, c.levier, cot);
+    marge += margeRequise(s, p.volume, p.prixOuverture, c.levier, cot, c.devise);
   }
   const fondsPropres = c.solde + c.credit + profit;
   return {
@@ -232,7 +244,7 @@ export function etatCompte(c: Compte, cot: Cotations): EtatCompte {
 
 // ---------- Création ----------
 
-export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard', sansSwap = false, mode: Compte['mode'] = 'couverture'): Compte {
+export function nouveauCompte(nom: string, depot: number, levier: number, type: TypeCompte = 'standard', sansSwap = false, mode: Compte['mode'] = 'couverture', devise: DeviseDepot = 'USD'): Compte {
   // Comptes locaux de 50000000 à 89999999 : les numéros en 9 sont ceux des comptes en ligne.
   const login = 50000000 + Math.floor(Math.random() * 39999999);
   const maintenant = Date.now();
@@ -244,7 +256,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number, type: 
     sansSwap: sansSwap || undefined,
     mode: mode === 'netting' ? 'netting' : undefined,
     serveur: SERVEUR,
-    devise: 'USD',
+    devise,
     levier,
     solde: depot,
     credit: 0,
@@ -254,7 +266,7 @@ export function nouveauCompte(nom: string, depot: number, levier: number, type: 
       { ticket, ordre: 0, position: 0, heure: maintenant, symbole: '', type: 'balance', entree: '', volume: 0, prix: 0, commission: 0, swap: 0, profit: depot, solde: depot, commentaire: 'Dépôt de démonstration' },
     ],
     ordresHisto: [],
-    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} USD, levier 1:${levier}, compte ${type === 'raw' ? 'Raw' : 'Standard'}${sansSwap ? ' sans swap' : ''}, ${mode === 'netting' ? 'compensation (netting)' : 'couverture (hedging)'}` }],
+    journal: [{ heure: maintenant, source: 'Réseau', message: `'${login}' : compte de démonstration ouvert sur ${SERVEUR}, dépôt ${depot.toFixed(2)} ${devise}, levier 1:${levier}, compte ${type === 'raw' ? 'Raw' : 'Standard'}${sansSwap ? ' sans swap' : ''}, ${mode === 'netting' ? 'compensation (netting)' : 'couverture (hedging)'}` }],
     ticketSuivant: ticket + 1,
     creeLe: maintenant,
     appelMarge: false,
@@ -370,9 +382,9 @@ function ouvrirPosition(c: Compte, d: DemandeMarche, cot: Cotations, origine?: {
   // Les stops sont contrôlés par rapport au prix de clôture (Bid pour un achat, Ask pour une vente).
   const es = verifierStops(d.type, prixFermeture(d.type, q), d.sl, d.tp);
   if (es) return echec(c, es, demande);
-  const marge = margeRequise(s, d.volume, prix, c.levier, cot);
+  const marge = margeRequise(s, d.volume, prix, c.levier, cot, c.devise);
   const etat = etatCompte(c, cot);
-  const commission = -arrondir(commissionParCote(s, c.type ?? 'standard', d.volume, d.volume * s.contrat * prix * conversion(s, cot))) || 0;
+  const commission = -arrondir(commissionParCote(s, c.type ?? 'standard', d.volume, d.volume * s.contrat * prix * conversion(s, cot, c.devise))) || 0;
   if (marge - commission > etat.margeLibre) return echec(c, 'Pas assez d\'argent', demande);
 
   const ticketOrdre = origine?.ordre ?? c.ticketSuivant;
@@ -393,6 +405,7 @@ function ouvrirPosition(c: Compte, d: DemandeMarche, cot: Cotations, origine?: {
     suiveur: d.suiveur ?? 0,
     equilibre: d.equilibre || undefined,
     magic: d.magic,
+    devise: c.devise === 'EUR' ? 'EUR' : undefined,
   };
   const deal: Transaction = {
     ticket: ticketDeal,
@@ -590,10 +603,10 @@ export function fermerPosition(c: Compte, ticket: number, cot: Cotations, volume
   const prix = prixFermeture(p.type, q);
   const part = v / p.volume;
   const ecart = p.type === 'buy' ? prix - p.prixOuverture : p.prixOuverture - prix;
-  const profit = arrondir(ecart * v * s.contrat * conversion(s, cot));
+  const profit = arrondir(ecart * v * s.contrat * conversion(s, cot, c.devise));
   const swap = arrondir(p.swap * part);
   // Commission de sortie (compte Raw) ; celle d'entrée a déjà été prélevée à l'ouverture.
-  const commission = -arrondir(commissionParCote(s, c.type ?? 'standard', v, v * s.contrat * prix * conversion(s, cot))) || 0;
+  const commission = -arrondir(commissionParCote(s, c.type ?? 'standard', v, v * s.contrat * prix * conversion(s, cot, c.devise))) || 0;
   const commissionEntree = arrondir(p.commission * part);
   const solde = arrondir(c.solde + profit + swap + commission);
   const maintenant = Date.now();
@@ -658,7 +671,7 @@ export function fermerPar(c: Compte, ticket: number, contre: number, cot: Cotati
   if (!s || a.symbole !== b.symbole || a.type === b.type) return echec(c, 'Positions incompatibles', demande);
   if (!marcheOuvert(s)) return echec(c, 'Marché fermé', demande);
   const v = Math.min(a.volume, b.volume);
-  const conv = conversion(s, cot);
+  const conv = conversion(s, cot, c.devise);
   const maintenant = Date.now();
   let suite: Compte = c;
   let total = 0;
@@ -757,7 +770,7 @@ export function appliquerSwaps(c: Compte, cot: Cotations, maintenant = Date.now(
     const prix = q ? (q.bid + q.ask) / 2 : p.prixOuverture;
     const points = swapPoints(s, prix)[p.type === 'buy' ? 'long' : 'short'];
     const fois = nuits.reduce((t, n) => t + n.fois, 0);
-    const montant = fois * points * point(s) * s.contrat * p.volume * conversion(s, cot);
+    const montant = fois * points * point(s) * s.contrat * p.volume * conversion(s, cot, p.devise);
     change = true;
     return { ...p, swap: arrondir(p.swap + montant), dernierSwap: nuits[nuits.length - 1].t };
   });

@@ -779,7 +779,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       const sy = symbole(gr.symbole)!;
       const f = (v: number) => v.toFixed(sy.chiffres);
       const pts = (a: number, b: number) => Math.round(Math.abs(a - b) / point(sy));
-      const usd = (sens: 'buy' | 'sell', volume: number, de: number) => (sens === 'buy' ? prix - de : de - prix) * volume * sy.contrat * conversion(sy, cot);
+      const usd = (sens: 'buy' | 'sell', volume: number, de: number) => (sens === 'buy' ? prix - de : de - prix) * volume * sy.contrat * conversion(sy, cot, c.devise);
       if (d.genre === 'objet') return { y, lignes: [f(prix)], signe: 0 };
       if (d.genre === 'ordre') {
         const o = c.ordres.find((x) => x.ticket === d.ticket);
@@ -792,7 +792,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       if (!p) return null;
       const r = usd(p.type, p.volume, p.prixOuverture);
       const role = d.genre === 'sl' ? 'S/L' : d.genre === 'tp' ? 'T/P' : r >= 0 ? 'T/P' : 'S/L';
-      return { y, lignes: [`#${p.ticket} ${role} ${f(prix)}`, `${pts(prix, p.prixOuverture)} points · ${r >= 0 ? '+' : ''}${r.toFixed(2)} USD`], signe: r };
+      return { y, lignes: [`#${p.ticket} ${role} ${f(prix)}`, `${pts(prix, p.prixOuverture)} points · ${r >= 0 ? '+' : ''}${r.toFixed(2)} ${c.devise}`], signe: r };
     };
     const haut = (e: PointerEvent) => {
       appui.current = null;

@@ -128,3 +128,17 @@ describe('compte en compensation (netting)', () => {
     expect(c.positions).toHaveLength(2);
   });
 });
+
+describe('compte en euros', () => {
+  it('convertit profits et marges en EUR au cours EURUSD', () => {
+    const q = (bid: number): Record<string, Cotation> => ({ ...cot(bid), EURUSD: { bid: 1.25, ask: 1.25, haut: 0, bas: 0, ouverture: 0, heure: 0, sens: 0 } });
+    let c = nouveauCompte('e', 10000, 100, 'standard', false, 'couverture', 'EUR');
+    expect(c.devise).toBe('EUR');
+    c = ouvrirMarche(c, { symbole: 'BTCUSD', type: 'buy', volume: 0.1, sl: 0, tp: 0, commentaire: '' }, q(80000)).compte;
+    // 0,1 BTC à 80 010 $ = 8 001 $ de notionnel, 6 400,80 € ; levier crypto plafonné par le symbole.
+    expect(etatCompte(c, q(80000)).marge).toBeGreaterThan(0);
+    const f = fermerPosition(c, c.positions[0].ticket, q(81010));
+    // +100 $ = +80 €
+    expect(f.compte.solde).toBeCloseTo(10080, 2);
+  });
+});

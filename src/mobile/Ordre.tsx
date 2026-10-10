@@ -3,7 +3,7 @@ import { useTerminal } from '../contexte';
 import { formaterPrix, marcheOuvert, point, symbole } from '../marche/symboles';
 import {
   NOMS_TYPE_ATTENTE,
-  conversion,
+  conversion, type DeviseDepot,
   etatCompte,
   fermerPosition,
   margeRequise,
@@ -33,9 +33,9 @@ function versDateLocale(ms: number): string {
 }
 
 /** Gain (ou perte) en USD si le prix va de `de` à `a`. */
-function enArgent(sym: string, sens: Sens, volume: number, de: number, a: number, cot: ReturnType<typeof useTerminal>['cotations']): number {
+function enArgent(sym: string, sens: Sens, volume: number, de: number, a: number, cot: ReturnType<typeof useTerminal>['cotations'], devise?: DeviseDepot): number {
   const s = symbole(sym)!;
-  return (sens === 'buy' ? a - de : de - a) * volume * s.contrat * conversion(s, cot);
+  return (sens === 'buy' ? a - de : de - a) * volume * s.contrat * conversion(s, cot, devise);
 }
 
 function ErreurStop({ texte }: { texte: string | null }) {
@@ -43,8 +43,9 @@ function ErreurStop({ texte }: { texte: string | null }) {
 }
 
 function Montant({ v }: { v: number | null }) {
+  const { compte } = useTerminal();
   if (v === null) return null;
-  return <span className={`mm-montant ${v >= 0 ? 'positif' : 'negatif'}`}>{`${v >= 0 ? '+' : ''}${argent(v)} USD`}</span>;
+  return <span className={`mm-montant ${v >= 0 ? 'positif' : 'negatif'}`}>{`${v >= 0 ? '+' : ''}${argent(v)} ${compte.devise}`}</span>;
 }
 
 /** Prix Bid / Ask en grand, comme au-dessus des boutons de l'écran d'ordre MT5. */
@@ -106,7 +107,7 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
 
   const pas = point(s);
   const pasS = pasStop(s, q ? q.bid : prix || 1);
-  const marge = q ? margeRequise(s, volume, type === 'marche' ? q.ask : prix || q.ask, compte.levier, cotations) : 0;
+  const marge = q ? margeRequise(s, volume, type === 'marche' ? q.ask : prix || q.ask, compte.levier, cotations, compte.devise) : 0;
   const libre = etatCompte(compte, cotations).margeLibre;
   const ouvert = marcheOuvert(s);
   const prixEntree = type === 'marche' ? q?.ask : type.endsWith('stop_limit') ? prixLimite : prix;
@@ -119,18 +120,18 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
       return;
     }
     const { fondsPropres, margeLibre } = etatCompte(compte, cotations);
-    const parLot = Math.abs(enArgent(sym, sens, 1, prixEntree, sl, cotations));
+    const parLot = Math.abs(enArgent(sym, sens, 1, prixEntree, sl, cotations, compte.devise));
     // Le volume est aussi plafonné par la marge libre (sinon l'ordre serait refusé).
-    const margeParLot = margeRequise(s, 1, prixEntree, compte.levier, cotations);
+    const margeParLot = margeRequise(s, 1, prixEntree, compte.levier, cotations, compte.devise);
     const maxMarge = margeParLot > 0 ? margeLibre / margeParLot : s.volumeMax;
     feuille(
-      `Risque jusqu'au S/L (fonds propres ${argent(fondsPropres)} USD)`,
+      `Risque jusqu'au S/L (fonds propres ${argent(fondsPropres)} ${compte.devise})`,
       [0.5, 1, 2, 3, 5].map((pct) => {
         const brut = parLot > 0 ? (fondsPropres * pct) / 100 / parLot : 0;
         const plafond = Math.min(s.volumeMax, maxMarge);
         const v = Number(Math.max(s.volumeMin, Math.floor(Math.min(brut, plafond) / s.pasVolume) * s.pasVolume).toFixed(2));
         const limite = brut > plafond ? (maxMarge < s.volumeMax ? ' — limité par la marge' : ' — volume maximal') : '';
-        return { libelle: `${pct} % → ${v.toFixed(2)} lot, perte ${argent(parLot * v)} USD${limite}`, action: () => setVolume(v) };
+        return { libelle: `${pct} % → ${v.toFixed(2)} lot, perte ${argent(parLot * v)} ${compte.devise}${limite}`, action: () => setVolume(v) };
       }),
     );
   };
@@ -192,7 +193,7 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
           </label>
           <ChampVolume valeur={volume} changer={setVolume} min={s.volumeMin} max={s.volumeMax} pasMin={s.pasVolume} />
           <div className="mm-aide-ligne">
-            {argent(volume * s.contrat, 0)} {s.base} · marge {argent(marge)} USD{marge > libre ? ' · marge libre insuffisante' : ''}
+            {argent(volume * s.contrat, 0)} {s.base} · marge {argent(marge)} {compte.devise}{marge > libre ? ' · marge libre insuffisante' : ''}
             {' · '}
             <button className="mm-lien" onClick={calculerRisque}>
               volume selon le risque
@@ -229,7 +230,7 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
               </div>
               {sl > 0 && prixEntree && (
                 <div className="mm-aide-ligne">
-                  <Montant v={enArgent(sym, sens, volume, prixEntree, sl, cotations)} />
+                  <Montant v={enArgent(sym, sens, volume, prixEntree, sl, cotations, compte.devise)} />
                 </div>
               )}
               {type !== 'marche' && <ErreurStop texte={prixEntree ? erreurStop(s, sens, prixEntree, 'sl', sl) : null} />}
@@ -239,7 +240,7 @@ export function EcranOrdre({ symboleInitial, attente, typeInitial, prixInitial }
               </div>
               {tp > 0 && prixEntree && (
                 <div className="mm-aide-ligne">
-                  <Montant v={enArgent(sym, sens, volume, prixEntree, tp, cotations)} />
+                  <Montant v={enArgent(sym, sens, volume, prixEntree, tp, cotations, compte.devise)} />
                 </div>
               )}
               {type !== 'marche' && <ErreurStop texte={prixEntree ? erreurStop(s, sens, prixEntree, 'tp', tp) : null} />}
@@ -394,7 +395,7 @@ export function EcranPosition({ ticket }: { ticket: number }) {
           <span>
             {formaterPrix(s, p.prixOuverture)} → {formaterPrix(s, actuel)}
           </span>
-          <b className={profit >= 0 ? 'positif' : 'negatif'}>{argent(profit)} USD</b>
+          <b className={profit >= 0 ? 'positif' : 'negatif'}>{argent(profit)} {compte.devise}</b>
         </div>
         <div className="mm-formulaire">
           <div className="mm-ligne-champ">
@@ -403,7 +404,7 @@ export function EcranPosition({ ticket }: { ticket: number }) {
           </div>
           {sl > 0 && (
             <div className="mm-aide-ligne">
-              <Montant v={enArgent(p.symbole, p.type, p.volume, p.prixOuverture, sl, cotations)} />
+              <Montant v={enArgent(p.symbole, p.type, p.volume, p.prixOuverture, sl, cotations, compte.devise)} />
             </div>
           )}
           <ErreurStop texte={errSl} />
@@ -413,7 +414,7 @@ export function EcranPosition({ ticket }: { ticket: number }) {
           </div>
           {tp > 0 && (
             <div className="mm-aide-ligne">
-              <Montant v={enArgent(p.symbole, p.type, p.volume, p.prixOuverture, tp, cotations)} />
+              <Montant v={enArgent(p.symbole, p.type, p.volume, p.prixOuverture, tp, cotations, compte.devise)} />
             </div>
           )}
           <ErreurStop texte={errTp} />
@@ -499,7 +500,7 @@ export function EcranFermer({ ticket }: { ticket: number }) {
             pousser(r.erreur ? { type: 'resultat', ok: false, titre: 'Fermeture refusée', texte: r.erreur } : { type: 'resultat', ok: true, titre: 'Position fermée', texte: r.message ?? '' });
           }}
         >
-          Fermer {volume.toFixed(2)} lot avec un {profit >= 0 ? 'profit' : 'perte'} de {argent(Math.abs(profit))} USD
+          Fermer {volume.toFixed(2)} lot avec un {profit >= 0 ? 'profit' : 'perte'} de {argent(Math.abs(profit))} {compte.devise}
         </button>
       </div>
     </div>

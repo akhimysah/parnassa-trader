@@ -97,7 +97,7 @@ export interface ComptesEnLigne {
   /** État de la connexion de chaque compte en ligne (par numéro). */
   statut: (login: number) => StatutCompte;
   erreur: (login: number) => string | null;
-  ouvrir: (o: { nom: string; depot: number; levier: number; type: TypeCompte; sansSwap: boolean; mode?: 'couverture' | 'netting' }) => Promise<Acces>;
+  ouvrir: (o: { nom: string; depot: number; levier: number; type: TypeCompte; sansSwap: boolean; mode?: 'couverture' | 'netting'; devise?: 'USD' | 'EUR' }) => Promise<Acces>;
   connecter: (login: number, motDePasse: string, serveur: string) => Promise<Compte>;
   /** Comptes en ligne rattachés au compte Parnassa relié (null sans liaison). */
   mesComptes: () => Promise<CompteServeur[] | null>;
@@ -321,7 +321,7 @@ export function useComptesEnLigne(etat: EtatTerminal, maj: (f: (e: EtatTerminal)
   }, []);
 
   const ouvrir = useCallback(
-    async (o: { nom: string; depot: number; levier: number; type: TypeCompte; sansSwap: boolean; mode?: 'couverture' | 'netting' }): Promise<Acces> => {
+    async (o: { nom: string; depot: number; levier: number; type: TypeCompte; sansSwap: boolean; mode?: 'couverture' | 'netting'; devise?: 'USD' | 'EUR' }): Promise<Acces> => {
       const liaison = jetonLiaison();
       let r: Awaited<ReturnType<typeof appel>>;
       try {
@@ -332,7 +332,7 @@ export function useComptesEnLigne(etat: EtatTerminal, maj: (f: (e: EtatTerminal)
       if (r.statut !== 201) throw new Error(messageErreur(r.donnees, 'Ouverture du compte impossible.'));
       const a = r.donnees.acces as { login: string; serveur: string; motDePasse: string; motDePasseInvestisseur: string };
       const login = Number(a.login);
-      const base = nouveauCompte(o.nom, Math.round(o.depot), o.levier, o.type, o.sansSwap, o.mode);
+      const base = nouveauCompte(o.nom, Math.round(o.depot), o.levier, o.type, o.sansSwap, o.mode, o.devise);
       const neuf: Compte = {
         ...base,
         login,

@@ -41,7 +41,7 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
               feuille(
                 'Changer de compte',
                 etat.comptes.map((c) => ({
-                  libelle: `${c.login === etat.actif ? '✓ ' : ''}${c.login} · ${c.nom} · ${argent(c.solde)} USD`,
+                  libelle: `${c.login === etat.actif ? '✓ ' : ''}${c.login} · ${c.nom} · ${argent(c.solde)} ${c.devise}`,
                   action: () => {
                     vibrer();
                     maj((x) => ({ ...x, actif: c.login }));
@@ -50,7 +50,7 @@ export function Trade({ voirGraphique }: { voirGraphique: (s: string) => void })
               )
             }
           >
-            <span className={e.profit >= 0 ? 'positif' : 'negatif'}>{`${e.profit >= 0 ? '' : '−'}${argent(Math.abs(e.profit))} USD`}</span>
+            <span className={e.profit >= 0 ? 'positif' : 'negatif'}>{`${e.profit >= 0 ? '' : '−'}${argent(Math.abs(e.profit))} ${compte.devise}`}</span>
           </button>
         }
         sousTitre={`${compte.login} · ${compte.nom}`}

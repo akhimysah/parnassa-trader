@@ -269,7 +269,7 @@ function DialogueDepot() {
   const [montant, setMontant] = useState(1000);
   return (
     <Fenetre titre={`Dépôt / retrait — ${compte.login}`} fermer={fermer} largeur={380}>
-      <p>Solde actuel : {argent(compte.solde)} USD</p>
+      <p>Solde actuel : {argent(compte.solde)} {compte.devise}</p>
       <Spin valeur={montant} changer={setMontant} pas={100} min={1} decimales={2} />
       <div className="boutons">
         <button
@@ -989,7 +989,7 @@ export function BlocRisque() {
         <Spin valeur={r.maxVolume} changer={(v) => changer({ maxVolume: Math.max(0, v) })} pas={0.1} min={0} decimales={2} />
       </label>
       <p className="aide">
-        Aujourd'hui sur {compte.login} : {p.montant > 0 ? `perte de ${argent(p.montant)} USD (${p.pct.toFixed(2)} %)` : `gain de ${argent(-p.montant)} USD`} depuis un solde de départ de {argent(p.depart)} USD
+        Aujourd'hui sur {compte.login} : {p.montant > 0 ? `perte de ${argent(p.montant)} ${compte.devise} (${p.pct.toFixed(2)} %)` : `gain de ${argent(-p.montant)} ${compte.devise}`} depuis un solde de départ de {argent(p.depart)} {compte.devise}
         {r.perteJourPct > 0 && p.pct >= r.perteJourPct ? ' — limite atteinte, nouveaux ordres bloqués.' : '.'}
       </p>
     </fieldset>

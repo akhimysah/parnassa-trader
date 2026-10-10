@@ -64,6 +64,8 @@ export function App() {
     }
     for (const g of etat.graphiques) noms.add(g.symbole);
     for (const a of etat.alertes) if (a.active) noms.add(a.symbole);
+    // Comptes en EUR : EURUSD sert à convertir profits et marges dans la devise du dépôt.
+    if (etat.comptes.some((c) => c.devise === 'EUR')) noms.add('EURUSD');
     return [...noms].sort().join(',');
   }, [etat.observation, etat.comptes, etat.graphiques, etat.alertes]);
   useEffect(() => definirAbonnements(cleAbonnements.split(',').filter(Boolean)), [cleAbonnements]);

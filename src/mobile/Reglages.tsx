@@ -45,7 +45,7 @@ export function Reglages() {
               )}
             </small>
             <small>
-              {argent(compte.solde)} USD · 1:{compte.levier} · démo {TYPES_COMPTE[compte.type ?? 'standard'].nom}
+              {argent(compte.solde)} {compte.devise} · 1:{compte.levier} · démo {TYPES_COMPTE[compte.type ?? 'standard'].nom}
               {compte.sansSwap ? ' sans swap' : ''}
             </small>
           </span>
@@ -222,7 +222,7 @@ export function Comptes() {
                       titre={c.nom}
                       statut={statut ? (c.lecture && statut === 'connecte' ? 'lecture seule' : LIBELLE_STATUT[statut]) : null}
                       classeStatut={statut ?? ''}
-                      detail={`${c.login} · ${TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:${c.levier} · ${argent(c.solde)} USD`}
+                      detail={`${c.login} · ${TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:${c.levier} · ${argent(c.solde)} ${c.devise}`}
                       choisir={connecter}
                       menu={() =>
                         feuille(`${c.login} — ${c.nom}`, [
@@ -375,7 +375,7 @@ export function ConnexionCompte({ login: loginInitial }: { login?: number }) {
                   <div className="mm-liste-texte">
                     <b>{c.nom}</b>
                     <small>
-                      {c.login} · {argent(c.solde)} USD
+                      {c.login} · {argent(c.solde)} {c.devise}
                     </small>
                   </div>
                 </li>
@@ -397,13 +397,14 @@ export function OuvrirCompte() {
   const [type, setType] = useState<TypeCompte>('standard');
   const [sansSwap, setSansSwap] = useState(false);
   const [mode, setMode] = useState<'couverture' | 'netting'>('couverture');
+  const [devise, setDevise] = useState<'USD' | 'EUR'>('USD');
   const [surServeur, setSurServeur] = useState(true);
   const [attente, setAttente] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const valider = async () => {
     const n = nom.trim() || 'Compte démo';
     if (!surServeur) {
-      const c = nouveauCompte(n, depot, levier, type, sansSwap, mode);
+      const c = nouveauCompte(n, depot, levier, type, sansSwap, mode, devise);
       maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
       signaler(`Compte ${c.login} ouvert`);
       vibrer(20);
@@ -413,7 +414,7 @@ export function OuvrirCompte() {
     setAttente(true);
     setErreur(null);
     try {
-      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap, mode });
+      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap, mode, devise });
       maj((e) => ({ ...e, actif: acces.login }));
       vibrer(20);
       pousser({ type: 'acces', acces });
@@ -461,6 +462,19 @@ export function OuvrirCompte() {
           </label>
           <div className="mm-aide-ligne">{TYPES_COMPTE[type].description}</div>
           <div className="mm-ligne-champ">
+            <span>Devise</span>
+            <span style={{ justifySelf: 'end' }}>
+              <Segments
+                valeur={devise}
+                options={[
+                  ['USD', 'USD'],
+                  ['EUR', 'EUR'],
+                ]}
+                changer={(v) => setDevise(v as 'USD' | 'EUR')}
+              />
+            </span>
+          </div>
+          <div className="mm-ligne-champ">
             <span>Mode</span>
             <span style={{ justifySelf: 'end' }}>
               <Segments
@@ -484,7 +498,7 @@ export function OuvrirCompte() {
             <select value={depot} onChange={(e) => setDepot(Number(e.target.value))}>
               {DEPOTS.map((v) => (
                 <option key={v} value={v}>
-                  {argent(v, 0)} USD
+                  {argent(v, 0)} {devise}
                 </option>
               ))}
             </select>

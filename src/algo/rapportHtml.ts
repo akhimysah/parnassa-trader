@@ -118,15 +118,15 @@ export async function enregistrerRapport(nom: string, html: string): Promise<voi
 }
 
 /** En-tête d'un rapport de compte : titulaire, serveur, levier, solde. */
-export function enteteCompte(c: { login: number; nom: string; serveur: string; levier: number; solde: number; type?: string }): EnteteRapport {
+export function enteteCompte(c: { login: number; nom: string; serveur: string; levier: number; solde: number; type?: string; devise?: string; mode?: string }): EnteteRapport {
   return {
     titre: `Rapport de trading — ${c.login} : ${c.nom}`,
     lignes: [
       ['Compte', `${c.login} (${c.nom})`],
       ['Serveur', c.serveur],
-      ['Type', `Démo ${c.type === 'raw' ? 'Raw' : 'Standard'}, couverture, USD`],
+      ['Type', `Démo ${c.type === 'raw' ? 'Raw' : 'Standard'}, ${c.mode === 'netting' ? 'compensation' : 'couverture'}, ${c.devise ?? 'USD'}`],
       ['Levier', `1:${c.levier}`],
-      ['Solde', `${argent(c.solde)} USD`],
+      ['Solde', `${argent(c.solde)} ${c.devise ?? 'USD'}`],
     ],
   };
 }

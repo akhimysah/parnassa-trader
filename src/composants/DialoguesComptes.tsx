@@ -20,13 +20,14 @@ export function DialogueCompte() {
   const [type, setType] = useState<TypeCompte>('standard');
   const [sansSwap, setSansSwap] = useState(false);
   const [mode, setMode] = useState<'couverture' | 'netting'>('couverture');
+  const [devise, setDevise] = useState<'USD' | 'EUR'>('USD');
   const [surServeur, setSurServeur] = useState(true);
   const [attente, setAttente] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const valider = async () => {
     const n = nom.trim() || 'Compte démo';
     if (!surServeur) {
-      const c = nouveauCompte(n, depot, levier, type, sansSwap, mode);
+      const c = nouveauCompte(n, depot, levier, type, sansSwap, mode, devise);
       maj((e) => ({ ...e, comptes: [...e.comptes, c], actif: c.login }));
       signaler(`Compte ${TYPES_COMPTE[type].nom} ${c.login} ouvert sur ${SERVEUR}`);
       fermer();
@@ -35,7 +36,7 @@ export function DialogueCompte() {
     setAttente(true);
     setErreur(null);
     try {
-      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap, mode });
+      const acces = await enLigne.ouvrir({ nom: n, depot, levier, type, sansSwap, mode, devise });
       maj((e) => ({ ...e, actif: acces.login }));
       ouvrir({ type: 'acces', acces });
     } catch (err) {
@@ -77,6 +78,13 @@ export function DialogueCompte() {
           </select>
         </label>
         <label>
+          <span>Devise du dépôt :</span>
+          <select value={devise} onChange={(e) => setDevise(e.target.value as 'USD' | 'EUR')}>
+            <option value="USD">USD — dollar américain</option>
+            <option value="EUR">EUR — euro</option>
+          </select>
+        </label>
+        <label>
           <span>Mode :</span>
           <select value={mode} onChange={(e) => setMode(e.target.value as 'couverture' | 'netting')}>
             <option value="couverture">Couverture (hedging) — plusieurs positions par symbole</option>
@@ -92,7 +100,7 @@ export function DialogueCompte() {
           <select value={depot} onChange={(e) => setDepot(Number(e.target.value))}>
             {DEPOTS.map((v) => (
               <option key={v} value={v}>
-                {argent(v, 0)} USD
+                {argent(v, 0)} {devise}
               </option>
             ))}
           </select>
@@ -109,7 +117,7 @@ export function DialogueCompte() {
         </label>
       </div>
       {erreur && <p className="erreur-champ">{erreur}</p>}
-      <p className="aide">Compte de couverture en USD, argent fictif. Aucune donnée personnelle n'est demandée.</p>
+      <p className="aide">Argent fictif. Profits, marges et swaps sont convertis dans la devise du dépôt. Aucune donnée personnelle n'est demandée.</p>
       <div className="boutons">
         <button onClick={fermer}>Annuler</button>
         <button className="principal" disabled={attente} onClick={() => void valider()}>
@@ -278,7 +286,7 @@ export function DialogueConnexion({ login: loginInitial }: { login?: number }) {
                     {statut && <span className={`pastille-statut ${statut}`}>{c.lecture && statut === 'connecte' ? 'lecture seule' : LIBELLE_STATUT[statut]}</span>}
                   </b>
                   <small>
-                    {c.serveur} · {TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:{c.levier} · solde {argent(c.solde)} USD
+                    {c.serveur} · {TYPES_COMPTE[c.type ?? 'standard'].nom} · 1:{c.levier} · solde {argent(c.solde)} {c.devise}
                   </small>
                 </button>
               );

@@ -3,7 +3,7 @@ import { useTerminal } from '../contexte';
 import { SYMBOLES, formaterPrix, marcheOuvert, point, symbole } from '../marche/symboles';
 import {
   NOMS_TYPE_ATTENTE,
-  conversion,
+  conversion, type DeviseDepot,
   etatCompte,
   fermerPosition,
   margeRequise,
@@ -28,14 +28,15 @@ function versDateLocale(ms: number): string {
 }
 
 /** Gain ou perte (USD) si le prix passe de `de` à `a` pour `volume` lots dans le sens `sens`. */
-function resultatA(sym: string, sens: Sens, volume: number, de: number, a: number, cot: ReturnType<typeof useTerminal>['cotations']): number {
+function resultatA(sym: string, sens: Sens, volume: number, de: number, a: number, cot: ReturnType<typeof useTerminal>['cotations'], devise?: DeviseDepot): number {
   const s = symbole(sym)!;
-  return (sens === 'buy' ? a - de : de - a) * volume * s.contrat * conversion(s, cot);
+  return (sens === 'buy' ? a - de : de - a) * volume * s.contrat * conversion(s, cot, devise);
 }
 
 function Estimation({ valeur }: { valeur: number | null }) {
+  const { compte } = useTerminal();
   if (valeur === null) return null;
-  return <span className={`estimation ${valeur >= 0 ? 'positif' : 'negatif'}`}>{valeur >= 0 ? '+' : ''}{argent(valeur)} USD</span>;
+  return <span className={`estimation ${valeur >= 0 ? 'positif' : 'negatif'}`}>{valeur >= 0 ? '+' : ''}{argent(valeur)} {compte.devise}</span>;
 }
 
 /** Fenêtre « Ordre » (F9) : exécution au marché ou ordre en attente, avec graphique des ticks. */
@@ -70,7 +71,7 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
   }, [mode, q, prix, typeAttente]);
 
   const pas = point(s);
-  const marge = q ? margeRequise(s, volume, mode === 'marche' ? q.ask : prix || q.ask, compte.levier, cotations) : 0;
+  const marge = q ? margeRequise(s, volume, mode === 'marche' ? q.ask : prix || q.ask, compte.levier, cotations, compte.devise) : 0;
   const ouvert = marcheOuvert(s);
 
   const passerMarche = (type: Sens) => {
@@ -86,14 +87,14 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
   const entreeSens: Sens = mode === 'marche' ? (sl && q && sl > q.bid ? 'sell' : 'buy') : sensDe(typeAttente);
   const prixEntree = mode === 'marche' ? (entreeSens === 'sell' ? q?.bid : q?.ask) : typeAttente.endsWith('stop_limit') ? prixLimite : prix;
   const { fondsPropres, margeLibre } = etatCompte(compte, cotations);
-  const perte = sl && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, sl, cotations) : null;
-  const gain = tp && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, tp, cotations) : null;
+  const perte = sl && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, sl, cotations, compte.devise) : null;
+  const gain = tp && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, tp, cotations, compte.devise) : null;
   const [risquePct, setRisquePct] = useState(1);
   /** Volume pour perdre `risquePct` % des fonds propres si le stop-loss est touché, plafonné par la marge libre. */
   const ajusterVolume = () => {
     if (!sl || !prixEntree) return;
-    const parLot = Math.abs(resultatA(sym, entreeSens, 1, prixEntree, sl, cotations));
-    const margeParLot = margeRequise(s, 1, prixEntree, compte.levier, cotations);
+    const parLot = Math.abs(resultatA(sym, entreeSens, 1, prixEntree, sl, cotations, compte.devise));
+    const margeParLot = margeRequise(s, 1, prixEntree, compte.levier, cotations, compte.devise);
     const plafond = Math.min(s.volumeMax, margeParLot > 0 ? margeLibre / margeParLot : s.volumeMax);
     const brut = parLot > 0 ? (fondsPropres * risquePct) / 100 / parLot : 0;
     setVolume(Number(Math.max(s.volumeMin, Math.floor(Math.min(brut, plafond) / s.pasVolume) * s.pasVolume).toFixed(2)));
@@ -147,20 +148,20 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
             <span>Volume :</span>
             <Spin valeur={volume} changer={setVolume} pas={s.pasVolume} min={s.volumeMin} max={s.volumeMax} decimales={2} />
             <small className="aide">
-              {argent(volume * s.contrat, 0)} {s.base} · marge {argent(marge)} USD
+              {argent(volume * s.contrat, 0)} {s.base} · marge {argent(marge)} {compte.devise}
             </small>
           </label>
           <div className="ordre-stops">
             <label>
               <span>Stop Loss :</span>
               <Spin valeur={sl} changer={setSl} pas={pasStop(s, prixEntree ?? 1)} decimales={s.chiffres} vide amorce={prixEntree ? amorceStop(s, prixEntree, entreeSens, 'sl') : undefined} />
-              <Estimation valeur={sl && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, sl, cotations) : null} />
+              <Estimation valeur={sl && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, sl, cotations, compte.devise) : null} />
               {mode === 'attente' && prixEntree && erreurStop(s, entreeSens, prixEntree, 'sl', sl) && <small className="erreur-champ">{erreurStop(s, entreeSens, prixEntree, 'sl', sl)}</small>}
             </label>
             <label>
               <span>Take Profit :</span>
               <Spin valeur={tp} changer={setTp} pas={pasStop(s, prixEntree ?? 1)} decimales={s.chiffres} vide amorce={prixEntree ? amorceStop(s, prixEntree, entreeSens, 'tp') : undefined} />
-              <Estimation valeur={tp && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, tp, cotations) : null} />
+              <Estimation valeur={tp && prixEntree ? resultatA(sym, entreeSens, volume, prixEntree, tp, cotations, compte.devise) : null} />
               {mode === 'attente' && prixEntree && erreurStop(s, entreeSens, prixEntree, 'tp', tp) && <small className="erreur-champ">{erreurStop(s, entreeSens, prixEntree, 'tp', tp)}</small>}
             </label>
           </div>
@@ -177,7 +178,7 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
               Ajuster le volume
             </button>
             <small className="aide">
-              {perte !== null ? `perte au S/L ${argent(Math.abs(perte))} USD (${((Math.abs(perte) / Math.max(1, fondsPropres)) * 100).toFixed(2)} % des fonds)` : 'placez un S/L pour mesurer le risque'}
+              {perte !== null ? `perte au S/L ${argent(Math.abs(perte))} ${compte.devise} (${((Math.abs(perte) / Math.max(1, fondsPropres)) * 100).toFixed(2)} % des fonds)` : 'placez un S/L pour mesurer le risque'}
               {perte && gain ? ` · ratio gain/risque 1 : ${(Math.abs(gain) / Math.abs(perte)).toFixed(2)}` : ''}
               {mode === 'marche' && sl ? ` · ${entreeSens === 'buy' ? 'achat' : 'vente'}` : ''}
             </small>
@@ -236,7 +237,7 @@ export function DialogueOrdre({ symboleInitial, sens, attente, prixInitial, volu
                 </span>
               </div>
               {!ouvert && <div className="avertissement">Marché fermé</div>}
-              {marge > margeLibre && <div className="avertissement">Marge libre insuffisante ({argent(margeLibre)} USD)</div>}
+              {marge > margeLibre && <div className="avertissement">Marge libre insuffisante ({argent(margeLibre)} {compte.devise})</div>}
               <div className="ordre-boutons">
                 <button className="vente" disabled={!q || !ouvert} onClick={() => passerMarche('sell')}>
                   Vente au marché
@@ -309,13 +310,13 @@ export function DialogueModifierPosition({ ticket }: { ticket: number }) {
           <label>
             <span>Stop Loss :</span>
             <Spin valeur={sl} changer={setSl} pas={pasStop(s, actuel)} decimales={s.chiffres} vide amorce={amorceStop(s, actuel, p.type, 'sl')} />
-            <Estimation valeur={sl ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, sl, cotations) : null} />
+            <Estimation valeur={sl ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, sl, cotations, compte.devise) : null} />
             {erreurStop(s, p.type, actuel, 'sl', sl) && <small className="erreur-champ">{erreurStop(s, p.type, actuel, 'sl', sl)}</small>}
           </label>
           <label>
             <span>Take Profit :</span>
             <Spin valeur={tp} changer={setTp} pas={pasStop(s, actuel)} decimales={s.chiffres} vide amorce={amorceStop(s, actuel, p.type, 'tp')} />
-            <Estimation valeur={tp ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, tp, cotations) : null} />
+            <Estimation valeur={tp ? resultatA(p.symbole, p.type, p.volume, p.prixOuverture, tp, cotations, compte.devise) : null} />
             {erreurStop(s, p.type, actuel, 'tp', tp) && <small className="erreur-champ">{erreurStop(s, p.type, actuel, 'tp', tp)}</small>}
           </label>
           <label>

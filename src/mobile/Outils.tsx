@@ -32,10 +32,10 @@ export function EcranRapport() {
   const partager = async () => {
     const texte = [
       `Parnassa Trader — compte ${compte.login} (démo)`,
-      `Solde : ${argent(compte.solde)} USD`,
-      `Bénéfice net : ${argent(s.net)} USD sur ${s.trades} trades (${pct(s.gagnants, s.trades)} gagnants)`,
+      `Solde : ${argent(compte.solde)} ${compte.devise}`,
+      `Bénéfice net : ${argent(s.net)} ${compte.devise} sur ${s.trades} trades (${pct(s.gagnants, s.trades)} gagnants)`,
       `Facteur de profit : ${s.facteur === null ? '—' : s.facteur.toFixed(2)} · drawdown max ${s.ddMaxPct.toFixed(2)} %`,
-      ...s.parSymbole.slice(0, 5).map((x) => `${x.symbole} : ${argent(x.net)} USD (${x.trades} trades)`),
+      ...s.parSymbole.slice(0, 5).map((x) => `${x.symbole} : ${argent(x.net)} ${compte.devise} (${x.trades} trades)`),
     ].join('\n');
     try {
       if (navigator.share) await navigator.share({ title: 'Rapport Parnassa Trader', text: texte });
@@ -557,7 +557,7 @@ export function EcranExperts() {
                   <b>{definitionExpert(e.type).nom}</b>
                   <small>
                     {g.symbole}, {g.periode} · {pos.length} position{pos.length > 1 ? 's' : ''}
-                    {pos.length ? ` · ${argent(flottant)} USD` : ''}
+                    {pos.length ? ` · ${argent(flottant)} ${compte.devise}` : ''}
                   </small>
                 </div>
               </li>
@@ -686,7 +686,7 @@ export function EcranDepot() {
         </div>
         <div className="mm-formulaire">
           <div className="mm-ligne-champ">
-            <span>Montant (USD)</span>
+            <span>Montant ({compte.devise})</span>
             <ChampPas valeur={montant} changer={setMontant} pas={100} min={1} decimales={2} />
           </div>
           <div className="mm-raccourcis">
@@ -697,7 +697,7 @@ export function EcranDepot() {
             ))}
           </div>
         </div>
-        <p className="mm-note">Solde actuel : {argent(compte.solde)} USD. Argent fictif : compte de démonstration.</p>
+        <p className="mm-note">Solde actuel : {argent(compte.solde)} {compte.devise}. Argent fictif : compte de démonstration.</p>
       </div>
       <div className="mm-boutons-bas">
         <button
@@ -710,7 +710,7 @@ export function EcranDepot() {
             }
           }}
         >
-          {sens === 'depot' ? 'DÉPOSER' : 'RETIRER'} {argent(montant)} USD
+          {sens === 'depot' ? 'DÉPOSER' : 'RETIRER'} {argent(montant)} {compte.devise}
         </button>
       </div>
     </div>

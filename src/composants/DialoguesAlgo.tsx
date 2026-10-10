@@ -73,7 +73,7 @@ export function DialogueExpert({ graphique, expert }: { graphique: string; exper
             {ouvertes.length > 0 && (
               <>
                 {' '}
-                — profit flottant <b className={flottant >= 0 ? 'positif' : 'negatif'}>{argent(flottant)} USD</b>
+                — profit flottant <b className={flottant >= 0 ? 'positif' : 'negatif'}>{argent(flottant)} {compte.devise}</b>
               </>
             )}
           </p>
@@ -134,7 +134,7 @@ export function DialogueRapport() {
       <div className="rapport-tete">
         <div>
           <small>Solde</small>
-          <b>{argent(compte.solde)} USD</b>
+          <b>{argent(compte.solde)} {compte.devise}</b>
         </div>
         <div>
           <small>Bénéfice net</small>
