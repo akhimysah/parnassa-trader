@@ -36,7 +36,8 @@ export interface SymboleMT {
 
 type Options = Partial<Pick<SymboleMT, 'contrat' | 'volumeMin' | 'volumeMax' | 'pasVolume' | 'levierMax' | 'profit' | 'base'>>;
 
-const fx = (nom: string, description: string, chemin: string, chiffres: number, spread: number): SymboleMT => ({
+/** `swissquote` : faux pour les croisées que le relais ne cote pas chez Swissquote (Yahoo et le scanner prennent le relais). */
+const fx = (nom: string, description: string, chemin: string, chiffres: number, spread: number, swissquote = true): SymboleMT => ({
   nom,
   description,
   chemin: `Forex\\${chemin}`,
@@ -51,7 +52,7 @@ const fx = (nom: string, description: string, chemin: string, chiffres: number, 
   pasVolume: 0.01,
   levierMax: 1000,
   // Swissquote (Bid/Ask réels chaque seconde) en priorité ; Yahoo et le scanner restent en secours et pour les statistiques du jour.
-  direct: { tradingview: `FX:${nom}`, yahoo: nom.startsWith('USD') ? `${nom.slice(3)}=X` : `${nom}=X`, swissquote: `${nom.slice(0, 3)}/${nom.slice(3)}` },
+  direct: { tradingview: `FX:${nom}`, yahoo: nom.startsWith('USD') ? `${nom.slice(3)}=X` : `${nom}=X`, ...(swissquote ? { swissquote: `${nom.slice(0, 3)}/${nom.slice(3)}` } : {}) },
   histo: { yahoo: nom.startsWith('USD') ? `${nom.slice(3)}=X` : `${nom}=X` },
 });
 
@@ -116,6 +117,18 @@ export const SYMBOLES: SymboleMT[] = [
   fx('AUDJPY', 'Dollar australien vs Yen japonais', 'Croisées', 3, 22),
   fx('EURAUD', 'Euro vs Dollar australien', 'Croisées', 5, 25),
   fx('GBPCHF', 'Livre sterling vs Franc suisse', 'Croisées', 5, 30),
+  fx('EURNZD', 'Euro vs Dollar néo-zélandais', 'Croisées', 5, 30, false),
+  fx('EURCAD', 'Euro vs Dollar canadien', 'Croisées', 5, 25, false),
+  fx('GBPAUD', 'Livre sterling vs Dollar australien', 'Croisées', 5, 30, false),
+  fx('GBPCAD', 'Livre sterling vs Dollar canadien', 'Croisées', 5, 30, false),
+  fx('GBPNZD', 'Livre sterling vs Dollar néo-zélandais', 'Croisées', 5, 40, false),
+  fx('AUDCAD', 'Dollar australien vs Dollar canadien', 'Croisées', 5, 20, false),
+  fx('AUDNZD', 'Dollar australien vs Dollar néo-zélandais', 'Croisées', 5, 22, false),
+  fx('AUDCHF', 'Dollar australien vs Franc suisse', 'Croisées', 5, 20, false),
+  fx('CADCHF', 'Dollar canadien vs Franc suisse', 'Croisées', 5, 22, false),
+  fx('CADJPY', 'Dollar canadien vs Yen japonais', 'Croisées', 3, 20, false),
+  fx('CHFJPY', 'Franc suisse vs Yen japonais', 'Croisées', 3, 25, false),
+  fx('NZDJPY', 'Dollar néo-zélandais vs Yen japonais', 'Croisées', 3, 22, false),
   // Métaux
   cfd('XAUUSD', 'Or vs Dollar US', 'Métaux', 'metaux', 3, 300, { tradingview: 'OANDA:XAUUSD', pilote: 'PAXGUSDT', swissquote: 'XAU/USD' }, { yahoo: 'GC=F', recaler: true }, { contrat: 100, levierMax: 500, base: 'XAU' }),
   cfd('XAGUSD', 'Argent vs Dollar US', 'Métaux', 'metaux', 4, 300, { tradingview: 'TVC:SILVER', swissquote: 'XAG/USD' }, { yahoo: 'SI=F', recaler: true }, { contrat: 5000, levierMax: 200, base: 'XAG' }),
@@ -129,6 +142,9 @@ export const SYMBOLES: SymboleMT[] = [
   cfd('GER40', 'DAX 40', 'Indices\\Europe', 'indices', 2, 150, { tradingview: 'XETR:DAX', yahoo: '^GDAXI' }, { yahoo: '^GDAXI' }, { levierMax: 200, profit: 'EUR' }),
   cfd('FRA40', 'CAC 40', 'Indices\\Europe', 'indices', 2, 150, { tradingview: 'EURONEXT:PX1', yahoo: '^FCHI' }, { yahoo: '^FCHI' }, { levierMax: 200, profit: 'EUR' }),
   cfd('UK100', 'FTSE 100', 'Indices\\Europe', 'indices', 2, 150, { tradingview: 'TVC:UKX', yahoo: '^FTSE' }, { yahoo: '^FTSE' }, { levierMax: 200, profit: 'GBP' }),
+  cfd('EU50', 'Euro Stoxx 50', 'Indices\\Europe', 'indices', 2, 150, { tradingview: 'TVC:SX5E', yahoo: '^STOXX50E' }, { yahoo: '^STOXX50E' }, { levierMax: 200, profit: 'EUR' }),
+  cfd('ESP35', 'IBEX 35', 'Indices\\Europe', 'indices', 2, 500, { tradingview: 'BME:IBC', yahoo: '^IBEX' }, { yahoo: '^IBEX' }, { levierMax: 200, profit: 'EUR' }),
+  cfd('AUS200', 'S&P/ASX 200', 'Indices\\Asie', 'indices', 2, 100, { yahoo: '^AXJO' }, { yahoo: '^AXJO' }, { levierMax: 200, profit: 'AUD' }),
   cfd('JPN225', 'Nikkei 225', 'Indices\\Asie', 'indices', 2, 1000, { tradingview: 'TVC:NI225', yahoo: '^N225' }, { yahoo: '^N225' }, { levierMax: 200, profit: 'JPY', contrat: 100 }),
   // Énergie
   cfd('USOIL', 'Pétrole brut WTI', 'Énergie', 'energie', 2, 4, { tradingview: 'NYMEX:CL1!' }, { yahoo: 'CL=F' }, { contrat: 1000, levierMax: 100 }),
@@ -145,6 +161,15 @@ export const SYMBOLES: SymboleMT[] = [
   crypto('LTCUSD', 'Litecoin vs Dollar US', 'LTCUSDT', 2),
   crypto('LNKUSD', 'Chainlink vs Dollar US', 'LINKUSDT', 3, { contrat: 10 }),
   crypto('AVAUSD', 'Avalanche vs Dollar US', 'AVAXUSDT', 3, { contrat: 10 }),
+  crypto('BCHUSD', 'Bitcoin Cash vs Dollar US', 'BCHUSDT', 2),
+  crypto('DOTUSD', 'Polkadot vs Dollar US', 'DOTUSDT', 3, { contrat: 100 }),
+  crypto('NEARUSD', 'NEAR Protocol vs Dollar US', 'NEARUSDT', 3, { contrat: 100 }),
+  crypto('ATOMUSD', 'Cosmos vs Dollar US', 'ATOMUSDT', 3, { contrat: 100 }),
+  crypto('UNIUSD', 'Uniswap vs Dollar US', 'UNIUSDT', 3, { contrat: 10 }),
+  crypto('TRXUSD', 'TRON vs Dollar US', 'TRXUSDT', 4, { contrat: 10000 }),
+  crypto('XLMUSD', 'Stellar vs Dollar US', 'XLMUSDT', 4, { contrat: 10000 }),
+  crypto('POLUSD', 'Polygon (POL) vs Dollar US', 'POLUSDT', 5, { contrat: 10000 }),
+  crypto('SHIBUSD', 'Shiba Inu vs Dollar US', 'SHIBUSDT', 8, { contrat: 10000000 }),
   // Actions
   action('AAPL', 'Apple Inc.', 'NASDAQ:AAPL', 'AAPL', 'US'),
   action('MSFT', 'Microsoft Corporation', 'NASDAQ:MSFT', 'MSFT', 'US'),
@@ -153,10 +178,22 @@ export const SYMBOLES: SymboleMT[] = [
   action('GOOGL', 'Alphabet Inc. (classe A)', 'NASDAQ:GOOGL', 'GOOGL', 'US'),
   action('META', 'Meta Platforms Inc.', 'NASDAQ:META', 'META', 'US'),
   action('TSLA', 'Tesla Inc.', 'NASDAQ:TSLA', 'TSLA', 'US'),
+  action('NFLX', 'Netflix Inc.', 'NASDAQ:NFLX', 'NFLX', 'US'),
+  action('AMD', 'Advanced Micro Devices Inc.', 'NASDAQ:AMD', 'AMD', 'US'),
+  action('JPM', 'JPMorgan Chase & Co.', 'NYSE:JPM', 'JPM', 'US'),
+  action('V', 'Visa Inc.', 'NYSE:V', 'V', 'US'),
+  action('KO', 'The Coca-Cola Company', 'NYSE:KO', 'KO', 'US'),
+  action('DIS', 'The Walt Disney Company', 'NYSE:DIS', 'DIS', 'US'),
+  action('BA', 'The Boeing Company', 'NYSE:BA', 'BA', 'US'),
   action('MC', 'LVMH Moët Hennessy Louis Vuitton', 'EURONEXT:MC', 'MC.PA', 'FR'),
   action('TTE', 'TotalEnergies SE', 'EURONEXT:TTE', 'TTE.PA', 'FR'),
   action('AIR', 'Airbus SE', 'EURONEXT:AIR', 'AIR.PA', 'FR'),
   action('OR', "L'Oréal SA", 'EURONEXT:OR', 'OR.PA', 'FR'),
+  action('BNP', 'BNP Paribas SA', 'EURONEXT:BNP', 'BNP.PA', 'FR'),
+  action('SAN', 'Sanofi SA', 'EURONEXT:SAN', 'SAN.PA', 'FR'),
+  action('SU', 'Schneider Electric SE', 'EURONEXT:SU', 'SU.PA', 'FR'),
+  action('AI', 'Air Liquide SA', 'EURONEXT:AI', 'AI.PA', 'FR'),
+  action('RMS', 'Hermès International', 'EURONEXT:RMS', 'RMS.PA', 'FR'),
 ];
 
 const PAR_NOM = new Map(SYMBOLES.map((s) => [s.nom, s]));
@@ -240,11 +277,15 @@ export const TYPES_COMPTE: Record<TypeCompte, { nom: string; description: string
 const SPREADS: Record<string, [number, number]> = {
   EURUSD: [12, 2], GBPUSD: [15, 4], USDJPY: [13, 2], USDCHF: [15, 4], AUDUSD: [13, 3], USDCAD: [16, 4], NZDUSD: [18, 5],
   EURGBP: [15, 5], EURJPY: [18, 5], GBPJPY: [25, 9], EURCHF: [18, 6], AUDJPY: [18, 6], EURAUD: [22, 8], GBPCHF: [25, 10],
+  EURNZD: [30, 10], EURCAD: [25, 8], GBPAUD: [30, 10], GBPCAD: [30, 10], GBPNZD: [40, 15], AUDCAD: [20, 7], AUDNZD: [22, 8],
+  AUDCHF: [20, 7], CADCHF: [22, 8], CADJPY: [20, 6], CHFJPY: [25, 8], NZDJPY: [22, 7],
   XAUUSD: [300, 100], XAGUSD: [300, 150], XPTUSD: [3000, 1500], XPDUSD: [5000, 3000], COPPER: [30, 20],
+  EU50: [150, 100], ESP35: [500, 300], AUS200: [100, 70],
   US500: [50, 40], NAS100: [150, 100], US30: [250, 180], GER40: [150, 100], FRA40: [150, 100], UK100: [150, 100], JPN225: [1000, 700],
   USOIL: [4, 3], UKOIL: [5, 3], NATGAS: [8, 5],
   BTCUSD: [2500, 1000], ETHUSD: [250, 100], SOLUSD: [20, 10], BNBUSD: [50, 20], XRPUSD: [30, 15], DOGUSD: [50, 25],
   ADAUSD: [30, 15], LTCUSD: [20, 10], LNKUSD: [30, 15], AVAUSD: [50, 25],
+  BCHUSD: [30, 15], DOTUSD: [2, 1], NEARUSD: [5, 2], ATOMUSD: [2, 1], UNIUSD: [8, 4], TRXUSD: [2, 1], XLMUSD: [2, 1], POLUSD: [10, 5], SHIBUSD: [2, 1],
 };
 
 /** Spread de base en points du symbole pour un type de compte. */
