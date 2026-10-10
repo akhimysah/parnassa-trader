@@ -8,7 +8,7 @@ import { registreGraphiques } from '../graphique/registre';
 import { useRef } from 'react';
 import { BoutonIcone, EnTete, IconePlus, useNav, vibrer } from './commun';
 import { OBJETS } from '../graphique/dessins';
-import { demanderNom, enregistrerModele, reglagesModele } from '../modeles';
+import { chargerProfil, demanderNom, enregistrerModele, enregistrerProfil, reglagesModele } from '../modeles';
 
 /** Graphique plein écran avec les barres de commandes de MT5 mobile. */
 export function GraphiqueMobile() {
@@ -85,6 +85,14 @@ export function GraphiqueMobile() {
       { libelle: 'Couleurs et propriétés…', action: () => ouvrir({ type: 'proprietes', graphique: g.id }) },
       { libelle: 'Expert Advisor…', action: () => pousser({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
       ...etat.modeles.map((m) => ({ libelle: `Modèle « ${m.nom} »`, action: () => majGraphique(g.id, reglagesModele(m)) })),
+      ...etat.profils.map((pr) => ({ libelle: `Profil « ${pr.nom} » (${pr.graphiques.length} graphiques)`, action: () => maj((e) => chargerProfil(e, pr.nom)) })),
+      {
+        libelle: 'Enregistrer les graphiques comme profil…',
+        action: () => {
+          const nom = demanderNom('Nom du profil (tous les graphiques ouverts)', etat.profilActif ?? 'Mon profil');
+          if (nom) maj((e) => enregistrerProfil(e, nom));
+        },
+      },
       {
         libelle: 'Enregistrer comme modèle…',
         action: () => {
