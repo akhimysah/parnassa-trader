@@ -149,3 +149,13 @@ describe('indicateurs par formule', () => {
     expect(calculer(f(false), serie(50)).traces[0].valeurs[20]).not.toBeNull();
   });
 });
+
+describe('formules dans les conditions', () => {
+  it('compare une formule à une valeur', () => {
+    const b = serie(200);
+    const vraie = evaluateur(b);
+    expect(vraie({ a: { type: 'formule', formule: 'close - close' }, op: 'inferieur', b: { type: 'valeur', valeur: 1 } })).toBe(true);
+    expect(vraie({ a: { type: 'formule', formule: 'close - close' }, op: 'superieur', b: { type: 'valeur', valeur: 1 } })).toBe(false);
+    expect(vraie({ a: { type: 'formule', formule: 'pas une formule (' }, op: 'superieur', b: { type: 'valeur', valeur: -1 } })).toBe(false);
+  });
+});

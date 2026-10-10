@@ -2401,3 +2401,7 @@ kbd {
 .aide-formule code {
   color: var(--texte);
 }
+.operande-formule input {
+  width: 220px;
+  font-family: Consolas, Menlo, monospace;
+}

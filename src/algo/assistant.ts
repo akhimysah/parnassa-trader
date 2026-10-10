@@ -6,12 +6,15 @@
 import type { Bougie } from '../marche/bougies';
 import type { Sens } from '../compte/moteur';
 import { calculer, definition, nomCourt, type MethodeMA, type TypeIndicateur, type Valeurs } from '../graphique/indicateurs';
+import { calculerFormule } from '../graphique/formule';
 
 export type ChampPrix = 'close' | 'open' | 'high' | 'low';
 export type Operande =
   | { type: 'prix'; champ: ChampPrix }
   | { type: 'indicateur'; indicateur: TypeIndicateur; p: Record<string, number>; trace: number; methode?: MethodeMA }
-  | { type: 'valeur'; valeur: number };
+  | { type: 'valeur'; valeur: number }
+  /** Formule personnalisée (première courbe), comme l'indicateur « Formule personnalisée ». */
+  | { type: 'formule'; formule: string };
 export type Operateur = 'croise-dessus' | 'croise-dessous' | 'superieur' | 'inferieur';
 
 export interface Condition {
@@ -45,6 +48,7 @@ export function tracesIndicateur(t: TypeIndicateur, p: Record<string, number>): 
 export function libelleOperande(o: Operande): string {
   if (o.type === 'prix') return CHAMPS_PRIX[o.champ];
   if (o.type === 'valeur') return String(o.valeur);
+  if (o.type === 'formule') return `[${o.formule}]`;
   const nom = nomCourt({ id: '', type: o.indicateur, p: o.p, couleur: '', methode: o.methode });
   const traces = tracesIndicateur(o.indicateur, o.p);
   return traces.length > 1 ? `${nom} ${traces[o.trace] ?? ''}`.trim() : nom;
@@ -79,6 +83,19 @@ export function evaluateur(b: Bougie[]): (c: Condition) => boolean {
   const serie = (o: Operande): Valeurs | number => {
     if (o.type === 'valeur') return o.valeur;
     if (o.type === 'prix') return b.map((x) => x[o.champ]);
+    if (o.type === 'formule') {
+      const cleF = `formule|${o.formule}`;
+      let f = cache.get(cleF);
+      if (!f) {
+        try {
+          f = calculerFormule(o.formule, b)[0] ?? [];
+        } catch {
+          f = [];
+        }
+        cache.set(cleF, f);
+      }
+      return f;
+    }
     const cle = `${o.indicateur}|${JSON.stringify(o.p)}|${o.trace}|${o.methode ?? ''}`;
     let v = cache.get(cle);
     if (!v) {

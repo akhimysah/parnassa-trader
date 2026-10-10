@@ -5,15 +5,17 @@ import { CHAMPS_PRIX, OPERATEURS, decrireExpert, nouvelExpertPerso, tracesIndica
 import { DEFINITIONS, GROUPES, definition, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
 import { preparerTest } from './Testeur';
 import { Fenetre, Spin } from './ui';
+import { erreurFormule } from '../graphique/formule';
 
 /** Indicateurs utilisables dans une condition (les volumes bruts n'ont pas de sens ici). */
 const INDICATEURS = DEFINITIONS.filter((d) => d.type !== 'volumes');
 
 /** Choix d'une opérande : prix, indicateur (avec ses paramètres et sa ligne) ou valeur fixe. */
 export function EditeurOperande({ o, changer }: { o: Operande; changer: (o: Operande) => void }) {
-  const cle = o.type === 'prix' ? `prix:${o.champ}` : o.type === 'valeur' ? 'valeur' : `ind:${o.indicateur}`;
+  const cle = o.type === 'prix' ? `prix:${o.champ}` : o.type === 'valeur' ? 'valeur' : o.type === 'formule' ? 'formule' : `ind:${o.indicateur}`;
   const choisir = (v: string) => {
     if (v === 'valeur') return changer({ type: 'valeur', valeur: 0 });
+    if (v === 'formule') return changer({ type: 'formule', formule: 'ema(close, 20) - ema(close, 50)' });
     if (v.startsWith('prix:')) return changer({ type: 'prix', champ: v.slice(5) as ChampPrix });
     const t = v.slice(4) as TypeIndicateur;
     changer({ type: 'indicateur', indicateur: t, p: { ...definition(t).defaut }, trace: 0 });
@@ -39,7 +41,14 @@ export function EditeurOperande({ o, changer }: { o: Operande; changer: (o: Oper
           </optgroup>
         ))}
         <option value="valeur">Valeur fixe</option>
+        <option value="formule">Formule…</option>
       </select>
+      {o.type === 'formule' && (
+        <span className="operande-formule">
+          <input value={o.formule} onChange={(e) => changer({ ...o, formule: e.target.value })} spellCheck={false} title="Formule : séries open, high, low, close… et fonctions sma, ema, rsi, atr…" />
+          {erreurFormule(o.formule) && <small className="erreur-champ">{erreurFormule(o.formule)}</small>}
+        </span>
+      )}
       {o.type === 'valeur' && <Spin valeur={o.valeur} changer={(v) => changer({ ...o, valeur: v })} pas={1} decimales={5} />}
       {o.type === 'indicateur' &&
         Object.keys(definition(o.indicateur).defaut).map((k) => (
