@@ -21,6 +21,8 @@ export class Dessins implements ISeriesPrimitive<Time> {
   private ancrables: ObjetGraphique[] = [];
   private selection: string | null = null;
   private evenements: Evenement[] = [];
+  /** Trades passés : segment pointillé de l'entrée à la sortie (bleu si gagnant, rouge sinon), comme MT5. */
+  private trajets: { t1: number; p1: number; t2: number; p2: number; gagnant: boolean }[] = [];
   /** Séparateurs de périodes : jour, semaine, mois ou année selon la période du graphique (0 = masqués). */
   private separateurs: 'jour' | 'semaine' | 'mois' | 'annee' | null = null;
   private couleurSeparateur = '#8a8a8a';
@@ -51,6 +53,11 @@ export class Dessins implements ISeriesPrimitive<Time> {
     this.objets = objets.filter((o) => TYPES_DESSINES.includes(o.type));
     this.ancrables = objets.filter((o) => o.type !== 'horizontale');
     this.temps = temps;
+    this.demander?.();
+  }
+
+  definirTrajets(t: { t1: number; p1: number; t2: number; p2: number; gagnant: boolean }[]) {
+    this.trajets = t;
     this.demander?.();
   }
 
@@ -285,6 +292,26 @@ export class Dessins implements ISeriesPrimitive<Time> {
           ctx.beginPath();
           ctx.moveTo(Math.round(x) + 0.5, 0);
           ctx.lineTo(Math.round(x) + 0.5, mediaSize.height);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      // Trajets des trades fermés.
+      if (this.trajets.length) {
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1.2;
+        for (const tr of this.trajets) {
+          const x1 = this.x(tr.t1);
+          const x2 = this.x(tr.t2);
+          const y1 = this.y(tr.p1);
+          const y2 = this.y(tr.p2);
+          if (x1 === null || x2 === null || y1 === null || y2 === null) continue;
+          if (Math.max(x1, x2) < 0 || Math.min(x1, x2) > mediaSize.width) continue;
+          ctx.strokeStyle = tr.gagnant ? '#1e6fd9' : '#e0393e';
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
           ctx.stroke();
         }
         ctx.restore();

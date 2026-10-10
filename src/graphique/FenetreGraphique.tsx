@@ -581,7 +581,10 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
   useEffect(() => {
     const m = marqueursRef.current;
     if (!m) return;
-    if (!g.historiqueTrading) return m.setMarkers([]);
+    if (!g.historiqueTrading) {
+      dessinsRef.current?.definirTrajets([]);
+      return m.setMarkers([]);
+    }
     const marqueurs: SeriesMarker<Time>[] = transactions
       .map((d) => ({
         time: debutBougie(Math.floor(d.heure / 1000), g.periode) as UTCTimestamp,
@@ -593,6 +596,18 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       }))
       .sort((a, b) => a.time - b.time);
     m.setMarkers(marqueurs);
+    // Segment entrée → sortie de chaque trade fermé, au début des bougies de la période affichée.
+    dessinsRef.current?.definirTrajets(
+      transactions
+        .filter((d) => d.entree === 'out' && d.prixOuverture && d.heureOuverture)
+        .map((d) => ({
+          t1: debutBougie(Math.floor(d.heureOuverture! / 1000), g.periode),
+          p1: d.prixOuverture!,
+          t2: debutBougie(Math.floor(d.heure / 1000), g.periode),
+          p2: d.prix,
+          gagnant: d.profit >= 0,
+        })),
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transactions.length, g.historiqueTrading, g.periode, versionSerie, chargement]);
 

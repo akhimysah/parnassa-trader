@@ -7,11 +7,36 @@ import { preparerTest } from './Testeur';
 import { fermerPosition, profitPosition, supprimerOrdre, type Compte } from '../compte/moteur';
 import { useMenuContextuel } from './ui';
 
-function Noeud({ libelle, icone, children, ouvertParDefaut = false, onDoubleClick, onContextMenu, actif }: { libelle: ReactNode; icone: string; children?: ReactNode; ouvertParDefaut?: boolean; onDoubleClick?: () => void; onContextMenu?: (e: React.MouseEvent) => void; actif?: boolean }) {
+function Noeud({
+  libelle,
+  icone,
+  children,
+  ouvertParDefaut = false,
+  onDoubleClick,
+  onContextMenu,
+  actif,
+  glisser,
+}: {
+  libelle: ReactNode;
+  icone: string;
+  children?: ReactNode;
+  ouvertParDefaut?: boolean;
+  onDoubleClick?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  actif?: boolean;
+  /** Donnée glissée vers un graphique (« text/indicateur », « text/expert »). */
+  glisser?: [string, string];
+}) {
   const [ouvert, setOuvert] = useState(ouvertParDefaut);
   return (
     <li>
-      <div className={`noeud${actif ? ' actif' : ''}`} onDoubleClick={onDoubleClick ?? (() => setOuvert(!ouvert))} onContextMenu={onContextMenu}>
+      <div
+        className={`noeud${actif ? ' actif' : ''}`}
+        onDoubleClick={onDoubleClick ?? (() => setOuvert(!ouvert))}
+        onContextMenu={onContextMenu}
+        draggable={Boolean(glisser)}
+        onDragStart={glisser ? (e) => e.dataTransfer.setData(glisser[0], glisser[1]) : undefined}
+      >
         <span className="noeud-bascule" onClick={() => setOuvert(!ouvert)}>
           {children ? (ouvert ? '⊟' : '⊞') : ''}
         </span>
@@ -98,7 +123,7 @@ export function Navigateur() {
               {groupes.map((gr) => (
                 <Noeud key={gr} libelle={gr} icone="📁">
                   {DEFINITIONS.filter((d) => d.groupe === gr).map((d) => (
-                    <Noeud key={d.type} libelle={d.nom} icone="ƒ" onDoubleClick={() => ouvrir({ type: 'indicateur', indicateur: d.type, graphique: etat.graphiqueActif })} />
+                    <Noeud key={d.type} libelle={d.nom} icone="ƒ" glisser={['text/indicateur', d.type]} onDoubleClick={() => ouvrir({ type: 'indicateur', indicateur: d.type, graphique: etat.graphiqueActif })} />
                   ))}
                 </Noeud>
               ))}
@@ -109,6 +134,7 @@ export function Navigateur() {
                   key={x.type}
                   libelle={x.nom}
                   icone={x.type.startsWith('perso:') ? '🧩' : '🎓'}
+                  glisser={['text/expert', x.type]}
                   onDoubleClick={() => ouvrir({ type: 'expert', graphique: etat.graphiqueActif, expert: x.type })}
                   onContextMenu={(e) => {
                     e.preventDefault();

@@ -2,10 +2,12 @@ import { useTerminal } from '../contexte';
 import { FenetreGraphique } from '../graphique/FenetreGraphique';
 import { useMenuContextuel } from './ui';
 import { useActions } from './Barres';
+import type { TypeIndicateur } from '../graphique/indicateurs';
+import type { TypeExpert } from '../algo/experts';
 
 /** Zone centrale : fenêtres graphiques en onglets (comme MT5) ou en mosaïque. */
 export function ZoneGraphiques() {
-  const { etat, maj, majGraphique } = useTerminal();
+  const { etat, maj, majGraphique, ouvrir } = useTerminal();
   const { fermerGraphique } = useActions();
   const { ouvrirMenu, element: menu } = useMenuContextuel();
   const mosaique = etat.disposition === 'mosaique' && etat.graphiques.length > 1;
@@ -21,13 +23,21 @@ export function ZoneGraphiques() {
         style={mosaique ? { gridTemplateColumns: `repeat(${colonnes}, 1fr)`, gridTemplateRows: `repeat(${lignes}, 1fr)` } : undefined}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
-          // Déposer un symbole de l'Observation du marché sur un graphique change son symbole.
+          // Glisser-déposer comme MT5, sur le graphique visé : un symbole change son symbole, un indicateur ou un
+          // expert du Navigateur ouvre sa fenêtre pour ce graphique.
+          const cible = (e.target as HTMLElement).closest<HTMLElement>('[data-graphique]')?.dataset.graphique ?? etat.graphiqueActif;
+          if (!cible) return;
           const sym = e.dataTransfer.getData('text/symbole');
-          if (sym && etat.graphiqueActif) majGraphique(etat.graphiqueActif, { symbole: sym });
+          const ind = e.dataTransfer.getData('text/indicateur');
+          const expert = e.dataTransfer.getData('text/expert');
+          if (sym || ind || expert) maj((x) => ({ ...x, graphiqueActif: cible }));
+          if (sym) majGraphique(cible, { symbole: sym });
+          else if (ind) ouvrir({ type: 'indicateur', indicateur: ind as TypeIndicateur, graphique: cible });
+          else if (expert) ouvrir({ type: 'expert', graphique: cible, expert: expert as TypeExpert });
         }}
       >
         {etat.graphiques.map((g) => (
-          <div key={g.id} className={`case-graphique${g.id === etat.graphiqueActif ? ' active' : ''}`} style={!mosaique && g.id !== etat.graphiqueActif ? { visibility: 'hidden' } : undefined}>
+          <div key={g.id} data-graphique={g.id} className={`case-graphique${g.id === etat.graphiqueActif ? ' active' : ''}`} style={!mosaique && g.id !== etat.graphiqueActif ? { visibility: 'hidden' } : undefined}>
             {mosaique && (
               <div className="case-titre" onMouseDown={() => activer(g.id)}>
                 <span>
