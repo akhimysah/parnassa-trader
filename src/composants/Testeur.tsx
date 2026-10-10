@@ -3,7 +3,7 @@ import { CandlestickSeries, ColorType, createChart, createSeriesMarkers, type IC
 import { useTerminal } from '../contexte';
 import { tousExperts, EXPERTS, definitionExpert, type TypeExpert } from '../algo/experts';
 import { combinaisons, lancerTest, nombreCombinaisons, optimiser, optimiserGenetique, type Modelisation, type Passe, type PlageOptimisation, type ResultatTest } from '../algo/testeur';
-import { chargerHistoriqueLong, PERIODES, type Bougie, type Periode } from '../marche/bougies';
+import { chargerHistoriqueLong, chargerM1, PERIODES, type Bougie, type Periode } from '../marche/bougies';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { conversion } from '../compte/moteur';
 import { CourbeSolde } from './Courbe';
@@ -50,6 +50,13 @@ function charger(): Reglages {
 }
 
 /** Demande au testeur de se configurer pour un expert, un symbole et une période (depuis le Navigateur ou un graphique). */
+const MODELISATIONS: Record<Modelisation, string> = {
+  ticks: 'Chaque tick (générés depuis le M1, le plus précis)',
+  m1: 'OHLC de chaque minute (M1)',
+  ohlc: 'OHLC de chaque barre (SL/TP dans la barre)',
+  ouverture: "Prix d'ouverture uniquement (rapide)",
+};
+
 export function preparerTest(d: { expert: TypeExpert; symbole: string; periode: Periode; p?: Record<string, number> }) {
   window.dispatchEvent(new CustomEvent('parnassa-testeur', { detail: d }));
 }
@@ -80,6 +87,7 @@ export function Testeur() {
   const annuler = useRef(false);
   const [vueOpti, setVueOpti] = useState<'tableau' | 'carte'>('tableau');
   const historique = useRef<{ cle: string; bougies: Bougie[] } | null>(null);
+  const minutes = useRef<{ cle: string; bougies: Bougie[] } | null>(null);
   const def = definitionExpert(r.expert);
   const s = symbole(r.symbole)!;
   const q = cotations[r.symbole];
@@ -117,6 +125,19 @@ export function Testeur() {
     return b;
   };
 
+  /** Historique 1 minute couvrant les barres testées (modélisations « 1 minute OHLC » et « Chaque tick »). */
+  const bougiesM1 = async (b: Bougie[]): Promise<Bougie[] | undefined> => {
+    if (r.modelisation !== 'm1' && r.modelisation !== 'ticks') return undefined;
+    const cle = `${r.symbole}|${b[0].time}`;
+    if (minutes.current?.cle === cle) return minutes.current.bougies;
+    noter(`${r.symbole},M1 : chargement de l'historique 1 minute…`);
+    const reference = q ? (q.bid + q.ask) / 2 : undefined;
+    const m = await chargerM1(s, b[0].time, reference, 60, (n) => setEnCours({ texte: `Historique 1 minute : ${n.toLocaleString('fr-FR')} bougies…`, fait: 0, total: 1 }));
+    minutes.current = { cle, bougies: m };
+    noter(m.length ? `${r.symbole},M1 : ${m.length} bougies du ${dateMT(m[0].time * 1000, false)} au ${dateMT(m[m.length - 1].time * 1000, false)}` : `${r.symbole},M1 : pas d'historique 1 minute, OHLC des barres utilisé`);
+    return m;
+  };
+
   const base = (b: Bougie[]) => ({
     s,
     expert: { type: r.expert, p: r.p, magic: 0 },
@@ -128,6 +149,7 @@ export function Testeur() {
     conversion: conversion(s, cotations),
     typeCompte: compte.type ?? 'standard',
     swaps: !compte.sansSwap,
+    m1: minutes.current?.bougies,
   });
 
   const plagesActives = Object.fromEntries(Object.entries(r.optimiser).filter(([, v]) => v.actif)) as Record<string, PlageOptimisation>;
@@ -155,6 +177,7 @@ export function Testeur() {
         signaler('Historique insuffisant pour ce symbole et cette période');
         return;
       }
+      await bougiesM1(b);
       const reglages = { ...r };
       // Avant-test : la dernière fraction de l'historique n'est pas vue par le test (ni par l'optimisation),
       // puis l'expert y est rejoué ; les barres juste avant la coupure amorcent ses indicateurs.
@@ -177,6 +200,8 @@ export function Testeur() {
             const res = lancerTest({
               ...base(hist),
               s: sy,
+              // L'historique 1 minute chargé est celui du symbole principal : les autres sont testés en OHLC.
+              m1: nom === r.symbole ? minutes.current?.bougies : undefined,
               spread: r.spreadActuel && qy ? Math.max(1, Math.round((qy.ask - qy.bid) / point(sy))) : sy.spread,
               conversion: conversion(sy, cotations),
             });
@@ -198,7 +223,7 @@ export function Testeur() {
         const res = lancerTest(base(passe));
         const resAvant = baseAvant ? lancerTest(baseAvant) : undefined;
         setResultat({ ...res, reglages, bougies: passe, avant: resAvant ? { ...resAvant, bougies: b.slice(coupe) } : undefined });
-        noter(`${def.nom} sur ${r.symbole},${r.periode} : ${res.stats.trades} trades, bénéfice net ${argent(res.stats.net)} USD, drawdown max ${res.stats.ddMaxPct.toFixed(2)} % (${res.barres} barres en ${Math.round(res.dureeMs)} ms)`);
+        noter(`${def.nom} sur ${r.symbole},${r.periode} : ${res.stats.trades} trades, bénéfice net ${argent(res.stats.net)} USD, drawdown max ${res.stats.ddMaxPct.toFixed(2)} % (${res.barres} barres, ${res.ticks.toLocaleString('fr-FR')} prix simulés${r.modelisation === 'm1' || r.modelisation === 'ticks' ? `, ${res.couvertes} barres couvertes par le M1` : ''}, en ${Math.round(res.dureeMs)} ms)`);
         if (resAvant) noter(`avant-test : ${resAvant.stats.trades} trades, bénéfice net ${argent(resAvant.stats.net)} USD, drawdown max ${resAvant.stats.ddMaxPct.toFixed(2)} %`);
         for (const j of res.journal.slice(0, 50)) noter(`${dateMT(j.t)} ${j.message}`);
         setOnglet('backtest');
@@ -338,7 +363,7 @@ export function Testeur() {
                 <label>
                   <span>Historique :</span>
                   <select value={r.barres} onChange={(e) => changer({ barres: Number(e.target.value) })}>
-                    {[500, 1000, 2000, 3000, 5000, 10000].map((n) => (
+                    {[500, 1000, 2000, 3000, 5000, 10000, 20000, 50000].map((n) => (
                       <option key={n} value={n}>
                         {n.toLocaleString('fr-FR')} dernières barres
                       </option>
@@ -348,8 +373,11 @@ export function Testeur() {
                 <label>
                   <span>Modélisation :</span>
                   <select value={r.modelisation} onChange={(e) => changer({ modelisation: e.target.value as Modelisation })}>
-                    <option value="ohlc">OHLC de chaque barre (SL/TP dans la barre)</option>
-                    <option value="ouverture">Prix d'ouverture uniquement (rapide)</option>
+                    {(Object.keys(MODELISATIONS) as Modelisation[]).map((m) => (
+                      <option key={m} value={m}>
+                        {MODELISATIONS[m]}
+                      </option>
+                    ))}
                   </select>
                 </label>
               </div>
@@ -677,6 +705,7 @@ function Backtest({ res }: { res: ResultatTest & { reglages: Reglages; bougies: 
       ['Symbole / période', `${r.symbole}, ${r.periode}`],
       ['Intervalle', res.bougies.length ? `${dateMT(res.bougies[0].time * 1000, false)} – ${dateMT(res.bougies[res.bougies.length - 1].time * 1000, false)}` : '—'],
       ['Barres', String(res.barres)],
+      ['Modélisation', `${MODELISATIONS[r.modelisation]} — ${res.ticks.toLocaleString('fr-FR')} prix${r.modelisation === 'm1' || r.modelisation === 'ticks' ? `, qualité ${pct(res.couvertes, res.barres)}` : ''}`],
       ['Entrées', Object.entries(r.p).map(([k, v]) => `${k}=${v}`).join(', ')],
       ['Dépôt initial', argent(r.depot)],
       ['Levier', `1:${r.levier}`],

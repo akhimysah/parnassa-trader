@@ -212,3 +212,23 @@ describe('filtres de l’assistant', () => {
     expect(deciderPerso({ ...e, heures: [h, h + 1] }, b, null).ouvrir).toBe('buy');
   });
 });
+
+describe('modélisation du testeur', () => {
+  it('suit les bougies 1 minute et génère des ticks entre leurs points', async () => {
+    const { cheminPrix } = await import('../src/algo/testeur');
+    const barre = { time: 0, open: 1.1, high: 1.105, low: 1.095, close: 1.102, volume: 0 };
+    const m1 = [
+      { time: 0, open: 1.1, high: 1.105, low: 1.0995, close: 1.104, volume: 0 },
+      { time: 60, open: 1.104, high: 1.1045, low: 1.095, close: 1.102, volume: 0 },
+    ];
+    expect(cheminPrix(barre, [], 'ohlc', 0.00001, 5)).toEqual([1.1, 1.095, 1.105, 1.102]);
+    expect(cheminPrix(barre, [], 'm1', 0.00001, 5)).toEqual([1.1, 1.095, 1.105, 1.102]);
+    expect(cheminPrix(barre, m1, 'm1', 0.00001, 5)).toHaveLength(8);
+    const ticks = cheminPrix(barre, m1, 'ticks', 0.00001, 5);
+    expect(ticks.length).toBeGreaterThan(8);
+    expect(Math.min(...ticks)).toBe(1.095);
+    expect(Math.max(...ticks)).toBe(1.105);
+    // Aucun saut de plus d’un douzième de segment (à l’arrondi du point près).
+    for (let i = 1; i < ticks.length; i++) expect(Math.abs(ticks[i] - ticks[i - 1])).toBeLessThanOrEqual(0.0095 / 12 + 0.00001);
+  });
+});

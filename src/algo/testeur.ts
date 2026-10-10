@@ -10,7 +10,39 @@ import { NIVEAU_STOP_OUT } from '../compte/moteur';
 import { decider, type Expert } from './experts';
 import { calculerStats, type Stats } from './statistiques';
 
-export type Modelisation = 'ouverture' | 'ohlc';
+/**
+ * Modélisation des prix dans la barre, comme le testeur de MT5 :
+ * - `ouverture` : prix d'ouverture uniquement ;
+ * - `ohlc` : ouverture, extrêmes, clôture de la barre testée ;
+ * - `m1` : OHLC de chaque bougie 1 minute contenue dans la barre (« 1 minute OHLC ») ;
+ * - `ticks` : ticks générés entre ces points, pas à pas (« Chaque tick »).
+ */
+export type Modelisation = 'ouverture' | 'ohlc' | 'm1' | 'ticks';
+
+/** Points O-B-H-C (barre haussière) ou O-H-B-C (baissière). */
+function ohlc(b: Bougie): number[] {
+  return b.close >= b.open ? [b.open, b.low, b.high, b.close] : [b.open, b.high, b.low, b.close];
+}
+
+/**
+ * Chemin des prix Bid dans une barre selon la modélisation. `m1` : bougies 1 minute de la barre (vide si
+ * l'historique 1 minute ne la couvre pas : retour à l'OHLC de la barre). En « chaque tick », chaque segment est
+ * découpé en pas d'au moins un point, 12 ticks au plus par segment.
+ */
+export function cheminPrix(barre: Bougie, m1: Bougie[], modelisation: Modelisation, pas: number, chiffres: number): number[] {
+  if (modelisation === 'ouverture') return [barre.open];
+  if (modelisation === 'ohlc' || (modelisation === 'm1' && m1.length === 0)) return ohlc(barre);
+  const noeuds = m1.length ? m1.flatMap(ohlc) : ohlc(barre);
+  if (modelisation === 'm1') return noeuds;
+  const ticks: number[] = [noeuds[0]];
+  for (let k = 1; k < noeuds.length; k++) {
+    const a = noeuds[k - 1];
+    const b = noeuds[k];
+    const n = Math.min(12, Math.max(1, Math.round(Math.abs(b - a) / pas)));
+    for (let j = 1; j <= n; j++) ticks.push(Number((a + ((b - a) * j) / n).toFixed(chiffres)));
+  }
+  return ticks;
+}
 
 export interface ParametresTest {
   s: SymboleMT;
@@ -29,6 +61,8 @@ export interface ParametresTest {
   swaps?: boolean;
   /** Indice de la première barre tradée : les barres d'avant ne servent qu'à amorcer les indicateurs (avant-test). */
   debut?: number;
+  /** Bougies 1 minute (modélisations `m1` et `ticks`), triées. */
+  m1?: Bougie[];
 }
 
 export interface Marqueur {
@@ -45,8 +79,10 @@ export interface ResultatTest {
   journal: { t: number; message: string }[];
   marqueurs: Marqueur[];
   stats: Stats;
-  /** Barres simulées et durée du calcul. */
+  /** Barres simulées, prix simulés (ticks), barres couvertes par l'historique 1 minute, et durée du calcul. */
   barres: number;
+  ticks: number;
+  couvertes: number;
   dureeMs: number;
 }
 
@@ -123,6 +159,10 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
     marqueurs.push({ time: Math.floor(heure / 1000), sens: p.type === 'buy' ? 'sell' : 'buy', entree: false, prix, texte: raison });
     positions.splice(positions.indexOf(p), 1);
   };
+  const m1 = pt.m1 ?? [];
+  let j1 = 0;
+  let nbTicks = 0;
+  let couvertes = 0;
   const volume = Number(Math.min(s.volumeMax, Math.max(s.volumeMin, Math.round(expert.p.volume / s.pasVolume) * s.pasVolume)).toFixed(2));
 
   for (let i = premiere; i < b.length; i++) {
@@ -162,7 +202,15 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
       }
     }
     // 2. Stop-loss / take-profit dans la barre (chemin O-B-H-C pour une barre haussière, O-H-B-C sinon).
-    const chemin = modelisation === 'ohlc' ? (barre.close >= barre.open ? [barre.open, barre.low, barre.high, barre.close] : [barre.open, barre.high, barre.low, barre.close]) : [barre.open];
+    const finBarre = b[i + 1]?.time ?? barre.time + (barre.time - (b[i - 1]?.time ?? barre.time - 60));
+    const dedans: Bougie[] = [];
+    if (modelisation === 'm1' || modelisation === 'ticks') {
+      while (j1 < m1.length && m1[j1].time < barre.time) j1++;
+      while (j1 < m1.length && m1[j1].time < finBarre) dedans.push(m1[j1++]);
+      if (dedans.length) couvertes++;
+    }
+    const chemin = cheminPrix(barre, dedans, modelisation, pas, s.chiffres);
+    nbTicks += chemin.length;
     for (let k = 0; k < chemin.length; k++) {
       const bid = chemin[k];
       const ask = bid + ecart;
@@ -214,7 +262,7 @@ export function lancerTest(pt: ParametresTest): ResultatTest {
   }
   const der = b[b.length - 1];
   for (const p of [...positions]) fermer(p, p.type === 'buy' ? der.close : arrondi(der.close + ecart), der.time * 1000, 'fin du test');
-  return { transactions, fonds, journal, marqueurs, stats: calculerStats(transactions), barres: b.length - premiere + 1, dureeMs: performance.now() - debut };
+  return { transactions, fonds, journal, marqueurs, stats: calculerStats(transactions), barres: b.length - premiere + 1, ticks: nbTicks, couvertes, dureeMs: performance.now() - debut };
 }
 
 // ---------- Optimisation ----------

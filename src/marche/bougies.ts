@@ -138,3 +138,29 @@ export async function chargerHistoriqueLong(s: SymboleMT, p: Periode, max: numbe
   const arrondi = (v: number) => Number(v.toFixed(s.chiffres));
   return bougies.map((b) => ({ ...b, open: arrondi(b.open * facteur), high: arrondi(b.high * facteur), low: arrondi(b.low * facteur), close: arrondi(b.close * facteur) }));
 }
+
+/**
+ * Bougies 1 minute depuis `depuis` (secondes) pour les modélisations « 1 minute OHLC » et « Chaque tick » du testeur :
+ * Binance par pages de 1 000 (au plus `pagesMax` pages), Yahoo sur ses 5 derniers jours (sa limite en 1 minute).
+ */
+export async function chargerM1(s: SymboleMT, depuis: number, reference?: number, pagesMax = 60, progression?: (n: number) => void): Promise<Bougie[]> {
+  let bougies: Bougie[] = [];
+  if (s.histo.binance) {
+    let fin: number | undefined;
+    for (let page = 0; page < pagesMax; page++) {
+      const lot = await klines(s.histo.binance, '1m', 1000, fin);
+      if (lot.length === 0) break;
+      bougies = [...lot, ...bougies];
+      progression?.(bougies.length);
+      if (lot.length < 1000 || lot[0].time <= depuis) break;
+      fin = lot[0].time * 1000 - 1;
+    }
+  } else if (s.histo.yahoo) {
+    bougies = await bougiesYahoo(s.histo.yahoo, 'M1');
+  }
+  bougies = bougies.filter((b) => b.time >= depuis);
+  const der = bougies[bougies.length - 1];
+  const facteur = s.histo.recaler && reference && der ? reference / der.close : 1;
+  const arrondi = (v: number) => Number(v.toFixed(s.chiffres));
+  return bougies.map((b) => ({ ...b, open: arrondi(b.open * facteur), high: arrondi(b.high * facteur), low: arrondi(b.low * facteur), close: arrondi(b.close * facteur) }));
+}
