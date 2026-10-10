@@ -40,6 +40,7 @@ const SECTIONS: { titre: string; points: string[] }[] = [
       '29 indicateurs MT5 : tendance, oscillateurs, volumes, Bill Williams. Glissez-les du Navigateur sur un graphique.',
       '« Appliquer à » : un autre prix (médian, typique…) ou les données d’un autre indicateur (par exemple une moyenne mobile du RSI).',
       'Niveaux personnalisés (ex. RSI 20 ; 50 ; 80) et épaisseur des lignes dans la fenêtre de l’indicateur.',
+      'Indicateurs personnalisés par formule (groupe Personnalisés) : ex. « ema(close, 20) - ema(close, 50) » ou « highest(high, 20) ; lowest(low, 20) », en sous-fenêtre ou sur le graphique.',
     ],
   },
   {

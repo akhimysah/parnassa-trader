@@ -127,3 +127,25 @@ describe('boîte aux lettres', () => {
     expect(releves[0].texte).toContain('Trades fermés : 2');
   });
 });
+
+describe('indicateurs par formule', () => {
+  it('calcule une formule et plusieurs courbes', async () => {
+    const { calculerFormule, erreurFormule } = await import('../src/graphique/formule');
+    const b = serie(200);
+    const [diff] = calculerFormule('ema(close, 20) - ema(close, 50)', b);
+    const e20 = moyenne(b.map((x) => x.close), 20, 'ema');
+    const e50 = moyenne(b.map((x) => x.close), 50, 'ema');
+    expect(diff[150]).toBeCloseTo(e20[150]! - e50[150]!, 6);
+    const [haut, bas] = calculerFormule('highest(high, 20) ; lowest(low, 20)', b);
+    expect(haut[100]!).toBeGreaterThan(bas[100]!);
+    expect(calculerFormule('2 * (close - shift(close, 1))', b)[0][10]).toBeCloseTo(2 * (b[10].close - b[9].close), 6);
+    expect(erreurFormule('ema(close, 20) - ')).not.toBeNull();
+    expect(erreurFormule('foo(close)')).toMatch(/inconnue/);
+    expect(erreurFormule('rsi(close, 14) - 50')).toBeNull();
+  });
+  it('se range dans la bonne fenêtre', () => {
+    const f = (superposeFormule: boolean) => ({ id: 'f', type: 'formule' as const, p: {}, couleur: '', formule: 'sma(close, 5)', superposeFormule });
+    expect(panneauxIndicateurs([f(true), f(false)])).toEqual([0, 1]);
+    expect(calculer(f(false), serie(50)).traces[0].valeurs[20]).not.toBeNull();
+  });
+});

@@ -4,7 +4,7 @@ import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
 import { HEURE_ROLLOVER_UTC, SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, point, spreadPoints, swapPoints, symbole, type Categorie } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
 import { sourceDirecte } from '../marche/cotations';
-import { calculer, definition, DEFINITIONS, nomCourt, type Indicateur, type MethodeMA, APPLICABLES, SOURCES, type Source } from '../graphique/indicateurs';
+import { calculer, definition, DEFINITIONS, estSuperpose, nomCourt, type Indicateur, type MethodeMA, APPLICABLES, SOURCES, type Source } from '../graphique/indicateurs';
 import { SCHEMAS } from '../graphique/couleurs';
 import { definirSuiveur, fermerPosition, levierEffectif, operationBalance, ouvrirMarche, NIVEAU_APPEL_MARGE, NIVEAU_STOP_OUT, SERVEUR } from '../compte/moteur';
 import { DialogueExpert, DialogueRapport } from './DialoguesAlgo';
@@ -20,6 +20,7 @@ import { EditeurOperande } from './Assistant';
 import { OPERATEURS, type Condition, type Operateur } from '../algo/assistant';
 import { PERIODES, type Periode } from '../marche/bougies';
 import { perteJour, RISQUE_DEFAUT } from '../compte/risque';
+import { erreurFormule, FONCTIONS } from '../graphique/formule';
 
 export function Dialogues() {
   const { dialogue } = useTerminal();
@@ -363,6 +364,9 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
   const niveauxDefaut = calculer({ id: '', type, p: def.defaut, couleur: '' }, []).niveaux ?? [];
   const [niveaux, setNiveaux] = useState(((actuel?.niveaux ?? niveauxDefaut) as number[]).join(' ; '));
   const [epaisseur, setEpaisseur] = useState(actuel?.epaisseur ?? 1);
+  const [formule, setFormule] = useState(actuel?.formule ?? 'ema(close, 20) - ema(close, 50)');
+  const [surGraphique, setSurGraphique] = useState(actuel?.superposeFormule ?? false);
+  const erreurF = type === 'formule' ? erreurFormule(formule) : null;
   if (!g) return null;
   const lireNiveaux = () =>
     niveaux
@@ -384,6 +388,7 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
       source: applicable && source !== 'close' ? source : undefined,
       niveaux: JSON.stringify(liste) === JSON.stringify(niveauxDefaut) ? undefined : liste,
       epaisseur: epaisseur > 1 ? epaisseur : undefined,
+      ...(type === 'formule' ? { formule: formule.trim(), superposeFormule: surGraphique || undefined } : {}),
     };
     majGraphique(g.id, (gr) => ({ indicateurs: actuel ? gr.indicateurs.map((i) => (i.id === actuel.id ? ind : i)) : [...gr.indicateurs, ind] }));
     fermer();
@@ -391,6 +396,31 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
   return (
     <Fenetre titre={`${def.nom} — ${g.symbole}, ${g.periode}`} fermer={fermer} largeur={400}>
       <div className="formulaire">
+        {type === 'formule' && (
+          <>
+            <label>
+              <span>Formule :</span>
+              <textarea className="champ-formule" value={formule} onChange={(e) => setFormule(e.target.value)} rows={3} spellCheck={false} />
+            </label>
+            {erreurF ? <p className="erreur-champ">{erreurF}</p> : <p className="aide">Formule valide. Plusieurs courbes : séparez-les par « ; ».</p>}
+            <label className="case">
+              <input type="checkbox" checked={surGraphique} onChange={() => setSurGraphique(!surGraphique)} />
+              Sur le graphique principal (formule en prix, ex. sma(close, 20) + 2 * atr(14))
+            </label>
+            <details className="aide-formule">
+              <summary>Séries et fonctions</summary>
+              <p>Séries : open, high, low, close, volume, median, typical. Opérations : + − × ÷ et parenthèses.</p>
+              <ul>
+                {Object.values(FONCTIONS).map((f) => (
+                  <li key={f}>
+                    <code>{f}</code>
+                  </li>
+                ))}
+              </ul>
+              <p>Exemples : <code>(close - sma(close, 20)) / atr(14)</code> · <code>highest(high, 20) ; lowest(low, 20)</code> · <code>rsi(close, 14) - rsi(close, 28)</code></p>
+            </details>
+          </>
+        )}
         {Object.keys(def.defaut).map((k) => (
           <label key={k}>
             <span>{def.libelles[k]} :</span>
@@ -418,7 +448,7 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
             </span>
           </label>
         )}
-        {!def.superpose && (
+        {!def.superpose && !(type === 'formule' && surGraphique) && (
           <label>
             <span>Niveaux :</span>
             <input value={niveaux} onChange={(e) => setNiveaux(e.target.value)} placeholder="ex. 20 ; 50 ; 80" title="Lignes horizontales de la fenêtre de l'indicateur, séparées par des points-virgules" />
@@ -465,7 +495,7 @@ function DialogueIndicateur({ type, graphique, existant }: { type: Indicateur['t
           </button>
         )}
         <button onClick={fermer}>Annuler</button>
-        <button className="principal" onClick={valider}>
+        <button className="principal" onClick={valider} disabled={Boolean(erreurF)}>
           OK
         </button>
       </div>
@@ -483,7 +513,7 @@ function DialogueListeIndicateurs({ graphique }: { graphique: string }) {
       <ul className="liste-simple">
         {g.indicateurs.map((i) => (
           <li key={i.id}>
-            <span style={{ color: i.couleur }}>■</span> {nomCourt(i)} <small>({definition(i.type).superpose ? 'fenêtre principale' : 'sous-fenêtre'})</small>
+            <span style={{ color: i.couleur }}>■</span> {nomCourt(i)} <small>({estSuperpose(i) ? 'fenêtre principale' : 'sous-fenêtre'})</small>
             <span className="actions">
               <button onClick={() => ouvrir({ type: 'indicateur', indicateur: i.type, graphique: g.id, existant: i.id })}>Modifier</button>
               <button onClick={() => majGraphique(g.id, (gr) => ({ indicateurs: gr.indicateurs.filter((x) => x.id !== i.id) }))}>Supprimer</button>

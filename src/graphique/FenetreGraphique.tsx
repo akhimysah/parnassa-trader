@@ -25,7 +25,7 @@ import type { Graphique, ObjetGraphique } from '../etat';
 import { identifiant } from '../etat';
 import { chargerBougies, debutBougie, PERIODES, type Bougie } from '../marche/bougies';
 import { formaterPrix, point, symbole } from '../marche/symboles';
-import { calculerTous, definition, nomCourt, panneauxIndicateurs } from './indicateurs';
+import { calculerTous, definition, estSuperpose, nomCourt, panneauxIndicateurs } from './indicateurs';
 import { couleursSchema } from './couleurs';
 import { Dessins, OBJETS } from './dessins';
 import { heikin, heikinSuivante } from './heikin';
@@ -465,11 +465,11 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       const index = tous[k].panneau;
       const r = tous[k].resultat;
       const series = r.traces.map((tr) => {
-        const commun = { lastValueVisible: !def.superpose, priceLineVisible: false, title: '', crosshairMarkerVisible: false };
+        const commun = { lastValueVisible: !estSuperpose(ind), priceLineVisible: false, title: '', crosshairMarkerVisible: false };
         const se =
           tr.style === 'histogramme'
             ? chart.addSeries(HistogramSeries, { ...commun, color: tr.couleur, priceFormat: def.type === 'volumes' ? { type: 'volume' } : { type: 'price', precision: s.chiffres, minMove: point(s) } }, index)
-            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: Math.min(4, Math.max(1, ind.epaisseur ?? 1)) as 1 | 2 | 3 | 4, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: def.superpose || EN_PRIX.includes(def.type) ? { type: 'price', precision: s.chiffres, minMove: point(s) } : def.type === 'demarker' || def.type === 'rvi' ? { type: 'price', precision: 3, minMove: 0.001 } : def.type === 'obv' || def.type === 'force' ? { type: 'volume' } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
+            : chart.addSeries(LineSeries, { ...commun, color: tr.couleur, lineWidth: Math.min(4, Math.max(1, ind.epaisseur ?? 1)) as 1 | 2 | 3 | 4, lineVisible: tr.style !== 'points', pointMarkersVisible: tr.style === 'points', pointMarkersRadius: 1.5, priceFormat: estSuperpose(ind) || EN_PRIX.includes(def.type) || def.type === 'formule' ? { type: 'price', precision: s.chiffres, minMove: point(s) } : def.type === 'demarker' || def.type === 'rvi' ? { type: 'price', precision: 3, minMove: 0.001 } : def.type === 'obv' || def.type === 'force' ? { type: 'volume' } : { type: 'price', precision: 2, minMove: 0.01 } }, index);
         if (r.bornes) se.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: r.bornes![0], maxValue: r.bornes![1] } }) });
         return se;
       });
@@ -495,7 +495,8 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
       });
     });
     const chart = chartRef.current;
-    if (chart) setHauteursPanneaux(chart.panes().map((p) => p.getHeight()));
+    // Hauteurs relues après la mise en page des fenêtres (un panneau ajouté ne la connaît qu'à l'image suivante).
+    if (chart) requestAnimationFrame(() => setHauteursPanneaux(chart.panes().map((p) => p.getHeight())));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [version]);
 

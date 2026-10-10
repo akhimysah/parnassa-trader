@@ -1,10 +1,12 @@
 import type { Bougie } from '../marche/bougies';
+import { calculerFormule } from './formule';
 
 export type TypeIndicateur =
   | 'ma' | 'bb' | 'env' | 'sar' | 'ichimoku' | 'dema' | 'tema' | 'adx' | 'stddev'
   | 'rsi' | 'macd' | 'stoch' | 'atr' | 'cci' | 'mom' | 'wpr' | 'demarker' | 'force' | 'osma' | 'bears' | 'bulls' | 'rvi'
   | 'alligator' | 'fractals' | 'ao' | 'ac'
-  | 'volumes' | 'obv' | 'mfi';
+  | 'volumes' | 'obv' | 'mfi'
+  | 'formule';
 export type MethodeMA = 'sma' | 'ema' | 'smma' | 'lwma';
 
 export interface Indicateur {
@@ -20,6 +22,14 @@ export interface Indicateur {
   niveaux?: number[];
   /** Épaisseur des lignes (1 à 4). */
   epaisseur?: number;
+  /** Indicateur personnalisé : formule et choix de la fenêtre (graphique principal ou sous-fenêtre). */
+  formule?: string;
+  superposeFormule?: boolean;
+}
+
+/** Dessiné sur le graphique principal ? (une formule le précise elle-même). */
+export function estSuperpose(ind: Indicateur): boolean {
+  return ind.type === 'formule' ? Boolean(ind.superposeFormule) : definition(ind.type).superpose;
 }
 
 export type Source = 'close' | 'open' | 'high' | 'low' | 'median' | 'typique' | 'pondere' | 'precedent' | 'premier';
@@ -63,7 +73,7 @@ export function panneauxIndicateurs(liste: Indicateur[]): number[] {
   let n = 0;
   liste.forEach((ind, i) => {
     const ref = ind.source === 'precedent' ? r[i - 1] : ind.source === 'premier' ? r[0] : undefined;
-    r.push(APPLICABLES.includes(ind.type) && sourceIndicateur(ind.source) && i > 0 && ref !== undefined ? ref : definition(ind.type).superpose ? 0 : ++n);
+    r.push(APPLICABLES.includes(ind.type) && sourceIndicateur(ind.source) && i > 0 && ref !== undefined ? ref : estSuperpose(ind) ? 0 : ++n);
   });
   return r;
 }
@@ -81,13 +91,13 @@ export function calculerTous(liste: Indicateur[], b: Bougie[]): { resultat: Resu
     const resultat = calculer(ind, b, applicable ? ref.resultat.traces[0]?.valeurs : undefined);
     // Sur des données d'indicateur, l'échelle est celle de l'indicateur source : pas de bornes fixes propres.
     if (applicable) delete resultat.bornes;
-    const panneau = applicable ? ref.panneau : definition(ind.type).superpose ? 0 : ++panneaux;
+    const panneau = applicable ? ref.panneau : estSuperpose(ind) ? 0 : ++panneaux;
     sortie.push({ resultat, panneau });
   });
   return sortie;
 }
 
-export const GROUPES = ['Tendance', 'Oscillateurs', 'Volumes', 'Bill Williams'] as const;
+export const GROUPES = ['Tendance', 'Oscillateurs', 'Volumes', 'Bill Williams', 'Personnalisés'] as const;
 export type GroupeIndicateur = (typeof GROUPES)[number];
 
 export interface DefinitionIndicateur {
@@ -131,6 +141,7 @@ export const DEFINITIONS: DefinitionIndicateur[] = [
   { type: 'fractals', nom: 'Fractals', groupe: 'Bill Williams', superpose: true, defaut: {}, libelles: {}, couleur: '#808080' },
   { type: 'ao', nom: 'Awesome Oscillator', groupe: 'Bill Williams', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
   { type: 'ac', nom: 'Accelerator Oscillator', groupe: 'Bill Williams', superpose: false, defaut: {}, libelles: {}, couleur: '#32cd32' },
+  { type: 'formule', nom: 'Formule personnalisée', groupe: 'Personnalisés', superpose: false, defaut: {}, libelles: {}, couleur: '#ff8c00' },
 ];
 
 export function definition(type: TypeIndicateur): DefinitionIndicateur {
@@ -198,6 +209,8 @@ export function nomCourt(i: Indicateur): string {
       return 'AO';
     case 'ac':
       return 'AC';
+    case 'formule':
+      return (i.formule ?? 'Formule').length > 40 ? `${(i.formule ?? '').slice(0, 38)}…` : (i.formule ?? 'Formule');
   }
 }
 
@@ -637,6 +650,16 @@ export function calculer(ind: Indicateur, b: Bougie[], donnees?: Valeurs): Resul
         traces: [{ nom: nomCourt(ind), valeurs: v, couleur: ind.couleur, style: 'histogramme', couleurs: v.map((x, i) => (i > 0 && x !== null && v[i - 1] !== null && x < v[i - 1]! ? '#ff3b30' : '#32cd32')) }],
         niveaux: [0],
       };
+    }
+    case 'formule': {
+      const couleurs = [ind.couleur, '#1e90ff', '#e0393e', '#20b2aa'];
+      try {
+        const series = calculerFormule(ind.formule ?? '', b);
+        const parties = (ind.formule ?? '').split(';').map((x) => x.trim()).filter(Boolean);
+        return { traces: series.map((v, k) => ({ nom: parties[k] ?? `Courbe ${k + 1}`, valeurs: v, couleur: couleurs[k % couleurs.length] })), niveaux: ind.superposeFormule ? undefined : [0] };
+      } catch {
+        return { traces: [] };
+      }
     }
     case 'volumes':
       return {

@@ -2383,3 +2383,21 @@ kbd {
   padding: 4px 6px;
   margin: 2px 0 4px;
 }
+.champ-formule {
+  width: 100%;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+.aide-formule {
+  font-size: 11px;
+  color: var(--muet);
+}
+.aide-formule ul {
+  margin: 4px 0;
+  padding-left: 16px;
+  columns: 2;
+}
+.aide-formule code {
+  color: var(--texte);
+}

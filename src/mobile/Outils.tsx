@@ -3,7 +3,7 @@ import { useTerminal } from '../contexte';
 import { identifiant, type Alerte } from '../etat';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
 import { abonnerProfondeur, type Carnet } from '../marche/binance';
-import { APPLICABLES, SOURCES, calculer, type Source, DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
+import { APPLICABLES, SOURCES, calculer, estSuperpose, type Source, DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
 import { tousExperts, definitionExpert, type TypeExpert } from '../algo/experts';
 import { calculerStats } from '../algo/statistiques';
 import { definirSuiveur, operationBalance, ouvrirMarche, profitPosition } from '../compte/moteur';
@@ -12,6 +12,7 @@ import { PrixGros, argent } from '../composants/ui';
 import { BoutonIcone, BoutonRetour, ChampPas, ChampVolume, EnTete, Interrupteur, Segments, useNav, vibrer } from './commun';
 import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
 import { depuisChampDate, versChampDate } from '../alertes';
+import { erreurFormule } from '../graphique/formule';
 
 // ---------- Rapport de trading ----------
 
@@ -154,7 +155,7 @@ export function EcranIndicateurs() {
               <span className="mm-pastille-couleur" style={{ background: i.couleur }} />
               <div className="mm-liste-texte">
                 <b>{nomCourt(i)}</b>
-                <small>{definition(i.type).superpose ? 'Fenêtre principale' : 'Sous-fenêtre'}</small>
+                <small>{estSuperpose(i) ? 'Fenêtre principale' : 'Sous-fenêtre'}</small>
               </div>
               <button
                 className="mm-supprimer-texte"
@@ -205,6 +206,9 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
   const niveauxDefaut = calculer({ id: '', type, p: def.defaut, couleur: '' }, []).niveaux ?? [];
   const [niveaux, setNiveaux] = useState(((actuel?.niveaux ?? niveauxDefaut) as number[]).join(' ; '));
   const [epaisseur, setEpaisseur] = useState(actuel?.epaisseur ?? 1);
+  const [formule, setFormule] = useState(actuel?.formule ?? 'ema(close, 20) - ema(close, 50)');
+  const [surGraphique, setSurGraphique] = useState(actuel?.superposeFormule ?? false);
+  const erreurF = type === 'formule' ? erreurFormule(formule) : null;
   if (!g) return null;
   const liste = niveaux
     .split(/[;\s]+/)
@@ -220,6 +224,21 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
       <EnTete titre={def.nom} sousTitre={`${g.symbole}, ${g.periode}`} gauche={<BoutonRetour />} />
       <div className="mm-defile">
         <div className="mm-formulaire">
+          {type === 'formule' && (
+            <>
+              <label className="mm-ligne-champ mm-champ-formule">
+                <span>Formule</span>
+                <textarea value={formule} rows={3} spellCheck={false} autoCapitalize="off" onChange={(e) => setFormule(e.target.value)} />
+              </label>
+              <div className={erreurF ? 'mm-erreur-champ' : 'mm-aide-ligne'}>{erreurF ?? 'Formule valide · séries open, high, low, close, volume ; fonctions sma, ema, wma, rsi, atr, stddev, highest, lowest, shift, abs, max, min'}</div>
+              <div className="mm-ligne-champ">
+                <span>Sur le graphique</span>
+                <span style={{ justifySelf: 'end' }}>
+                  <Interrupteur actif={surGraphique} libelle="Sur le graphique principal" changer={setSurGraphique} />
+                </span>
+              </div>
+            </>
+          )}
           {Object.keys(def.defaut).map((k) => (
             <div key={k} className="mm-ligne-champ">
               <span>{def.libelles[k]}</span>
@@ -289,7 +308,8 @@ export function EcranIndicateur({ type, existant }: { type: TypeIndicateur; exis
         <button
           className="mm-bouton principal"
           onClick={() => {
-            const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur, source: applicable && source !== 'close' ? source : undefined, niveaux: JSON.stringify(liste) === JSON.stringify(niveauxDefaut) ? undefined : liste, epaisseur: epaisseur > 1 ? epaisseur : undefined };
+            const ind: Indicateur = { id: actuel?.id ?? identifiant(), type, p, methode: type === 'ma' || type === 'env' ? methode : undefined, couleur, source: applicable && source !== 'close' ? source : undefined, niveaux: JSON.stringify(liste) === JSON.stringify(niveauxDefaut) ? undefined : liste, epaisseur: epaisseur > 1 ? epaisseur : undefined, ...(type === 'formule' ? { formule: formule.trim(), superposeFormule: surGraphique || undefined } : {}) };
+            if (erreurF) return;
             majGraphique(g.id, (gr) => ({ indicateurs: actuel ? gr.indicateurs.map((i) => (i.id === actuel.id ? ind : i)) : [...gr.indicateurs, ind] }));
             vibrer(15);
             retour();

@@ -1699,3 +1699,12 @@
     max-height: 50vh;
   }
 }
+.mm-champ-formule textarea {
+  width: 100%;
+  font-family: Menlo, monospace;
+  font-size: 13px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+}
