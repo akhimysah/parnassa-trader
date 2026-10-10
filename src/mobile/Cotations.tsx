@@ -96,7 +96,7 @@ function LigneCotation({ nom, avance, voirGraphique }: { nom: string; avance: bo
       { libelle: 'Nouvel ordre', action: () => pousser({ type: 'ordre', symbole: nom }) },
       { libelle: 'Graphique', action: () => voirGraphique(nom) },
       { libelle: 'Propriétés', action: () => pousser({ type: 'symbole', symbole: nom }) },
-      ...(s.direct.binance ? [{ libelle: 'Profondeur du marché', action: () => pousser({ type: 'profondeur', symbole: nom }) }] : []),
+      { libelle: 'Profondeur du marché', action: () => pousser({ type: 'profondeur', symbole: nom }) },
       { libelle: 'Alerte de prix', action: () => pousser({ type: 'alerte', symbole: nom }) },
     ]);
   const appui = useAppuiLong(menu, menu);

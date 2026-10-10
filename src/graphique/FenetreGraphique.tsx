@@ -943,7 +943,7 @@ export function FenetreGraphique({ g, actif, activer, appuiLong, appuiLigne }: P
     elements.push(
       { libelle: 'Trading', sousMenu: trading },
       { libelle: 'Trading en un clic', raccourci: 'Alt+T', coche: g.unClic, action: () => majGraphique(g.id, { unClic: !g.unClic }) },
-      { libelle: 'Profondeur du marché', raccourci: 'Alt+B', desactive: !s.direct.binance, action: () => ouvrir({ type: 'profondeur', symbole: g.symbole }) },
+      { libelle: 'Profondeur du marché', raccourci: 'Alt+B', action: () => ouvrir({ type: 'profondeur', symbole: g.symbole }) },
       { separateur: true },
       { libelle: 'Période', sousMenu: PERIODES.map((p) => ({ libelle: p.libelle, raccourci: p.id, coche: g.periode === p.id, action: () => majGraphique(g.id, { periode: p.id }) })) },
       {

@@ -22,11 +22,10 @@ export function ObservationMarche() {
   const menuSymbole = (ev: React.MouseEvent, nom: string) => {
     ev.preventDefault();
     setChoisi(nom);
-    const s = symbole(nom)!;
     const basculer = (c: keyof typeof col) => maj((e) => ({ ...e, colonnes: { ...e.colonnes, [c]: !e.colonnes[c] } }));
     const elements: ElementMenu[] = [
       { libelle: 'Nouvel ordre', raccourci: 'F9', action: () => ouvrir({ type: 'ordre', symbole: nom }) },
-      { libelle: 'Profondeur du marché', raccourci: 'Alt+B', desactive: !s.direct.binance, action: () => ouvrir({ type: 'profondeur', symbole: nom }) },
+      { libelle: 'Profondeur du marché', raccourci: 'Alt+B', action: () => ouvrir({ type: 'profondeur', symbole: nom }) },
       { libelle: 'Fenêtre graphique', action: () => ouvrirGraphique(nom) },
       { libelle: 'Graphique des ticks', action: () => setOnglet('ticks') },
       { separateur: true },

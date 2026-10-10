@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTerminal } from '../contexte';
 import { identifiant, type Alerte } from '../etat';
 import { SYMBOLES, formaterPrix, point, symbole } from '../marche/symboles';
-import { abonnerProfondeur, type Carnet } from '../marche/binance';
+import { useProfondeur } from '../marche/profondeur';
 import { APPLICABLES, SOURCES, calculer, estSuperpose, type Source, DEFINITIONS, GROUPES, definition, nomCourt, type Indicateur, type MethodeMA, type TypeIndicateur } from '../graphique/indicateurs';
 import { tousExperts, definitionExpert, type TypeExpert } from '../algo/experts';
 import { calculerStats } from '../algo/statistiques';
@@ -458,9 +458,10 @@ export function EcranProfondeur({ nom }: { nom: string }) {
   const { etat, cotations, operer } = useTerminal();
   const { pousser } = useNav();
   const s = symbole(nom)!;
-  const [carnet, setCarnet] = useState<Carnet | null>(null);
+  const { compte } = useTerminal();
+  const { carnet, reel, unite, source } = useProfondeur(s, cotations[nom], compte.type ?? 'standard');
+  const decimales = reel ? 4 : 2;
   const [volume, setVolume] = useState(Math.max(s.volumeMin, etat.volumeDefaut));
-  useEffect(() => (s.direct.binance ? abonnerProfondeur(s.direct.binance, setCarnet) : undefined), [s]);
   const max = carnet ? Math.max(...carnet.bids.slice(0, 10).map((b) => b[1]), ...carnet.asks.slice(0, 10).map((a) => a[1])) : 1;
   const passer = (type: 'buy' | 'sell') => {
     if (!etat.unClicAccepte) return pousser({ type: 'unclic' });
@@ -472,10 +473,8 @@ export function EcranProfondeur({ nom }: { nom: string }) {
     <div className="mm-ecran">
       <EnTete titre="Profondeur du marché" sousTitre={nom} gauche={<BoutonRetour />} />
       <div className="mm-defile">
-        {!s.direct.binance ? (
-          <div className="mm-vide grand">La profondeur du marché n'est disponible que pour la crypto (carnet d'ordres Binance).</div>
-        ) : !carnet ? (
-          <div className="mm-vide grand">Connexion au carnet d'ordres…</div>
+        {!carnet ? (
+          <div className="mm-vide grand">{reel ? "Connexion au carnet d'ordres…" : 'En attente de la cotation…'}</div>
         ) : (
           <table className="mm-dom">
             <tbody>
@@ -488,7 +487,7 @@ export function EcranProfondeur({ nom }: { nom: string }) {
                     <td className="prix">{formaterPrix(s, p)}</td>
                     <td className="vol">
                       <i style={{ width: `${(v / max) * 100}%` }} />
-                      <span>{v.toFixed(4)}</span>
+                      <span>{v.toFixed(decimales)}</span>
                     </td>
                   </tr>
                 ))}
@@ -499,7 +498,7 @@ export function EcranProfondeur({ nom }: { nom: string }) {
                 <tr key={`b${p}`} className="bid">
                   <td className="vol">
                     <i style={{ width: `${(v / max) * 100}%` }} />
-                    <span>{v.toFixed(4)}</span>
+                    <span>{v.toFixed(decimales)}</span>
                   </td>
                   <td className="prix">{formaterPrix(s, p)}</td>
                   <td />
@@ -508,9 +507,11 @@ export function EcranProfondeur({ nom }: { nom: string }) {
             </tbody>
           </table>
         )}
-        <p className="mm-note">Volumes en {s.base}, carnet réel Binance {s.direct.binance}. Vos ordres s'exécutent au Bid / Ask de votre compte.</p>
+        <p className="mm-note">
+          Volumes en {unite} — {source}.{!reel && ' Pas de carnet public hors crypto : paliers de liquidité indicatifs autour de vos Bid / Ask, comme chez les courtiers CFD.'} Vos ordres s'exécutent au Bid / Ask de votre compte.
+        </p>
       </div>
-      {s.direct.binance && (
+      {carnet && (
         <div className="mm-boutons-bas colonne">
           <ChampVolume valeur={volume} changer={setVolume} min={s.volumeMin} max={s.volumeMax} pasMin={s.pasVolume} />
           <div className="mm-ligne-boutons">

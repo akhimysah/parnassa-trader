@@ -166,3 +166,20 @@ describe('exécution côté serveur', () => {
     expect(r.compte.ordres).toHaveLength(1);
   });
 });
+
+describe('profondeur du marché hors crypto', () => {
+  it('part du Bid/Ask du compte avec des volumes valides et croissants en moyenne', async () => {
+    const { profondeurIndicative } = await import('../src/marche/profondeur');
+    const { symbole } = await import('../src/marche/symboles');
+    const s = symbole('XAUUSD')!;
+    const q = { bid: 2400.1, ask: 2400.4, haut: 0, bas: 0, ouverture: 0, heure: 0, sens: 0 as const };
+    const c = profondeurIndicative(s, q, 'standard', 12, 0);
+    expect(c.bids[0][0]).toBe(2400.1);
+    expect(c.asks[0][0]).toBe(2400.4);
+    expect(c.bids[1][0]).toBeLessThan(c.bids[0][0]);
+    expect(c.asks[1][0]).toBeGreaterThan(c.asks[0][0]);
+    for (const [, v] of [...c.bids, ...c.asks]) expect(v).toBeGreaterThanOrEqual(s.volumeMin);
+    expect(c.bids[11][1]).toBeGreaterThan(c.bids[0][1]);
+    expect(profondeurIndicative(s, q, 'standard', 12, 0)).toEqual(c);
+  });
+});

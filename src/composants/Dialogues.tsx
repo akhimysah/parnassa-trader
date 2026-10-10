@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTerminal, type Dialogue } from '../contexte';
 import { identifiant, type Alerte, type Graphique, type Schema } from '../etat';
 import { HEURE_ROLLOVER_UTC, SYMBOLES, TYPES_COMPTE, formaterPrix, jourSwapTriple, libelleSeances, point, spreadPoints, swapPoints, symbole, type Categorie } from '../marche/symboles';
-import { abonnerProfondeur, type Carnet } from '../marche/binance';
+import { useProfondeur } from '../marche/profondeur';
 import { sourceDirecte } from '../marche/cotations';
 import { calculer, definition, DEFINITIONS, estSuperpose, nomCourt, type Indicateur, type MethodeMA, APPLICABLES, SOURCES, type Source } from '../graphique/indicateurs';
 import { SCHEMAS } from '../graphique/couleurs';
@@ -888,13 +888,16 @@ function DialogueAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: 
   );
 }
 
-/** Profondeur du marché (DOM) : vrai carnet d'ordres Binance, 20 niveaux, avec achat/vente en un clic. */
+/**
+ * Profondeur du marché (DOM) avec achat/vente en un clic : vrai carnet Binance pour la crypto, liquidité indicative
+ * du courtier pour les autres symboles.
+ */
 function DialogueProfondeur({ nom }: { nom: string }) {
-  const { fermer, cotations, operer, etat, ouvrir } = useTerminal();
+  const { fermer, cotations, operer, etat, ouvrir, compte } = useTerminal();
   const s = symbole(nom)!;
-  const [carnet, setCarnet] = useState<Carnet | null>(null);
-  const [volume, setVolume] = useState(etat.volumeDefaut);
-  useEffect(() => (s.direct.binance ? abonnerProfondeur(s.direct.binance, setCarnet) : undefined), [s]);
+  const { carnet, reel, unite, source } = useProfondeur(s, cotations[nom], compte.type ?? 'standard');
+  const [volume, setVolume] = useState(Math.max(s.volumeMin, etat.volumeDefaut));
+  const decimales = reel ? 4 : 2;
   const max = carnet ? Math.max(...carnet.bids.map((b) => b[1]), ...carnet.asks.map((a) => a[1])) : 1;
   const passer = (type: 'buy' | 'sell') => {
     if (!etat.unClicAccepte) return ouvrir({ type: 'unclic' });
@@ -902,10 +905,8 @@ function DialogueProfondeur({ nom }: { nom: string }) {
   };
   return (
     <Fenetre titre={`Profondeur du marché — ${nom}`} fermer={fermer} largeur={380} className="fenetre-dom">
-      {!s.direct.binance ? (
-        <p>La profondeur du marché n'est disponible que pour la crypto (carnet d'ordres Binance).</p>
-      ) : !carnet ? (
-        <p>Connexion au carnet d'ordres…</p>
+      {!carnet ? (
+        <p>{reel ? "Connexion au carnet d'ordres…" : 'En attente de la cotation…'}</p>
       ) : (
         <>
           <div className="dom-actions">
@@ -926,7 +927,7 @@ function DialogueProfondeur({ nom }: { nom: string }) {
                   <tr key={`a${p}`} className="dom-ask">
                     <td className="d">
                       <span className="dom-barre" style={{ width: `${(q / max) * 100}%` }} />
-                      {q.toFixed(4)}
+                      {q.toFixed(decimales)}
                     </td>
                     <td className="d">{formaterPrix(s, p)}</td>
                     <td />
@@ -938,13 +939,15 @@ function DialogueProfondeur({ nom }: { nom: string }) {
                   <td className="d">{formaterPrix(s, p)}</td>
                   <td>
                     <span className="dom-barre" style={{ width: `${(q / max) * 100}%` }} />
-                    {q.toFixed(4)}
+                    {q.toFixed(decimales)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <p className="aide">Volumes en {s.base} (carnet Binance {s.direct.binance}).</p>
+          <p className="aide">
+            Volumes en {unite} — {source}.{!reel && ' Le forex, les métaux, les indices et les actions n’ont pas de carnet public : comme chez les courtiers CFD, ce sont les paliers de liquidité proposés autour de vos Bid / Ask.'}
+          </p>
         </>
       )}
     </Fenetre>
