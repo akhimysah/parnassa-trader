@@ -6,11 +6,11 @@ const Mobile = lazy(() => import('./mobile/Mobile').then((m) => ({ default: m.Mo
 const Dialogues = lazy(() => import('./composants/Dialogues').then((m) => ({ default: m.Dialogues })));
 import { ContexteTerminal, type Dialogue, type OutilDessin, type Survol, type Terminal } from './contexte';
 import { reglagesModele } from './modeles';
+import { evaluerAlertes } from './alertes';
 import { definirExpertsPerso } from './algo/experts';
 import { chargerEtat, nouveauGraphique, sauverEtat, type EtatTerminal, type Graphique } from './etat';
 import { definirAbonnements, definirTypeCompte, useCotations } from './marche/cotations';
 import { appliquerCotations, type Compte, type Resultat } from './compte/moteur';
-import { symbole } from './marche/symboles';
 import { jouer } from './sons';
 import { registreGraphiques } from './graphique/registre';
 import { identifiant } from './etat';
@@ -102,18 +102,11 @@ export function App() {
         }
         return r.compte;
       });
-      let alertes = e.alertes;
-      for (const a of e.alertes) {
-        const q = cotations[a.symbole];
-        if (!a.active || !q) continue;
-        const v = a.condition.startsWith('bid') ? q.bid : q.ask;
-        const ok = a.condition.endsWith('>') ? v > a.valeur : v < a.valeur;
-        if (!ok) continue;
-        alertes = alertes.map((x) => (x.id === a.id ? { ...x, active: false, declencheeLe: Date.now() } : x));
-        const s = symbole(a.symbole);
-        messages.push(`Alerte ${a.symbole} : ${a.condition.slice(0, 3).toUpperCase()} ${a.condition.slice(3)} ${a.valeur.toFixed(s?.chiffres ?? 5)}${a.commentaire ? ` — ${a.commentaire}` : ''}`);
+      const { alertes, declenchees } = evaluerAlertes(e.alertes, cotations, Date.now());
+      for (const d of declenchees) {
+        messages.push(d.message);
         retour.son = 'alerte';
-        notifier(`Alerte ${a.symbole}`, messages[messages.length - 1], true);
+        notifier(`Alerte ${d.alerte.symbole}`, d.message, true);
       }
       if (!change && alertes === e.alertes) return e;
       return { ...e, comptes, alertes };

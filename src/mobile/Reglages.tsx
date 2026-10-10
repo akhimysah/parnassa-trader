@@ -12,6 +12,7 @@ import { choisirInterface } from '../interface';
 import { demanderPermission, notificationsDisponibles } from '../notifications';
 import { useInstallation } from '../installation';
 import { BoutonIcone, BoutonRetour, ChampPas, EnTete, IconePlus, Interrupteur, Segments, useAppuiLong, useNav, vibrer } from './commun';
+import { libelleAlerte } from '../alertes';
 
 /** Onglet Paramètres : compte, messagerie, outils et réglages, comme le menu de MT5 mobile. */
 export function Reglages() {
@@ -740,7 +741,7 @@ function Alertes() {
             key={a.id}
             className={a.active ? '' : 'muet'}
             onClick={() =>
-              feuille(`${a.symbole} ${a.condition.slice(0, 3).toUpperCase()} ${a.condition.slice(3)} ${formaterPrix(s, a.valeur)}`, [
+              feuille(`${a.symbole} ${libelleAlerte(a)}`, [
                 { libelle: 'Modifier', action: () => pousser({ type: 'alerte', id: a.id }) },
                 { libelle: a.active ? 'Désactiver' : 'Réactiver', action: () => maj((e) => ({ ...e, alertes: e.alertes.map((x) => (x.id === a.id ? { ...x, active: !x.active, declencheeLe: undefined } : x)) })) },
                 { libelle: 'Supprimer', danger: true, action: () => maj((e) => ({ ...e, alertes: e.alertes.filter((x) => x.id !== a.id) })) },
@@ -749,10 +750,10 @@ function Alertes() {
           >
             <div className="mm-liste-texte">
               <b>
-                {a.symbole} · {a.condition.slice(0, 3).toUpperCase()} {a.condition.slice(3)} {formaterPrix(s, a.valeur)}
+                {a.symbole} · {libelleAlerte(a)}
               </b>
               <small>
-                {a.declencheeLe ? `déclenchée le ${dateMT(a.declencheeLe)}` : a.active ? `actuel ${c ? formaterPrix(s, a.condition.startsWith('bid') ? c.bid : c.ask) : '—'}` : 'désactivée'}
+                {a.declencheeLe ? `déclenchée le ${dateMT(a.declencheeLe)}` : a.active ? (a.condition === 'heure=' ? 'en attente' : `actuel ${c ? formaterPrix(s, a.condition.startsWith('bid') ? c.bid : c.ask) : '—'}`) : 'désactivée'}
                 {a.commentaire ? ` · ${a.commentaire}` : ''}
               </small>
             </div>

@@ -11,6 +11,7 @@ import { CourbeSolde } from '../composants/Courbe';
 import { PrixGros, argent } from '../composants/ui';
 import { BoutonIcone, BoutonRetour, ChampPas, ChampVolume, EnTete, Interrupteur, Segments, useNav, vibrer } from './commun';
 import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
+import { depuisChampDate, versChampDate } from '../alertes';
 
 // ---------- Rapport de trading ----------
 
@@ -293,6 +294,9 @@ export function EcranAlerte({ id, symboleInitial }: { id?: string; symboleInitia
   const [condition, setCondition] = useState<Alerte['condition']>(actuelle?.condition ?? 'bid>');
   const [valeur, setValeur] = useState(actuelle?.valeur ?? 0);
   const [commentaire, setCommentaire] = useState(actuelle?.commentaire ?? '');
+  const [heure, setHeure] = useState(actuelle?.condition === 'heure=' ? actuelle.valeur : Date.now() + 3600_000);
+  const [max, setMax] = useState(actuelle?.max ?? 1);
+  const [expiration, setExpiration] = useState<number | null>(actuelle?.expiration ?? null);
   const s = symbole(sym)!;
   const q = cotations[sym];
   useEffect(() => {
@@ -318,12 +322,38 @@ export function EcranAlerte({ id, symboleInitial }: { id?: string; symboleInitia
               <option value="bid<">Bid inférieur à</option>
               <option value="ask>">Ask supérieur à</option>
               <option value="ask<">Ask inférieur à</option>
+              <option value="heure=">À une heure précise</option>
             </select>
           </label>
+          {condition === 'heure=' ? (
+            <label className="mm-ligne-champ">
+              <span>Heure</span>
+              <input type="datetime-local" value={versChampDate(heure)} onChange={(e) => setHeure(depuisChampDate(e.target.value))} />
+            </label>
+          ) : (
+            <>
+              <div className="mm-ligne-champ">
+                <span>Valeur</span>
+                <ChampPas valeur={valeur} changer={setValeur} pas={point(s)} decimales={s.chiffres} />
+              </div>
+              <div className="mm-ligne-champ">
+                <span>Déclenchements</span>
+                <ChampPas valeur={max} changer={(v) => setMax(Math.max(1, Math.round(v)))} pas={1} min={1} decimales={0} />
+              </div>
+            </>
+          )}
           <div className="mm-ligne-champ">
-            <span>Valeur</span>
-            <ChampPas valeur={valeur} changer={setValeur} pas={point(s)} decimales={s.chiffres} />
+            <span>Expiration</span>
+            <span style={{ justifySelf: 'end' }}>
+              <Interrupteur actif={expiration !== null} libelle="Expiration" changer={(v) => setExpiration(v ? Date.now() + 86400_000 : null)} />
+            </span>
           </div>
+          {expiration !== null && (
+            <label className="mm-ligne-champ">
+              <span>Expire le</span>
+              <input type="datetime-local" value={versChampDate(expiration)} onChange={(e) => setExpiration(depuisChampDate(e.target.value))} />
+            </label>
+          )}
           <label className="mm-ligne-champ">
             <span>Commentaire</span>
             <input value={commentaire} maxLength={60} placeholder="facultatif" onChange={(e) => setCommentaire(e.target.value)} />
@@ -347,7 +377,18 @@ export function EcranAlerte({ id, symboleInitial }: { id?: string; symboleInitia
         <button
           className="mm-bouton principal"
           onClick={() => {
-            const a: Alerte = { id: actuelle?.id ?? identifiant(), symbole: sym, condition, valeur, commentaire, active: true };
+            const a: Alerte = {
+              id: actuelle?.id ?? identifiant(),
+              symbole: sym,
+              condition,
+              valeur: condition === 'heure=' ? heure : valeur,
+              commentaire,
+              active: true,
+              max: condition === 'heure=' ? 1 : max,
+              pause: 10,
+              declenchements: 0,
+              expiration: expiration ?? undefined,
+            };
             maj((e) => ({ ...e, alertes: actuelle ? e.alertes.map((x) => (x.id === a.id ? a : x)) : [...e.alertes, a] }));
             vibrer(15);
             retour();

@@ -14,6 +14,7 @@ import { DialogueAssistant } from './Assistant';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
 import { Fenetre, Spin, argent, dateMT } from './ui';
 import { OBJETS } from '../graphique/dessins';
+import { depuisChampDate, versChampDate } from '../alertes';
 
 export function Dialogues() {
   const { dialogue } = useTerminal();
@@ -636,13 +637,17 @@ function DialogueAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: 
   const [condition, setCondition] = useState<Alerte['condition']>(actuelle?.condition ?? 'bid>');
   const [valeur, setValeur] = useState(actuelle?.valeur ?? 0);
   const [commentaire, setCommentaire] = useState(actuelle?.commentaire ?? '');
+  const [heure, setHeure] = useState(actuelle?.condition === 'heure=' ? actuelle.valeur : Date.now() + 3600_000);
+  const [max, setMax] = useState(actuelle?.max ?? 1);
+  const [pause, setPause] = useState(actuelle?.pause ?? 10);
+  const [expiration, setExpiration] = useState<number | null>(actuelle?.expiration ?? null);
   const s = symbole(sym)!;
   const q = cotations[sym];
   useEffect(() => {
     if (valeur === 0 && q) setValeur(q.bid);
   }, [q, valeur]);
   return (
-    <Fenetre titre={actuelle ? "Modifier l'alerte" : 'Créer une alerte'} fermer={fermer} largeur={400}>
+    <Fenetre titre={actuelle ? "Modifier l'alerte" : 'Créer une alerte'} fermer={fermer} largeur={420}>
       <div className="formulaire">
         <label>
           <span>Symbole :</span>
@@ -659,12 +664,42 @@ function DialogueAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: 
             <option value="bid<">Bid &lt;</option>
             <option value="ask>">Ask &gt;</option>
             <option value="ask<">Ask &lt;</option>
+            <option value="heure=">Heure =</option>
           </select>
         </label>
-        <label>
-          <span>Valeur :</span>
-          <Spin valeur={valeur} changer={setValeur} pas={point(s)} decimales={s.chiffres} />
+        {condition === 'heure=' ? (
+          <label>
+            <span>Heure :</span>
+            <input type="datetime-local" value={versChampDate(heure)} onChange={(e) => setHeure(depuisChampDate(e.target.value))} />
+          </label>
+        ) : (
+          <>
+            <label>
+              <span>Valeur :</span>
+              <Spin valeur={valeur} changer={setValeur} pas={point(s)} decimales={s.chiffres} />
+            </label>
+            <label>
+              <span>Déclenchements :</span>
+              <Spin valeur={max} changer={(v) => setMax(Math.max(1, Math.round(v)))} pas={1} min={1} decimales={0} />
+            </label>
+            {max > 1 && (
+              <label>
+                <span>Pause (s) :</span>
+                <Spin valeur={pause} changer={(v) => setPause(Math.max(1, Math.round(v)))} pas={5} min={1} decimales={0} />
+              </label>
+            )}
+          </>
+        )}
+        <label className="case">
+          <input type="checkbox" checked={expiration !== null} onChange={() => setExpiration(expiration === null ? Date.now() + 86400_000 : null)} />
+          Expiration
         </label>
+        {expiration !== null && (
+          <label>
+            <span>Expire le :</span>
+            <input type="datetime-local" value={versChampDate(expiration)} onChange={(e) => setExpiration(depuisChampDate(e.target.value))} />
+          </label>
+        )}
         <label>
           <span>Commentaire :</span>
           <input value={commentaire} onChange={(e) => setCommentaire(e.target.value)} maxLength={60} />
@@ -680,7 +715,18 @@ function DialogueAlerte({ id, symboleInitial }: { id?: string; symboleInitial?: 
         <button
           className="principal"
           onClick={() => {
-            const a: Alerte = { id: actuelle?.id ?? identifiant(), symbole: sym, condition, valeur, commentaire, active: true };
+            const a: Alerte = {
+              id: actuelle?.id ?? identifiant(),
+              symbole: sym,
+              condition,
+              valeur: condition === 'heure=' ? heure : valeur,
+              commentaire,
+              active: true,
+              max: condition === 'heure=' ? 1 : max,
+              pause,
+              declenchements: 0,
+              expiration: expiration ?? undefined,
+            };
             maj((e) => ({ ...e, alertes: actuelle ? e.alertes.map((x) => (x.id === a.id ? a : x)) : [...e.alertes, a] }));
             fermer();
           }}

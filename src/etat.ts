@@ -46,11 +46,18 @@ export interface Graphique {
 export interface Alerte {
   id: string;
   symbole: string;
-  condition: 'bid>' | 'bid<' | 'ask>' | 'ask<';
+  /** Prix au-dessus / en dessous, ou heure atteinte (valeur = horodatage en ms). */
+  condition: 'bid>' | 'bid<' | 'ask>' | 'ask<' | 'heure=';
   valeur: number;
   active: boolean;
   commentaire: string;
   declencheeLe?: number;
+  /** Nombre de déclenchements avant désactivation (1 par défaut) et pause entre deux, en secondes. */
+  max?: number;
+  pause?: number;
+  declenchements?: number;
+  /** Désactivée passé cette date (ms). */
+  expiration?: number;
 }
 
 export interface EtatTerminal {

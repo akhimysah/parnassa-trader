@@ -5,6 +5,7 @@ import { formaterPrix, point, symbole } from '../marche/symboles';
 import { RELAIS } from '../marche/bougies';
 import { argent, dateMT, useMenuContextuel, type ElementMenu } from './ui';
 import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
+import { CONDITIONS } from '../alertes';
 
 export type OngletBoite = 'trading' | 'exposition' | 'historique' | 'actualites' | 'courrier' | 'calendrier' | 'alertes' | 'journal';
 
@@ -692,7 +693,6 @@ export function OngletCourrier() {
 export function OngletAlertes() {
   const { etat, maj, ouvrir, cotations } = useTerminal();
   const { ouvrirMenu, element: menu } = useMenuContextuel();
-  const libelle = { 'bid>': 'Bid >', 'bid<': 'Bid <', 'ask>': 'Ask >', 'ask<': 'Ask <' };
   return (
     <div
       className="alertes"
@@ -734,10 +734,14 @@ export function OngletAlertes() {
                 }}
               >
                 <td>{a.symbole}</td>
-                <td>{libelle[a.condition]}</td>
-                <td className="d">{formaterPrix(s, a.valeur)}</td>
-                <td className="d">{c ? formaterPrix(s, a.condition.startsWith('bid') ? c.bid : c.ask) : ''}</td>
-                <td>{a.declencheeLe ? dateMT(a.declencheeLe) : ''}</td>
+                <td>{CONDITIONS[a.condition]}</td>
+                <td className="d">{a.condition === 'heure=' ? dateMT(a.valeur).slice(0, 16) : formaterPrix(s, a.valeur)}</td>
+                <td className="d">{a.condition === 'heure=' ? '' : c ? formaterPrix(s, a.condition.startsWith('bid') ? c.bid : c.ask) : ''}</td>
+                <td>
+                  {a.declencheeLe ? dateMT(a.declencheeLe) : ''}
+                  {(a.max ?? 1) > 1 ? ` (${a.declenchements ?? 0}/${a.max})` : ''}
+                  {a.expiration && a.active ? ` · expire ${dateMT(a.expiration).slice(0, 16)}` : ''}
+                </td>
                 <td>{a.commentaire}</td>
                 <td>
                   <button className="croix" onClick={() => maj((e) => ({ ...e, alertes: e.alertes.filter((x) => x.id !== a.id) }))}>
