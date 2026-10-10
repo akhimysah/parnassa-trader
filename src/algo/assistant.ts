@@ -30,6 +30,10 @@ export interface ExpertPerso {
   vente: Condition[];
   sortieAchat: Condition[];
   sortieVente: Condition[];
+  /** Filtres d'entrée : sens autorisés, heures (heure locale, début inclus, fin exclue) et jours (0 = lundi). */
+  sens?: 'deux' | 'achat' | 'vente';
+  heures?: [number, number];
+  jours?: number[];
 }
 
 export const CHAMPS_PRIX: Record<ChampPrix, string> = { close: 'Clôture', open: 'Ouverture', high: 'Plus haut', low: 'Plus bas' };
@@ -128,8 +132,19 @@ export function deciderPerso(e: ExpertPerso, b: Bougie[], sensActuel: Sens | nul
   if (b.length < 3) return rien;
   const vraie = evaluateur(b);
   const tout = (cs: Condition[]) => cs.length > 0 && cs.every(vraie);
-  if (tout(e.achat)) return { fermer: ['sell'], ouvrir: 'buy', raison: e.achat.map(libelleCondition).join(' et ') };
-  if (tout(e.vente)) return { fermer: ['buy'], ouvrir: 'sell', raison: e.vente.map(libelleCondition).join(' et ') };
+  // Filtres : en dehors des heures ou jours choisis, l'expert ne fait que gérer ses sorties.
+  const d = new Date(b[b.length - 1].time * 1000);
+  const heure = d.getHours();
+  const jour = (d.getDay() + 6) % 7;
+  const [h1, h2] = e.heures ?? [0, 24];
+  const dansHeures = h1 <= h2 ? heure >= h1 && heure < h2 : heure >= h1 || heure < h2;
+  const ouvert = dansHeures && (!e.jours?.length || e.jours.includes(jour));
+  const achatsPermis = ouvert && e.sens !== 'vente';
+  const ventesPermises = ouvert && e.sens !== 'achat';
+  if (!achatsPermis && tout(e.achat) && sensActuel === 'sell') return { fermer: ['sell'], ouvrir: null, raison: e.achat.map(libelleCondition).join(' et ') };
+  if (!ventesPermises && tout(e.vente) && sensActuel === 'buy') return { fermer: ['buy'], ouvrir: null, raison: e.vente.map(libelleCondition).join(' et ') };
+  if (achatsPermis && tout(e.achat)) return { fermer: ['sell'], ouvrir: 'buy', raison: e.achat.map(libelleCondition).join(' et ') };
+  if (ventesPermises && tout(e.vente)) return { fermer: ['buy'], ouvrir: 'sell', raison: e.vente.map(libelleCondition).join(' et ') };
   if (sensActuel === 'buy' && tout(e.sortieAchat)) return { fermer: ['buy'], ouvrir: null, raison: `sortie : ${e.sortieAchat.map(libelleCondition).join(' et ')}` };
   if (sensActuel === 'sell' && tout(e.sortieVente)) return { fermer: ['sell'], ouvrir: null, raison: `sortie : ${e.sortieVente.map(libelleCondition).join(' et ')}` };
   return rien;

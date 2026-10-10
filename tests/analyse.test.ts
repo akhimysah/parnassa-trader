@@ -199,3 +199,16 @@ describe('indicateurs MT5 complémentaires', () => {
     }
   });
 });
+
+describe('filtres de l’assistant', () => {
+  it('n’ouvre pas hors des heures ou dans le sens interdit', () => {
+    const toujours: import('../src/algo/assistant').Condition = { a: { type: 'valeur', valeur: 1 }, op: 'superieur', b: { type: 'valeur', valeur: 0 } };
+    const e = { ...nouvelExpertPerso('f'), achat: [toujours], vente: [] };
+    const b = serie(100);
+    expect(deciderPerso(e, b, null).ouvrir).toBe('buy');
+    expect(deciderPerso({ ...e, sens: 'vente' }, b, null).ouvrir).toBeNull();
+    const h = new Date(b[b.length - 1].time * 1000).getHours();
+    expect(deciderPerso({ ...e, heures: [(h + 1) % 24, (h + 2) % 24 || 24] }, b, null).ouvrir).toBeNull();
+    expect(deciderPerso({ ...e, heures: [h, h + 1] }, b, null).ouvrir).toBe('buy');
+  });
+});

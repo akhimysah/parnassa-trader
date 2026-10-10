@@ -130,6 +130,58 @@ export function DialogueAssistant({ id }: { id?: string }) {
           <input value={e.nom} maxLength={40} onChange={(ev) => champ('nom')(ev.target.value)} autoFocus />
         </label>
       </div>
+      <div className="formulaire assistant-filtres">
+        <label>
+          <span>Sens :</span>
+          <select value={e.sens ?? 'deux'} onChange={(ev) => setE((x) => ({ ...x, sens: ev.target.value as ExpertPerso['sens'] }))}>
+            <option value="deux">Achats et ventes</option>
+            <option value="achat">Achats seulement</option>
+            <option value="vente">Ventes seulement</option>
+          </select>
+        </label>
+        <label>
+          <span>Heures d'entrée :</span>
+          <span className="heures">
+            de{' '}
+            <select value={e.heures?.[0] ?? 0} onChange={(ev) => setE((x) => ({ ...x, heures: [Number(ev.target.value), x.heures?.[1] ?? 24] }))}>
+              {Array.from({ length: 24 }, (_, h) => (
+                <option key={h} value={h}>
+                  {h} h
+                </option>
+              ))}
+            </select>{' '}
+            à{' '}
+            <select value={e.heures?.[1] ?? 24} onChange={(ev) => setE((x) => ({ ...x, heures: [x.heures?.[0] ?? 0, Number(ev.target.value)] }))}>
+              {Array.from({ length: 24 }, (_, h) => h + 1).map((h) => (
+                <option key={h} value={h}>
+                  {h} h
+                </option>
+              ))}
+            </select>
+          </span>
+        </label>
+        <label>
+          <span>Jours :</span>
+          <span className="jours">
+            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((j, k) => (
+              <label key={j} className="case">
+                <input
+                  type="checkbox"
+                  checked={!e.jours?.length || e.jours.includes(k)}
+                  onChange={() =>
+                    setE((x) => {
+                      const tous = x.jours?.length ? x.jours : [0, 1, 2, 3, 4, 5, 6];
+                      const suite = tous.includes(k) ? tous.filter((v) => v !== k) : [...tous, k].sort();
+                      return { ...x, jours: suite.length === 7 ? undefined : suite };
+                    })
+                  }
+                />
+                {j}
+              </label>
+            ))}
+          </span>
+        </label>
+      </div>
       <div className="assistant-blocs">
         <BlocConditions titre="Signal d'achat" aide="Toutes les conditions vraies à la clôture d'une barre : l'expert ferme sa vente et achète." conditions={e.achat} changer={champ('achat')} />
         <BlocConditions titre="Signal de vente" aide="Toutes vraies : l'expert ferme son achat et vend." conditions={e.vente} changer={champ('vente')} />

@@ -2521,3 +2521,8 @@ kbd {
   border: 1px solid var(--bordure);
   margin-bottom: 4px;
 }
+.assistant-filtres .jours {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
