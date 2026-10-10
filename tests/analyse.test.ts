@@ -1,0 +1,114 @@
+import { describe, expect, it } from 'vitest';
+import type { Bougie } from '../src/marche/bougies';
+import { calculer, calculerTous, moyenne, panneauxIndicateurs, type Indicateur } from '../src/graphique/indicateurs';
+import { heikin } from '../src/graphique/heikin';
+import { evaluateur, deciderPerso, nouvelExpertPerso } from '../src/algo/assistant';
+import { evaluerAlertes } from '../src/alertes';
+import { lancerTest, nombreCombinaisons, optimiserGenetique } from '../src/algo/testeur';
+import { symbole } from '../src/marche/symboles';
+import { interpreter } from '../src/composants/NavigationRapide';
+import { reglagesModele } from '../src/modeles';
+import type { Alerte } from '../src/etat';
+
+/** Série déterministe : une sinusoïde autour de 80 000, une barre par heure. */
+function serie(n = 600): Bougie[] {
+  return Array.from({ length: n }, (_, i) => {
+    const c = 80000 + 2000 * Math.sin(i / 25) + 300 * Math.sin(i / 3);
+    const o = 80000 + 2000 * Math.sin((i - 1) / 25) + 300 * Math.sin((i - 1) / 3);
+    return { time: 1_700_000_000 + i * 3600, open: o, high: Math.max(o, c) + 50, low: Math.min(o, c) - 50, close: c, volume: 10 };
+  });
+}
+const ind = (type: Indicateur['type'], p: Record<string, number>, extra: Partial<Indicateur> = {}): Indicateur => ({ id: type, type, p, couleur: '', ...extra });
+
+describe('indicateurs', () => {
+  it('calcule moyennes simple et exponentielle', () => {
+    const v = [1, 2, 3, 4, 5];
+    expect(moyenne(v, 3, 'sma')).toEqual([null, null, 2, 3, 4]);
+    expect(moyenne(v, 3, 'ema')[4]).toBeCloseTo(4, 6);
+  });
+  it('borne le RSI entre 0 et 100', () => {
+    const r = calculer(ind('rsi', { periode: 14 }), serie()).traces[0].valeurs.filter((x): x is number => x !== null);
+    expect(r.length).toBeGreaterThan(500);
+    expect(Math.min(...r)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...r)).toBeLessThanOrEqual(100);
+  });
+  it("applique un indicateur aux données du précédent, dans sa fenêtre", () => {
+    const liste = [ind('rsi', { periode: 14 }), ind('ma', { periode: 9, decalage: 0 }, { source: 'precedent' }), ind('ma', { periode: 20, decalage: 0 })];
+    expect(panneauxIndicateurs(liste)).toEqual([1, 1, 0]);
+    const [rsi, maRsi] = calculerTous(liste, serie());
+    const v = maRsi.resultat.traces[0].valeurs[300]!;
+    expect(v).toBeGreaterThan(0);
+    expect(v).toBeLessThan(100);
+    expect(rsi.panneau).toBe(1);
+  });
+  it('construit des bougies Heikin Ashi cohérentes', () => {
+    const b = serie(50);
+    const h = heikin(b);
+    expect(h[10].close).toBeCloseTo((b[10].open + b[10].high + b[10].low + b[10].close) / 4, 6);
+    expect(h[10].open).toBeCloseTo((h[9].open + h[9].close) / 2, 6);
+    expect(h[10].high).toBeGreaterThanOrEqual(Math.max(h[10].open, h[10].close));
+  });
+});
+
+describe('assistant et alertes', () => {
+  it('repère un croisement de moyennes', () => {
+    const b = serie();
+    const croisements = b.slice(60).filter((_, i) => evaluateur(b.slice(0, 61 + i))({ a: { type: 'indicateur', indicateur: 'ma', p: { periode: 5, decalage: 0 }, trace: 0 }, op: 'croise-dessus', b: { type: 'indicateur', indicateur: 'ma', p: { periode: 20, decalage: 0 }, trace: 0 } }));
+    expect(croisements.length).toBeGreaterThan(3);
+  });
+  it("décide comme l'expert par défaut de l'assistant", () => {
+    const d = deciderPerso(nouvelExpertPerso('x'), serie(), null);
+    expect(['buy', 'sell', null]).toContain(d.ouvrir);
+  });
+  it("répète une alerte avec pause puis la désactive, et désactive l'alerte expirée", () => {
+    const q = { BTCUSD: { bid: 80000, ask: 80010, haut: 0, bas: 0, ouverture: 0, heure: 0, sens: 0 as const } };
+    let a: Alerte[] = [
+      { id: '1', symbole: 'BTCUSD', condition: 'bid>', valeur: 1, active: true, commentaire: '', max: 2, pause: 10 },
+      { id: '2', symbole: 'BTCUSD', condition: 'bid>', valeur: 1, active: true, commentaire: '', expiration: 1 },
+    ];
+    const r1 = evaluerAlertes(a, q, 1000);
+    expect(r1.declenchees.map((d) => d.alerte.id)).toEqual(['1']);
+    a = r1.alertes;
+    expect(evaluerAlertes(a, q, 5000).declenchees).toHaveLength(0);
+    const r3 = evaluerAlertes(a, q, 12000);
+    expect(r3.declenchees).toHaveLength(1);
+    expect(r3.alertes.find((x) => x.id === '1')!.active).toBe(false);
+    expect(r3.alertes.find((x) => x.id === '2')!.active).toBe(false);
+  });
+});
+
+describe('testeur de stratégie', () => {
+  const base = { s: symbole('BTCUSD')!, bougies: serie(), depot: 10000, levier: 100, spread: 1000, modelisation: 'ohlc' as const, conversion: 1 };
+  const expert = { type: 'croisement-ma' as const, p: { rapide: 10, lente: 30, volume: 0.1, sl: 0, tp: 0, suiveur: 0, equilibre: 0 }, magic: 1 };
+  it('produit des trades et un solde cohérent', () => {
+    const r = lancerTest({ ...base, expert });
+    expect(r.stats.trades).toBeGreaterThan(5);
+    const dernier = r.transactions[r.transactions.length - 1];
+    expect(dernier.solde).toBeCloseTo(10000 + r.stats.net, 2);
+  });
+  it("ne trade pas avant la barre de départ (avant-test)", () => {
+    const r = lancerTest({ ...base, expert, debut: 400 });
+    const premier = r.transactions.find((t) => t.type !== 'balance');
+    expect(premier!.heure).toBeGreaterThanOrEqual(base.bougies[400].time * 1000);
+  });
+  it("trouve des réglages par l'algorithme génétique sans tout tester", async () => {
+    const plages = { rapide: { debut: 2, pas: 1, fin: 40 }, lente: { debut: 10, pas: 2, fin: 120 } };
+    expect(nombreCombinaisons(plages)).toBe(39 * 56);
+    const passes = await optimiserGenetique({ ...base, expert }, plages, (p) => (p.trades ? p.profit : -Infinity), () => {}, () => false, undefined, 12, 6);
+    expect(passes.length).toBeGreaterThan(10);
+    expect(passes.length).toBeLessThan(nombreCombinaisons(plages));
+  });
+});
+
+describe('utilitaires', () => {
+  it('comprend la navigation rapide', () => {
+    expect(interpreter('gbpusd,h4')).toEqual({ symbole: 'GBPUSD', periode: 'H4' });
+    expect(interpreter('M15')).toEqual({ periode: 'M15' });
+    expect(interpreter('xag')).toEqual({ symbole: 'XAGUSD' });
+    expect(interpreter('zzz')).toBeNull();
+  });
+  it('donne de nouveaux identifiants aux indicateurs d’un modèle', () => {
+    const r = reglagesModele({ nom: 'm', reglages: { indicateurs: [ind('rsi', { periode: 14 })] } });
+    expect(r.indicateurs![0].id).not.toBe('rsi');
+  });
+});

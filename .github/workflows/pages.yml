@@ -25,6 +25,7 @@ jobs:
       - run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
       - run: corepack pnpm exec tsc --noEmit
+      - run: corepack pnpm exec vitest run
       - run: corepack pnpm exec vite build --mode pages
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
