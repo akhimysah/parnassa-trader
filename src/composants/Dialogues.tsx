@@ -874,6 +874,7 @@ const RACCOURCIS: [string, string][] = [
   ['Ctrl+I', 'Liste des indicateurs'],
   ['Ctrl+B', 'Liste des objets'],
   ['Ctrl+D', 'Fenêtre de données'],
+  ['Ctrl+Z', 'Annuler le dernier changement des objets ou indicateurs du graphique'],
   ['Ctrl+Y', 'Séparateurs de périodes'],
   ['Taper un symbole ou une période', 'Navigation rapide (ex. GBPUSD,H4 puis Entrée)'],
   ['Alt+1 / Alt+2 / Alt+3 / Alt+4', 'Barres / bougies / ligne / Heikin Ashi'],

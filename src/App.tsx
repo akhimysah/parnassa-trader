@@ -185,11 +185,43 @@ export function App() {
     [maj, signaler],
   );
 
+  // Annuler (Ctrl+Z) comme MT5 : les objets et indicateurs de chaque graphique avant chaque changement. Les
+  // changements rapprochés (objet tiré à la souris) ne font qu'une étape.
+  const annulations = useRef<{ id: string; objets: Graphique['objets']; indicateurs: Graphique['indicateurs']; quand: number }[]>([]);
   const majGraphique = useCallback(
     (id: string, patch: Partial<Graphique> | ((g: Graphique) => Partial<Graphique>)) =>
-      maj((e) => ({ ...e, graphiques: e.graphiques.map((g) => (g.id === id ? { ...g, ...(typeof patch === 'function' ? patch(g) : patch) } : g)) })),
+      maj((e) => ({
+        ...e,
+        graphiques: e.graphiques.map((g) => {
+          if (g.id !== id) return g;
+          const suivant = { ...g, ...(typeof patch === 'function' ? patch(g) : patch) };
+          if (suivant.objets !== g.objets || suivant.indicateurs !== g.indicateurs) {
+            const pile = annulations.current;
+            const der = pile[pile.length - 1];
+            if (!der || der.id !== id || Date.now() - der.quand > 800) pile.push({ id, objets: g.objets, indicateurs: g.indicateurs, quand: Date.now() });
+            else der.quand = Date.now();
+            if (pile.length > 50) pile.shift();
+          }
+          return suivant;
+        }),
+      })),
     [maj],
   );
+  const annuler = useCallback(() => {
+    const e = refEtat.current;
+    const pile = annulations.current;
+    for (let i = pile.length - 1; i >= 0; i--) {
+      if (pile[i].id !== e.graphiqueActif) continue;
+      const [etape] = pile.splice(i, 1);
+      const g = e.graphiques.find((x) => x.id === etape.id);
+      if (!g) return;
+      const quoi = etape.objets.length !== g.objets.length || etape.objets !== g.objets ? 'objets' : 'indicateurs';
+      maj((x) => ({ ...x, graphiques: x.graphiques.map((k) => (k.id === etape.id ? { ...k, objets: etape.objets, indicateurs: etape.indicateurs } : k)) }));
+      signaler(`Annulé : dernier changement des ${quoi} de ${g.symbole},${g.periode}`);
+      return;
+    }
+    signaler('Rien à annuler sur ce graphique');
+  }, [maj, signaler]);
   const ouvrirGraphique = useCallback(
     (sym: string, periode?: Graphique['periode']) =>
       maj((e) => {
@@ -241,6 +273,7 @@ export function App() {
       if (e.key === 'F11') return faire(() => void (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => undefined));
       if (e.key === 'F1') return faire(() => setDialogue({ type: 'raccourcis' }));
       if (e.ctrlKey || e.metaKey) {
+        if (touche === 'z' && !saisie) return faire(annuler);
         if (touche === 'm') return faire(() => panneau('observation'));
         if (touche === 'n') return faire(() => panneau('navigateur'));
         if (touche === 't') return faire(() => panneau('boite'));
@@ -278,7 +311,7 @@ export function App() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [maj, majGraphique, outil, dialogue]);
+  }, [maj, majGraphique, outil, dialogue, annuler]);
 
   const texteSurvol = survol
     ? `${new Date(survol.temps).toLocaleString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}   O: ${survol.o.toFixed(survol.chiffres)}   H: ${survol.h.toFixed(survol.chiffres)}   L: ${survol.l.toFixed(survol.chiffres)}   C: ${survol.c.toFixed(survol.chiffres)}   V: ${Math.round(survol.v)}`
