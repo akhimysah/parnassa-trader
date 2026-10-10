@@ -123,6 +123,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Algo Trading', raccourci: 'Ctrl+E', coche: etat.algo, action: () => maj((e) => ({ ...e, algo: !e.algo })) },
         { libelle: 'Expert Advisor sur le graphique…', desactive: !g, action: () => g && ouvrir({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
         { libelle: "Assistant de création d'expert…", action: () => ouvrir({ type: 'assistant' }) },
+        { libelle: 'Gestion du risque…', action: () => ouvrir({ type: 'risque' }) },
         { separateur: true },
         { libelle: 'Options', raccourci: 'Ctrl+O', action: () => ouvrir({ type: 'options' }) },
       ],

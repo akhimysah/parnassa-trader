@@ -19,6 +19,7 @@ import { depuisChampDate, versChampDate } from '../alertes';
 import { EditeurOperande } from './Assistant';
 import { OPERATEURS, type Condition, type Operateur } from '../algo/assistant';
 import { PERIODES, type Periode } from '../marche/bougies';
+import { perteJour, RISQUE_DEFAUT } from '../compte/risque';
 
 export function Dialogues() {
   const { dialogue } = useTerminal();
@@ -82,6 +83,8 @@ function Contenu({ d }: { d: Dialogue }) {
       return <DialogueAcces acces={d.acces} />;
     case 'assistant':
       return <DialogueAssistant id={d.id} />;
+    case 'risque':
+      return <DialogueRisque />;
   }
 }
 
@@ -607,6 +610,7 @@ function DialogueOptions() {
           <Spin valeur={etat.volumeDefaut} changer={(v) => maj((e) => ({ ...e, volumeDefaut: v }))} pas={0.01} min={0.01} max={100} decimales={2} />
         </label>
       </fieldset>
+      <BlocRisque />
       <fieldset>
         <legend>Interface</legend>
         <label>
@@ -925,3 +929,50 @@ const RACCOURCIS: [string, string][] = [
   ['Échap', 'Annuler l\'outil de dessin, fermer une fenêtre'],
 ];
 
+
+/** Garde-fous de risque : perte du jour, positions et volume maximaux (0 = sans limite). */
+export function BlocRisque() {
+  const { etat, maj, compte, cotations } = useTerminal();
+  const r = etat.risque ?? RISQUE_DEFAUT;
+  const changer = (patch: Partial<typeof r>) => maj((e) => ({ ...e, risque: { ...(e.risque ?? RISQUE_DEFAUT), ...patch } }));
+  const p = perteJour(compte, cotations);
+  return (
+    <fieldset className="bloc-risque">
+      <legend>Gestion du risque</legend>
+      <label>
+        Perte du jour maximale (% du solde, 0 = aucune) :{' '}
+        <Spin valeur={r.perteJourPct} changer={(v) => changer({ perteJourPct: Math.max(0, v) })} pas={0.5} min={0} max={100} decimales={1} />
+      </label>
+      <label className="case">
+        <input type="checkbox" checked={r.fermerAuSeuil} onChange={() => changer({ fermerAuSeuil: !r.fermerAuSeuil })} />
+        Fermer toutes les positions quand elle est atteinte
+      </label>
+      <label>
+        Positions et ordres ouverts au plus (0 = sans limite) :{' '}
+        <Spin valeur={r.maxPositions} changer={(v) => changer({ maxPositions: Math.max(0, Math.round(v)) })} pas={1} min={0} decimales={0} />
+      </label>
+      <label>
+        Volume par position au plus (lots, 0 = sans limite) :{' '}
+        <Spin valeur={r.maxVolume} changer={(v) => changer({ maxVolume: Math.max(0, v) })} pas={0.1} min={0} decimales={2} />
+      </label>
+      <p className="aide">
+        Aujourd'hui sur {compte.login} : {p.montant > 0 ? `perte de ${argent(p.montant)} USD (${p.pct.toFixed(2)} %)` : `gain de ${argent(-p.montant)} USD`} depuis un solde de départ de {argent(p.depart)} USD
+        {r.perteJourPct > 0 && p.pct >= r.perteJourPct ? ' — limite atteinte, nouveaux ordres bloqués.' : '.'}
+      </p>
+    </fieldset>
+  );
+}
+
+function DialogueRisque() {
+  const { fermer } = useTerminal();
+  return (
+    <Fenetre titre="Gestion du risque" fermer={fermer} largeur={460}>
+      <BlocRisque />
+      <div className="boutons">
+        <button className="principal" onClick={fermer}>
+          OK
+        </button>
+      </div>
+    </Fenetre>
+  );
+}

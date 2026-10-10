@@ -18,6 +18,7 @@ import { NavigationRapide } from './composants/NavigationRapide';
 import type { OngletBoite } from './composants/BoiteOutils';
 import { useSynchro } from './synchro';
 import { refusTrading, useComptesEnLigne } from './compte/enLigne';
+import { appliquerLimiteJour, refusRisque, RISQUE_DEFAUT } from './compte/risque';
 import { useInterface } from './interface';
 import { notifier } from './notifications';
 
@@ -88,7 +89,14 @@ export function App() {
         if (c.positions.length === 0 && c.ordres.length === 0) return c;
         // Compte en ligne consulté en lecture seule ou sans session : c'est l'appareil connecté qui l'exécute.
         if (c.enLigne && (c.lecture || refEnLigne.current.statut(c.login) === 'deconnecte')) return c;
-        const r = appliquerCotations(c, cotations);
+        const r0 = appliquerCotations(c, cotations);
+        const limite = appliquerLimiteJour(r0.compte, e.risque ?? RISQUE_DEFAUT, cotations);
+        const r = { ...r0, compte: limite.compte };
+        if (limite.message) {
+          messages.push(limite.message);
+          retour.son = 'stop';
+          notifier('Limite de perte du jour', limite.message, true);
+        }
         if (r.compte !== c) change = true;
         for (const ev of r.evenements) {
           messages.push(c.login === e.actif ? ev.message : `${c.login} : ${ev.message}`);
@@ -199,7 +207,10 @@ export function App() {
       const e = refEtat.current;
       const c = e.comptes.find((x) => x.login === e.actif) ?? e.comptes[0];
       const refus = refusTrading(c, refEnLigne.current.statut(c.login));
-      const r = refus ? { compte: c, erreur: refus } : f(c);
+      const brut = refus ? { compte: c, erreur: refus } : f(c);
+      // Garde-fous de risque : une opération qui ouvre une position ou un ordre au-delà des limites est annulée.
+      const refusR = brut.erreur ? null : refusRisque(c, brut.compte, e.risque ?? RISQUE_DEFAUT, refCotations.current);
+      const r = refusR ? { compte: c, erreur: refusR } : brut;
       if (r.compte !== c) maj((x) => ({ ...x, comptes: x.comptes.map((k) => (k.login === c.login ? r.compte : k)) }));
       if (r.erreur) {
         if (e.son) jouer('erreur');

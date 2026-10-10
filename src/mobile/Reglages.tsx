@@ -153,6 +153,10 @@ export function Reglages() {
               <span className="mm-ico bleu">⬇</span>Installer l'application
             </li>
           )}
+          <li className="fleche" onClick={() => ouvrir({ type: 'risque' })}>
+            <span className="mm-ico rouge">⛨</span>Gestion du risque
+            {(etat.risque?.perteJourPct || etat.risque?.maxPositions || etat.risque?.maxVolume) ? <small className="mm-compte">active</small> : null}
+          </li>
           <li className="fleche" onClick={() => choisirInterface('bureau')}>
             <span className="mm-ico gris">🖥</span>Version ordinateur
           </li>

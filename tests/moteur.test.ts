@@ -72,3 +72,30 @@ describe('moteur du compte', () => {
     expect(r.evenements.some((e) => e.type === 'stop-out')).toBe(true);
   });
 });
+
+describe('gestion du risque', () => {
+  it('bloque au-delà du volume et du nombre de positions', async () => {
+    const { refusRisque } = await import('../src/compte/risque');
+    const c = nouveauCompte('t', 10000, 100);
+    const gros = ouvrirMarche(c, { symbole: 'BTCUSD', type: 'buy', volume: 0.5, sl: 0, tp: 0, commentaire: '' }, cot(80000)).compte;
+    expect(refusRisque(c, gros, { perteJourPct: 0, maxPositions: 0, maxVolume: 0.2, fermerAuSeuil: false }, cot(80000))).toMatch(/Volume limité/);
+    const un = acheter(c).compte;
+    const deux = acheter(un).compte;
+    expect(refusRisque(un, deux, { perteJourPct: 0, maxPositions: 1, maxVolume: 0, fermerAuSeuil: false }, cot(80000))).toMatch(/1 positions/);
+    // Fermer une position n'est jamais refusé.
+    const ferme = fermerPosition(deux, deux.positions[0].ticket, cot(80000)).compte;
+    expect(refusRisque(deux, ferme, { perteJourPct: 0, maxPositions: 1, maxVolume: 0, fermerAuSeuil: false }, cot(80000))).toBeNull();
+  });
+  it('bloque les nouveaux ordres et ferme tout à la perte du jour', async () => {
+    const { refusRisque, appliquerLimiteJour, perteJour } = await import('../src/compte/risque');
+    const regles = { perteJourPct: 2, maxPositions: 0, maxVolume: 0, fermerAuSeuil: true };
+    const c = acheter(nouveauCompte('t', 10000, 100)).compte;
+    // -2 500 $ de flottant sur 0,1 BTC : bien plus de 2 % des 10 000 $.
+    expect(perteJour(c, cot(55000)).pct).toBeGreaterThan(2);
+    expect(refusRisque(c, acheter(c, 55000).compte, regles, cot(55000))).toMatch(/Limite de perte du jour/);
+    const r = appliquerLimiteJour(c, regles, cot(55000));
+    expect(r.compte.positions).toHaveLength(0);
+    expect(r.message).toMatch(/limite de perte du jour/);
+    expect(appliquerLimiteJour(c, regles, cot(80000)).compte.positions).toHaveLength(1);
+  });
+});

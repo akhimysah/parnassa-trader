@@ -20,6 +20,7 @@ const SECTIONS: { titre: string; points: string[] }[] = [
       'Trading en un clic (Alt+T) : boutons SELL / BUY sur le graphique, volume modifiable directement.',
       'Sur le graphique, tirez la ligne d’une position pour créer un S/L ou un T/P ; une bulle montre le résultat en USD. Double-clic sur une ligne : la modifier.',
       'Clic droit sur une position : fermeture partielle, stop suiveur, break-even (tout de suite ou après N points), Fermer par.',
+      'Gestion du risque (Outils → Gestion du risque) : perte du jour maximale (avec fermeture automatique), nombre de positions et volume maximaux ; au-delà, les nouveaux ordres sont refusés.',
     ],
   },
   {

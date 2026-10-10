@@ -107,6 +107,8 @@ export interface EtatTerminal {
   expertsPerso: import('./algo/assistant').ExpertPerso[];
   /** Ensembles de symboles de l'Observation du marché (comme les « sets » de MT5). */
   ensembles: { nom: string; symboles: string[] }[];
+  /** Garde-fous de risque appliqués à tous les comptes. */
+  risque: import('./compte/risque').ReglesRisque;
 }
 
 export function identifiant(): string {
@@ -165,6 +167,7 @@ function etatInitial(): EtatTerminal {
     profilActif: null,
     expertsPerso: [],
     ensembles: [],
+    risque: { perteJourPct: 0, maxPositions: 0, maxVolume: 0, fermerAuSeuil: false },
   };
 }
 
