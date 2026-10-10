@@ -57,6 +57,7 @@ const SECTIONS: { titre: string; points: string[] }[] = [
       'Alertes de prix (Bid / Ask) ou d’heure, avec nombre de déclenchements, pause et expiration ; son et notification.',
       'Rapport de trading (Affichage → Rapport) et rapport HTML enregistrable ; export CSV de l’historique.',
       'Ensembles de symboles dans l’Observation du marché (clic droit → Ensembles).',
+      'Scanner de marché (Outils → Scanner) : une condition (ex. RSI(14) en dessous de 30) vérifiée sur tous les symboles de l’Observation du marché ; clic pour ouvrir le graphique.',
     ],
   },
   {

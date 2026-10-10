@@ -124,6 +124,7 @@ function menus(a: ReturnType<typeof useActions>): [string, ElementMenu[]][] {
         { libelle: 'Expert Advisor sur le graphique…', desactive: !g, action: () => g && ouvrir({ type: 'expert', graphique: g.id, expert: g.expert?.type }) },
         { libelle: "Assistant de création d'expert…", action: () => ouvrir({ type: 'assistant' }) },
         { libelle: 'Gestion du risque…', action: () => ouvrir({ type: 'risque' }) },
+        { libelle: 'Scanner de marché…', action: () => ouvrir({ type: 'scanner' }) },
         { separateur: true },
         { libelle: 'Options', raccourci: 'Ctrl+O', action: () => ouvrir({ type: 'options' }) },
       ],

@@ -12,6 +12,7 @@ import { BlocSynchro, DialogueSynchro } from './Synchro';
 import { DialogueAcces, DialogueCompte, DialogueConnexion } from './DialoguesComptes';
 import { DialogueAssistant } from './Assistant';
 import { DialogueGuide } from './Guide';
+import { DialogueScanner } from './Scanner';
 import { DialogueModifierOrdre, DialogueModifierPosition, DialogueOrdre } from './DialogueOrdre';
 import { Fenetre, Spin, argent, dateMT } from './ui';
 import { OBJETS } from '../graphique/dessins';
@@ -86,6 +87,8 @@ function Contenu({ d }: { d: Dialogue }) {
       return <DialogueAssistant id={d.id} />;
     case 'risque':
       return <DialogueRisque />;
+    case 'scanner':
+      return <DialogueScanner />;
   }
 }
 

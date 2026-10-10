@@ -35,6 +35,7 @@ export type Dialogue =
   | { type: 'synchro' }
   | { type: 'assistant'; id?: string }
   | { type: 'risque' }
+  | { type: 'scanner' }
   | { type: 'acces'; acces: Acces };
 
 /** Ce qu'affiche la barre d'état au survol d'un graphique. */
