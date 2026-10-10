@@ -13,6 +13,7 @@ import { BarreEtat, BarreMenus, BarreOutils } from './composants/Barres';
 import { ObservationMarche } from './composants/ObservationMarche';
 import { Navigateur } from './composants/Navigateur';
 import { FenetreDonnees } from './composants/FenetreDonnees';
+import { NavigationRapide } from './composants/NavigationRapide';
 import { BoiteOutils, type OngletBoite } from './composants/BoiteOutils';
 import { ZoneGraphiques } from './composants/ZoneGraphiques';
 import { Testeur } from './composants/Testeur';
@@ -45,6 +46,9 @@ export function App() {
   const [outil, setOutil] = useState<OutilDessin>(null);
   const [onglet, setOnglet] = useState<OngletBoite>('trading');
   const { mobile, force } = useInterface();
+  const mobileRef = useRef(mobile);
+  mobileRef.current = mobile;
+  const [navRapide, setNavRapide] = useState<string | null>(null);
 
   // ---------- Abonnements aux cotations ----------
   const cleAbonnements = useMemo(() => {
@@ -274,6 +278,8 @@ export function App() {
         return;
       }
       if (saisie || dialogue || !g) return;
+      // Navigation rapide : une lettre ou un chiffre tapé sur le graphique ouvre le champ symbole / période.
+      if (e.key.length === 1 && /[a-z0-9]/i.test(e.key) && !e.altKey && !mobileRef.current) return faire(() => setNavRapide(e.key.toUpperCase()));
       if (e.key === '+' || e.key === '=') return faire(() => registreGraphiques.get(g.id)?.zoomer(1.25));
       if (e.key === '-') return faire(() => registreGraphiques.get(g.id)?.zoomer(0.8));
       if (e.key === 'End') return faire(() => registreGraphiques.get(g.id)?.allerALaFin());
@@ -320,6 +326,13 @@ export function App() {
         </div>
       )}
       <Dialogues />
+      {navRapide !== null && (
+        <NavigationRapide
+          initial={navRapide}
+          fermer={() => setNavRapide(null)}
+          appliquer={(r) => majGraphique(etat.graphiqueActif, { ...(r.symbole ? { symbole: r.symbole } : {}), ...(r.periode ? { periode: r.periode } : {}) })}
+        />
+      )}
       {toast && (
         <div key={toast.id} className="toast" role="status" onClick={() => setToast(null)}>
           {toast.texte}
