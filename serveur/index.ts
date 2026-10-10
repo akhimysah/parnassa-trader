@@ -11,8 +11,10 @@
 import { journaliser, type Compte, type Evenement } from '../src/compte/moteur';
 import { executerHorsLigne, symbolesCompte, cotationServeur, type Barre, type PrixServeur } from '../src/compte/serveur';
 import { SYMBOLES_CONVERSION, symbole, formaterPrix, type TypeCompte } from '../src/marche/symboles';
+import { copierSignal, statistiquesSignal, type Abonnement, type StatistiquesSignal } from '../src/compte/signaux';
+import type { Cotation } from '../src/marche/cotations';
 import { DurableObject } from 'cloudflare:workers';
-import { envoyerPush, type AbonnementPush, type MessagePush } from './push';
+import { envoyerPush, type AbonnementPush } from './push';
 
 interface Env {
   DB: D1Database;
@@ -156,10 +158,11 @@ function json(corps: unknown, statut = 200): Response {
 }
 
 /** Le jeton est-il une session ouverte du compte (même vérification que l'API de la néobanque) ? */
-async function sessionValide(env: Env, login: number, jeton: string): Promise<boolean> {
+async function sessionValide(env: Env, login: number, jeton: string, trading = false): Promise<boolean> {
   if (typeof jeton !== 'string' || jeton.length < 16 || jeton.length > 200) return false;
-  const s = await env.DB.prepare('SELECT login, created_at FROM trading_account_sessions WHERE id_hash = ?').bind(await sha256Hex(jeton)).first<{ login: string; created_at: number }>();
-  return !!s && String(s.login) === String(login) && Date.now() - s.created_at < DUREE_SESSION;
+  const s = await env.DB.prepare('SELECT login, read_only, created_at FROM trading_account_sessions WHERE id_hash = ?').bind(await sha256Hex(jeton)).first<{ login: string; read_only: number; created_at: number }>();
+  // `trading` : le mot de passe principal est exigé (pas l'investisseur, en lecture seule).
+  return !!s && String(s.login) === String(login) && Date.now() - s.created_at < DUREE_SESSION && (!trading || s.read_only === 0);
 }
 
 function nettoyerAlertes(a: unknown): AlerteServeur[] {
@@ -173,8 +176,9 @@ function nettoyerAlertes(a: unknown): AlerteServeur[] {
 async function routes(requete: Request, env: Env): Promise<Response> {
   const url = new URL(requete.url);
   if (requete.method === 'OPTIONS') return json(null, 204);
-  if (url.pathname === '/' || url.pathname === '/sante') return json({ service: 'parnassa-trader-serveur', routes: ['/cle', '/abonnement', '/desabonnement', '/test'] });
+  if (url.pathname === '/' || url.pathname === '/sante') return json({ service: 'parnassa-trader-serveur', routes: ['/cle', '/abonnement', '/desabonnement', '/test', '/signaux', '/signaux/abonnement?login=…', '/signaux/publier', '/signaux/retirer', '/signaux/abonner', '/signaux/desabonner'] });
   if (url.pathname === '/cle') return json({ cle: env.VAPID_PUBLIQUE });
+  if (url.pathname === '/signaux' || url.pathname.startsWith('/signaux/')) return routesSignaux(requete, url, env);
   if (requete.method !== 'POST') return json({ erreur: 'Méthode non autorisée.' }, 405);
   let corps: { abonnement?: AbonnementPush; endpoint?: string; comptes?: { login: number; jeton: string }[]; alertes?: unknown; langue?: string; type?: string; logins?: number[] };
   try {
@@ -235,6 +239,151 @@ async function routes(requete: Request, env: Env): Promise<Response> {
   return json({ erreur: 'Route inconnue.' }, 404);
 }
 
+// ---------- Signaux (copie de trades) ----------
+
+interface Signal {
+  login: number;
+  nom: string;
+  description: string;
+  publieLe: number;
+}
+
+/** Comptes Parnassa Trader (type terminal, ouverts) par numéro. */
+async function lignesComptes(env: Env, logins: string[]): Promise<LigneCompte[]> {
+  const sortie: LigneCompte[] = [];
+  for (let i = 0; i < logins.length; i += 50) {
+    const lot = logins.slice(i, i + 50);
+    if (!lot.length) break;
+    const { results } = await env.DB.prepare(
+      `SELECT login, state, state_updated_at FROM trading_accounts WHERE kind = 'terminal' AND closed_at IS NULL AND state IS NOT NULL AND login IN (${lot.map(() => '?').join(',')})`,
+    )
+      .bind(...lot)
+      .all<LigneCompte>();
+    sortie.push(...(results ?? []));
+  }
+  return sortie;
+}
+
+function compteDe(ligne: LigneCompte): Compte | null {
+  try {
+    const c = (JSON.parse(ligne.state) as { compte?: Compte }).compte;
+    return c && Array.isArray(c.positions) ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+async function routesSignaux(requete: Request, url: URL, env: Env): Promise<Response> {
+  const signaux = ((await env.TRADER.get('signaux', 'json')) as Record<string, Signal> | null) ?? {};
+  const abonnements = ((await env.TRADER.get('abonnements-signaux', 'json')) as Record<string, Abonnement> | null) ?? {};
+  if (requete.method === 'GET' && url.pathname === '/signaux') {
+    const lignes = await lignesComptes(env, Object.keys(signaux));
+    const liste: (Signal & { abonnes: number; stats: StatistiquesSignal })[] = [];
+    for (const l of lignes) {
+      const c = compteDe(l);
+      const sig = signaux[l.login];
+      if (!c || !sig) continue;
+      liste.push({ ...sig, abonnes: Object.values(abonnements).filter((a) => String(a.fournisseur) === l.login).length, stats: statistiquesSignal(c) });
+    }
+    liste.sort((a, b) => b.stats.croissancePct - a.stats.croissancePct);
+    return json({ signaux: liste });
+  }
+  if (requete.method === 'GET' && url.pathname === '/signaux/abonnement') {
+    return json({ abonnement: abonnements[url.searchParams.get('login') ?? ''] ?? null });
+  }
+  if (requete.method !== 'POST') return json({ erreur: 'Méthode non autorisée.' }, 405);
+  let corps: { login?: number; jeton?: string; nom?: string; description?: string; fournisseur?: number; ratio?: number };
+  try {
+    corps = (await requete.json()) as typeof corps;
+  } catch {
+    return json({ erreur: 'Corps JSON invalide.' }, 400);
+  }
+  const login = Number(corps.login);
+  if (!Number.isInteger(login) || !(await sessionValide(env, login, corps.jeton ?? '', true))) return json({ erreur: 'Connectez ce compte avec son mot de passe principal.' }, 401);
+  if (!(await lignesComptes(env, [String(login)])).length) return json({ erreur: 'Seuls les comptes en ligne Parnassa Trader peuvent utiliser les signaux.' }, 400);
+  const cle = String(login);
+
+  if (url.pathname === '/signaux/publier') {
+    const nom = String(corps.nom ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (nom.length < 3) return json({ erreur: 'Nom du signal : 3 caractères au moins.' }, 400);
+    if (abonnements[cle]) return json({ erreur: "Un compte abonné à un signal ne peut pas publier le sien : désabonnez-le d'abord." }, 400);
+    signaux[cle] = { login, nom, description: String(corps.description ?? '').trim().slice(0, 300), publieLe: signaux[cle]?.publieLe ?? Date.now() };
+    await env.TRADER.put('signaux', JSON.stringify(signaux));
+    return json({ ok: true, signal: signaux[cle] });
+  }
+  if (url.pathname === '/signaux/retirer') {
+    if (signaux[cle]) {
+      delete signaux[cle];
+      await env.TRADER.put('signaux', JSON.stringify(signaux));
+      // Les abonnés ne copient plus rien : leurs abonnements sont retirés.
+      let change = false;
+      for (const [k, a] of Object.entries(abonnements))
+        if (String(a.fournisseur) === cle) {
+          delete abonnements[k];
+          change = true;
+        }
+      if (change) await env.TRADER.put('abonnements-signaux', JSON.stringify(abonnements));
+    }
+    return json({ ok: true });
+  }
+  if (url.pathname === '/signaux/abonner') {
+    const fournisseur = Number(corps.fournisseur);
+    const ratio = Math.round(Number(corps.ratio) * 100) / 100;
+    if (!signaux[String(fournisseur)]) return json({ erreur: 'Signal introuvable.' }, 404);
+    if (fournisseur === login) return json({ erreur: 'Un compte ne peut pas copier son propre signal.' }, 400);
+    if (signaux[cle]) return json({ erreur: 'Ce compte publie un signal : il ne peut pas en copier un autre.' }, 400);
+    if (!(ratio >= 0.1 && ratio <= 10)) return json({ erreur: 'Coefficient de volume : de 0,1 à 10.' }, 400);
+    abonnements[cle] = { fournisseur, ratio, depuis: Date.now() };
+    await env.TRADER.put('abonnements-signaux', JSON.stringify(abonnements));
+    return json({ ok: true, abonnement: abonnements[cle] });
+  }
+  if (url.pathname === '/signaux/desabonner') {
+    if (abonnements[cle]) {
+      delete abonnements[cle];
+      await env.TRADER.put('abonnements-signaux', JSON.stringify(abonnements));
+    }
+    return json({ ok: true });
+  }
+  return json({ erreur: 'Route inconnue.' }, 404);
+}
+
+/** Bid/Ask actuels d'un compte (spreads de son type) pour les symboles cotés. */
+function cotationsCompte(c: Compte, prix: Record<string, PrixServeur>, maintenant: number): Record<string, Cotation> {
+  const sortie: Record<string, Cotation> = {};
+  for (const [n, p] of Object.entries(prix)) {
+    const q = cotationServeur(n, p.milieu, c.type ?? 'standard', p.ecart, maintenant);
+    if (q) sortie[n] = q;
+  }
+  return sortie;
+}
+
+/** Copie de chaque fournisseur sur ses abonnés ; renvoie le nombre de comptes enregistrés. */
+async function tourneeSignaux(
+  env: Env,
+  signaux: Record<string, Signal>,
+  abonnements: Record<string, Abonnement>,
+  comptes: { ligne: LigneCompte; etat: { compte: Compte } & Record<string, unknown> }[],
+  prix: Record<string, PrixServeur>,
+  maintenant: number,
+  compterEnvois: (n: number) => void,
+): Promise<number> {
+  let ecrits = 0;
+  for (const [abonne, a] of Object.entries(abonnements)) {
+    if (!signaux[String(a.fournisseur)]) continue;
+    const f = comptes.find((x) => x.ligne.login === String(a.fournisseur));
+    const ab = comptes.find((x) => x.ligne.login === abonne);
+    if (!f || !ab) continue;
+    const r = copierSignal(ab.etat.compte, f.etat.compte, a, cotationsCompte(ab.etat.compte, prix, maintenant), maintenant);
+    if (!r.modifie) continue;
+    const compte = journaliser(r.compte, 'Réseau', `signal ${a.fournisseur} copié par le serveur Parnassa-Trader`);
+    if ((await ecrireEtat(env, ab.ligne, ab.etat, compte)) === null) continue;
+    ab.etat = { ...ab.etat, compte };
+    ecrits += 1;
+    compterEnvois(await prevenir(env, abonne, r.messages.map((corps) => ({ type: 'signal' as const, corps }))));
+  }
+  return ecrits;
+}
+
 // ---------- Tournée planifiée ----------
 
 const TITRES: Record<Evenement['type'], [string, string]> = {
@@ -253,6 +402,50 @@ interface LigneCompte {
   state_updated_at: number | null;
 }
 
+/**
+ * Enregistre l'état d'un compte si personne ne l'a modifié depuis sa lecture (sinon un terminal a la main).
+ * Renvoie la nouvelle date de l'état, ou null si rien n'a été écrit. La ligne en mémoire est mise à jour.
+ */
+async function ecrireEtat(env: Env, ligne: LigneCompte, etat: Record<string, unknown>, compte: Compte): Promise<number | null> {
+  const nouvel = { ...etat, compte: { ...compte, journal: compte.journal.slice(-300) } };
+  const texte = JSON.stringify(nouvel);
+  if (texte.length > TAILLE_MAX_ETAT) return null;
+  const majLe = Math.max(Date.now(), (ligne.state_updated_at ?? 0) + 1);
+  const ecriture = await env.DB.prepare(
+    ligne.state_updated_at === null
+      ? 'UPDATE trading_accounts SET state = ?, state_updated_at = ? WHERE login = ? AND closed_at IS NULL AND state_updated_at IS NULL'
+      : 'UPDATE trading_accounts SET state = ?, state_updated_at = ? WHERE login = ? AND closed_at IS NULL AND state_updated_at = ?',
+  )
+    .bind(...(ligne.state_updated_at === null ? [texte, majLe, ligne.login] : [texte, majLe, ligne.login, ligne.state_updated_at]))
+    .run();
+  if (!ecriture.meta.changes) return null;
+  ligne.state = texte;
+  ligne.state_updated_at = majLe;
+  return majLe;
+}
+
+/** Notifications push aux appareils abonnés au compte ; renvoie le nombre d'envois. */
+async function prevenir(env: Env, login: string, messages: { type: Evenement['type'] | 'signal'; corps: string }[]): Promise<number> {
+  if (!messages.length) return 0;
+  const abonnes = ((await env.TRADER.get(`login:${login}`, 'json')) as AbonnementCompte[] | null) ?? [];
+  const restants: AbonnementCompte[] = [];
+  let envois = 0;
+  for (const a of abonnes) {
+    let expire = false;
+    for (const e of messages.slice(0, 4)) {
+      const titre = e.type === 'signal' ? 'Signal' : TITRES[e.type][a.langue === 'en' ? 1 : 0];
+      envois += 1;
+      if ((await envoyerPush(a.abonnement, { titre: `${titre} · ${login}`, corps: e.corps, url: URL_APP, tag: `${login}-${e.type}-${Date.now()}-${envois}` }, vapid(env))) === 'expire') {
+        expire = true;
+        break;
+      }
+    }
+    if (!expire) restants.push(a);
+  }
+  if (restants.length !== abonnes.length) await env.TRADER.put(`login:${login}`, JSON.stringify(restants), { expirationTtl: 60 * 86400 });
+  return envois;
+}
+
 async function tournee(env: Env, maintenant: number): Promise<string> {
   const { results } = await env.DB.prepare(
     `SELECT login, state, state_updated_at FROM trading_accounts
@@ -269,6 +462,18 @@ async function tournee(env: Env, maintenant: number): Promise<string> {
       // état illisible : laissé tel quel
     }
   }
+  // Signaux : fournisseurs et abonnés sont chargés même sans position (un abonné vide reçoit des copies).
+  const signaux = ((await env.TRADER.get('signaux', 'json')) as Record<string, Signal> | null) ?? {};
+  const abonnementsSignaux = ((await env.TRADER.get('abonnements-signaux', 'json')) as Record<string, Abonnement> | null) ?? {};
+  const aCharger = [...new Set(Object.entries(abonnementsSignaux).flatMap(([abonne, a]) => [abonne, String(a.fournisseur)]))].filter((l) => !comptes.some((c) => c.ligne.login === l));
+  for (const ligne of await lignesComptes(env, aCharger)) {
+    try {
+      const etat = JSON.parse(ligne.state) as { compte?: Compte } & Record<string, unknown>;
+      if (etat.compte && Array.isArray(etat.compte.positions) && Array.isArray(etat.compte.ordres)) comptes.push({ ligne, etat: etat as { compte: Compte } });
+    } catch {
+      // état illisible
+    }
+  }
   const alertes = ((await env.TRADER.get('alertes', 'json')) as Record<string, AlertesAppareil> | null) ?? {};
   const noms = new Set<string>(SYMBOLES_CONVERSION);
   for (const { etat } of comptes) for (const n of symbolesCompte(etat.compte)) noms.add(n);
@@ -279,6 +484,9 @@ async function tournee(env: Env, maintenant: number): Promise<string> {
   let ecrits = 0;
   let envois = 0;
 
+  // Signaux : copie des fournisseurs sur leurs abonnés, avant l'exécution des stops (les copies en profitent).
+  ecrits += await tourneeSignaux(env, signaux, abonnementsSignaux, comptes, prix, maintenant, (n) => (envois += n));
+
   for (const { ligne, etat } of comptes) {
     const c = etat.compte;
     const utiles: Record<string, PrixServeur> = {};
@@ -287,34 +495,13 @@ async function tournee(env: Env, maintenant: number): Promise<string> {
     const r = executerHorsLigne(c, utiles, depuis, maintenant);
     if (!r.modifie) continue;
     const compte = journaliser(r.compte, 'Réseau', 'opérations exécutées par le serveur Parnassa-Trader (terminal fermé)');
-    const texte = JSON.stringify({ ...etat, compte: { ...compte, journal: compte.journal.slice(-300) } });
-    if (texte.length > TAILLE_MAX_ETAT) continue;
-    const majLe = Math.max(Date.now(), (ligne.state_updated_at ?? 0) + 1);
-    const ecriture = await env.DB.prepare(
-      ligne.state_updated_at === null
-        ? 'UPDATE trading_accounts SET state = ?, state_updated_at = ? WHERE login = ? AND closed_at IS NULL AND state_updated_at IS NULL'
-        : 'UPDATE trading_accounts SET state = ?, state_updated_at = ? WHERE login = ? AND closed_at IS NULL AND state_updated_at = ?',
-    )
-      .bind(...(ligne.state_updated_at === null ? [texte, majLe, ligne.login] : [texte, majLe, ligne.login, ligne.state_updated_at]))
-      .run();
-    // Un terminal a enregistré entre-temps : il a la main, rien n'est écrasé.
-    if (!ecriture.meta.changes) continue;
+    if ((await ecrireEtat(env, ligne, etat, compte)) === null) continue;
     ecrits += 1;
-    const abonnes = ((await env.TRADER.get(`login:${ligne.login}`, 'json')) as AbonnementCompte[] | null) ?? [];
-    const restants: AbonnementCompte[] = [];
-    for (const a of abonnes) {
-      let expire = false;
-      for (const e of r.evenements.filter((x) => x.type !== 'appel-marge').slice(0, 4)) {
-        const m: MessagePush = { titre: `${TITRES[e.type][a.langue === 'en' ? 1 : 0]} · ${ligne.login}`, corps: e.message, url: URL_APP, tag: `${ligne.login}-${e.type}-${envois}` };
-        envois += 1;
-        if ((await envoyerPush(a.abonnement, m, cles)) === 'expire') {
-          expire = true;
-          break;
-        }
-      }
-      if (!expire) restants.push(a);
-    }
-    if (restants.length !== abonnes.length) await env.TRADER.put(`login:${ligne.login}`, JSON.stringify(restants), { expirationTtl: 60 * 86400 });
+    envois += await prevenir(
+      env,
+      ligne.login,
+      r.evenements.filter((x) => x.type !== 'appel-marge').map((e) => ({ type: e.type, corps: e.message })),
+    );
   }
 
   // Alertes Bid/Ask : sur le chemin des bougies récentes et le prix actuel.

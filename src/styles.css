@@ -2551,3 +2551,12 @@ kbd {
 @media (max-width: 760px) {
   .metaediteur { grid-template-columns: 1fr; grid-template-rows: 1fr 140px; height: 62vh; }
 }
+
+/* ---------- Signaux ---------- */
+.onglet-signaux { display: flex; flex-direction: column; gap: 6px; padding: 4px 6px; }
+.signaux-entete { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.signaux-formulaire { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px; border: 1px solid var(--bordure); background: var(--entete); }
+.signaux-formulaire input { min-width: 180px; }
+.signaux-formulaire input + input { flex: 1; }
+.signaux-description { font-size: 11px; max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini-courbe { display: block; }

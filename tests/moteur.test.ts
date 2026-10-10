@@ -183,3 +183,41 @@ describe('profondeur du marché hors crypto', () => {
     expect(profondeurIndicative(s, q, 'standard', 12, 0)).toEqual(c);
   });
 });
+
+describe('signaux (copie de trades)', () => {
+  it('copie les nouvelles positions avec le coefficient, suit les S/L et ferme avec l’original', async () => {
+    const { copierSignal, statistiquesSignal, marqueSignal } = await import('../src/compte/signaux');
+    let f = acheter(nouveauCompte('fournisseur', 10000, 100), 80000, 79000, 0).compte;
+    const a = { fournisseur: 111, ratio: 2, depuis: Date.now() - 60000 };
+    let ab = nouveauCompte('abonné', 10000, 100);
+    let r = copierSignal(ab, f, a, cot(80000));
+    expect(r.modifie).toBe(true);
+    ab = r.compte;
+    expect(ab.positions).toHaveLength(1);
+    expect(ab.positions[0].volume).toBe(0.2);
+    expect(ab.positions[0].sl).toBe(79000);
+    expect(ab.positions[0].commentaire).toBe(marqueSignal(111, f.positions[0].ticket));
+    // Rien de nouveau : aucune modification.
+    expect(copierSignal(ab, f, a, cot(80000)).modifie).toBe(false);
+    // S/L déplacé chez le fournisseur.
+    f = { ...f, positions: f.positions.map((p) => ({ ...p, sl: 79500 })) };
+    ab = copierSignal(ab, f, a, cot(80000)).compte;
+    expect(ab.positions[0].sl).toBe(79500);
+    // Fermeture de l'original.
+    f = fermerPosition(f, f.positions[0].ticket, cot(80500)).compte;
+    r = copierSignal(ab, f, a, cot(80500));
+    expect(r.compte.positions).toHaveLength(0);
+    // Pas de nouvelle copie d'une position déjà copiée puis fermée.
+    expect(copierSignal(r.compte, { ...f, positions: [] }, a, cot(80500)).modifie).toBe(false);
+    const st = statistiquesSignal(f);
+    expect(st.trades).toBe(1);
+    expect(st.croissancePct).toBeGreaterThan(0);
+    expect(st.gagnantsPct).toBe(100);
+  });
+  it('ne copie pas les positions ouvertes avant l’abonnement', async () => {
+    const { copierSignal } = await import('../src/compte/signaux');
+    const f = acheter(nouveauCompte('f', 10000, 100)).compte;
+    const r = copierSignal(nouveauCompte('a', 10000, 100), f, { fournisseur: 1, ratio: 1, depuis: Date.now() + 1000 }, cot(80000));
+    expect(r.modifie).toBe(false);
+  });
+});

@@ -7,8 +7,9 @@ import { argent, dateMT, useMenuContextuel, type ElementMenu } from './ui';
 import { enregistrerRapport, enteteCompte, rapportHtml } from '../algo/rapportHtml';
 import { CONDITIONS } from '../alertes';
 import { messagesCompte } from '../courrier';
+import { OngletSignaux } from './Signaux';
 
-export type OngletBoite = 'trading' | 'exposition' | 'historique' | 'actualites' | 'courrier' | 'calendrier' | 'alertes' | 'journal';
+export type OngletBoite = 'trading' | 'exposition' | 'historique' | 'actualites' | 'courrier' | 'calendrier' | 'alertes' | 'signaux' | 'journal';
 
 export const ONGLETS_BOITE: [OngletBoite, string][] = [
   ['trading', 'Trading'],
@@ -18,6 +19,7 @@ export const ONGLETS_BOITE: [OngletBoite, string][] = [
   ['courrier', 'Boîte aux lettres'],
   ['calendrier', 'Calendrier'],
   ['alertes', 'Alertes'],
+  ['signaux', 'Signaux'],
   ['journal', 'Journal'],
 ];
 
@@ -41,6 +43,7 @@ export function BoiteOutils({ onglet, changer }: { onglet: OngletBoite; changer:
           {onglet === 'courrier' && <OngletCourrier />}
           {onglet === 'calendrier' && <OngletCalendrier />}
           {onglet === 'alertes' && <OngletAlertes />}
+          {onglet === 'signaux' && <OngletSignaux />}
           {onglet === 'journal' && <OngletJournal />}
         </div>
         <div className="onglets-bas">

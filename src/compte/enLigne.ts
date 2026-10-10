@@ -22,6 +22,12 @@ interface Session {
   base: number | null;
 }
 
+/** Session de cet appareil sur un compte en ligne (jeton et accès en lecture seule), ou null. */
+export function sessionCompte(login: number): { jeton: string; lecture: boolean } | null {
+  const s = lireSessions()[login];
+  return s ? { jeton: s.jeton, lecture: s.lecture } : null;
+}
+
 function lireSessions(): Record<string, Session> {
   try {
     return JSON.parse(localStorage.getItem(CLE_SESSIONS) ?? '{}') as Record<string, Session>;
