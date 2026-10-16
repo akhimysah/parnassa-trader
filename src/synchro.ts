@@ -3,7 +3,7 @@ import type { EtatTerminal } from './etat';
 import { fusionnerEtat } from './etat';
 
 /** Compte Parnassa (néobanque) : liaison par jeton propre à Parnassa Trader, puis synchronisation entre appareils. */
-export const URL_NEOBANQUE = 'https://parnassa.neobank.workers.dev';
+export const URL_NEOBANQUE = 'https://app.parnassapay.com';
 const API = `${URL_NEOBANQUE}/api/parnassa/trader/sync`;
 const CLE_JETON = 'parnassa-trader:jeton-parnassa:v1';
 const CLE_BASE = 'parnassa-trader:synchro-base:v1';
